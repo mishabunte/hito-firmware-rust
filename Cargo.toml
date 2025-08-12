@@ -1,0 +1,27 @@
+[package]
+name = "hito-simulator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+image     = "0.25.6"
+#once_cell = "1.19"
+minifb    = "^0"
+egui      = "^0"
+eframe    = "^0"
+#resvg     = "0.40.0"
+#tiny-skia = "^0"
+#drivers   = { path = "../drivers" }
+resvg = { version = "^0.40" }
+fontdb = "^0.7"
+once_cell = "1.19"
+#resvg = { version = "^0.40", default-features = false }
+
+[build]
+target-dir = "./target-build"
+
+[features]
+default = ["minifb"]
+minifb = []
+zephyr = []
+
