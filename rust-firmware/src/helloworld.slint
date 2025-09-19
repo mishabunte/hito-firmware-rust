@@ -1,0 +1,297 @@
+import { VerticalBox, HorizontalBox } from "std-widgets.slint";
+import "MinecraftRegular-Bmg3.otf";
+
+component BrightnessLogo inherits Rectangle {
+    width: 24px;
+    height: 24px;
+    
+    // Properties
+    property <int> brightness: 95;
+    property <bool> scale-shown: false;
+    property <bool> pressed: false;
+    property <duration> hide-timer-duration: 5000ms;
+    
+    // Callbacks
+    callback brightness-changed(int);
+    
+    // Brightness icon button
+    Image {
+        source: @image-url("../res/img/brightness.png");
+        width: parent.width;
+        height: parent.height;
+    }
+    
+    // Brightness scale (slider) - only visible when scale-shown is true
+    if scale-shown: Rectangle {
+        x: -70px; // Position to the left of the button
+        y: 30px;  // Position below the button
+        width: 140px;
+        height: 24px;
+        background: white;
+        border-color: #bdd7;
+        border-width: 1px;
+        
+        // Scale background track
+        Rectangle {
+            x: 0px;
+            y: parent.height / 2 - 2px;
+            width: parent.width;
+            height: 4px;
+            background: #bdd7;
+        }
+        
+        // Scale filled portion
+        Rectangle {
+            x: 0px;
+            y: parent.height / 2 - 2px;
+            width: parent.width * brightness / 100;
+            height: 4px;
+            background: #73ae;
+        }
+        
+        // Scale handle (brightness icon)
+        Image {
+            source: @image-url("../res/img/brightness.png");
+            x: parent.width * brightness / 100 - self.width / 2;
+            y: 0px;
+            width: 24px;
+            height: 24px;
+        }
+        
+        // Touch area for the scale
+        scale-touch := TouchArea {
+            width: parent.width;
+            height: parent.height * 3; // Larger touch area
+            
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down || event.kind == PointerEventKind.move) {
+                    if (scale-touch.pressed) {
+                        // Update brightness based on touch position
+                        brightness = max(1, min(100, round(scale-touch.mouse-x * 100 / scale-touch.width)));
+                        brightness-changed(brightness);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Main touch area for the brightness button
+    TouchArea {
+        width: parent.width + 20px; // Larger touch area
+        height: parent.height + 20px;
+        x: -10px;
+        y: -10px;
+        
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                pressed = true;
+            } else if (event.kind == PointerEventKind.up) {
+                if (pressed) {
+                    pressed = false;
+                    scale-shown = !scale-shown;
+                    if (scale-shown) {
+                        hide-timer.restart();
+                    }
+                }
+            }
+        }
+    }
+    
+    // Auto-hide timer
+    hide-timer := Timer {
+        interval: hide-timer-duration;
+        running: scale-shown;
+        triggered => {
+            scale-shown = false;
+        }
+    }
+}
+
+export component MainWindow inherits Window {
+    width: 320px;
+    height: 240px;
+    background: white;
+    
+    default-font-family: "Minecraft";
+
+    // Animation properties
+    property <bool> key-is-pressed: false;
+    property <length> key-offset: 0px;
+    property <length> key-offset-start: 0px;
+    property <int> lock-frame: 0;
+    property <bool> is-unlocked: false;
+    property <duration> animation-duration: 60ms;
+    
+    // Key and lock positions (matching C code coordinates)
+    property <length> key-start-x: 89px;
+    property <length> key-start-y: 90px;
+    property <length> lock-x: 184px;
+    property <length> lock-y: 90px;
+    property <length> unlock-threshold: 100px; // lock-x - key-start-x - 5px
+    property <int> first-frame-offset: 24; // For idle animation frame tracking
+
+    property <bool> key_shown: true; // To control key visibility
+    
+    // Brightness control in top-right corner
+    BrightnessLogo {
+        x: 320px - 24px - 10px; // 10px margin from right edge
+        y: 5px; // 5px margin from top
+        brightness-changed(value) => {
+            debug("Brightness changed to: " + value);
+        }
+    }
+    
+    // Title text
+    Text {
+        text: key-is-pressed ? "Release to unlock" : "Swipe the key";
+        //font-family: "InflateptxRegular-Wyg8V";
+        font-size: 30px;
+        color: black;
+        horizontal-alignment: center;
+        y: 150px;
+        x: 30px;
+        wrap: word-wrap;
+        width: 260px;
+    }
+
+    // Lock sprite with animation frames
+    Image {
+        source: @image-url("../res/img/lock.png");
+        x: lock-x + first-frame-offset*1px; // Adjusted to align with key
+        y: lock-y;
+        width: 46px - first-frame-offset*1px;
+        height: 34px;
+        // Simulate frame animation by changing source-clip-x
+        source-clip-x: first-frame-offset;
+        source-clip-y: 0;
+        source-clip-width: 46 - first-frame-offset;
+        source-clip-height: 34;
+        visible: key_shown;
+        z: 1; // Ensure key is above lock
+        
+        // animate source-clip-x {
+        //     duration: animation-duration;
+        //     easing: ease-in-out;
+        // }
+    }
+    
+    // Lock sprite with animation frames
+    Image {
+        source: @image-url("../res/img/lock.png");
+        x: lock-x;
+        y: lock-y;
+        width: 46px;
+        height: 34px;
+        // Simulate frame animation by changing source-clip-x
+        source-clip-x: lock-frame * 46 + 46;
+        source-clip-y: 0;
+        source-clip-width: 46;
+        source-clip-height: 34;
+        visible: !key_shown;
+        z: 1; // Ensure key is above lock
+        
+        // animate source-clip-x {
+        //     duration: animation-duration;
+        //     easing: ease-in-out;
+        // }
+    }
+    
+    // Key sprite
+    Rectangle {
+        x: key-start-x + key-offset + (key-is-pressed ? 0 : key-offset-start);
+        y: key-start-y;
+        width: 27px;
+        height: 34px;
+        visible: key_shown;
+        
+        Image {
+            source: @image-url("../res/img/lock.png");
+            width: 27px;
+            height: 34px;
+            // Key is at x=322 in the sprite sheet
+            source-clip-x: 322;
+            source-clip-y: 0;
+            source-clip-width: 27;
+            source-clip-height: 34; // Hide lock when key is shown
+        }
+    }
+    
+    // Touch area for key interaction - fixed position to avoid coordinate issues
+    TouchArea {
+        x: 0px;
+        y: 60px;
+        width: 320px; // Full width to capture drag anywhere
+        height: 100px;
+        
+        property <length> start-x: 0px;
+        property <bool> mouse-pressed: false;
+        
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                debug("Pointer down at " + self.mouse-x / 1px + ", " + self.mouse-y / 1px);
+                mouse-pressed = true;
+                key-is-pressed = true;
+                start-x = self.mouse-x;
+            } else if (event.kind == PointerEventKind.up) {
+                debug("Pointer up at " + self.mouse-x / 1px + ", " + self.mouse-y / 1px);
+                mouse-pressed = false;
+                key-is-pressed = false;
+                if (key-offset >= unlock-threshold) {
+                  debug("Unlock threshold reached");
+                    // Trigger unlock animation
+                    unlock();
+                } else {
+                    // Snap back to start
+                    key-offset = 0px;
+                    key-offset-start = (key-offset-start == -5px) ? 5px : -5px; // Simple back-and-forth
+                }
+            } else if (event.kind == PointerEventKind.move && mouse-pressed) {
+                debug("Pointer move at " + self.mouse-x / 1px + ", " + self.mouse-y / 1px);
+                // Calculate offset based on drag distance
+                key-offset = min(max(0px, self.mouse-x - start-x), unlock-threshold);
+                key-offset-start = key-offset;
+                debug("Key offset: " + key-offset / 1px);
+            }
+        }
+    }
+    
+    animate key-offset-start {
+        duration: (key-is-pressed ? 0ms : 500ms);
+        easing: ease-in-out;
+    }
+    
+    // Start idle animation timer
+    Timer {
+        interval: 500ms;
+        running: !key-is-pressed;
+        triggered => {
+            key-offset-start = (key-offset-start == -5px) ? 5px : -5px; // Simple back-and-forth
+        }
+    }
+    
+    // Timer for unlock animation
+    Timer {
+        interval: animation-duration;
+        running: is-unlocked && lock-frame <= 5;
+        triggered => {
+            if (lock-frame < 5) {
+                lock-frame += 1;
+            } else {
+                // Animation complete - trigger unlock callback
+                root.unlocked();
+            }
+        }
+    }
+    
+    // Functions
+    function unlock() {
+        debug("Unlocking...");
+        key_shown = false;
+        is-unlocked = true;
+        key-is-pressed = false;
+        lock-frame = 0; // Start animation from frame 0
+    }
+    
+    // Callback for when unlock animation completes
+    callback unlocked();
+}

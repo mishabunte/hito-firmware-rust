@@ -1,0 +1,3 @@
+[submodule "src/crypto/libcrypt0"]
+	path = src/crypto/libcrypt0
+	url = git@github.com:mishabunte/libcrypt0.git

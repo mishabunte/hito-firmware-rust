@@ -1,0 +1,4 @@
+include tests-desktop/.gitignore
+tags
+.sconsign.dblite
+.DS_Store

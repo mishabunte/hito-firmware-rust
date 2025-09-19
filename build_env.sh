@@ -1,0 +1,11 @@
+#!/bin/sh
+
+version=1.9.1
+export PATH=/opt/nordic/ncs/v$version/toolchain/bin:$PATH
+#export GIT_EXEC_PATH=/opt/nordic/ncs/v$version/toolchain/Cellar/git/2.26.2/libexec/git-core 
+export GIT_EXEC_PATH=/opt/nordic/ncs/v1.9.1/toolchain/bin/git
+export ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb 
+export GNUARMEMB_TOOLCHAIN_PATH=/opt/nordic/ncs/v$version/toolchain
+export ZEPHYR_BASE=/opt/nordic/ncs/v$version/zephyr
+
+west config build.board nrf5340dk_nrf5340_cpuapp

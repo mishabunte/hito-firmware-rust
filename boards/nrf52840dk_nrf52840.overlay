@@ -1,0 +1,87 @@
+/ {
+	aliases {
+		hito-lcd = &spi3;
+    hito-ctp = &i2c0;
+	};
+
+  zephyr,user {
+    
+    lcd-dcx-pin   = <30>; // P0.30
+    lcd-reset-pin = <31>; // P0.31
+    lcd-power-pin = <22>; // P0.22
+    lcd-led-pin   = <29>; // P0.29
+    lcd-cs-pin    = <17>; // P0.17
+
+    ctp-power-pin     = <33>; // P1.01
+    ctp-int-pin       = <24>; // P0.24
+    ctp-reset-pin     = <23>; // P0.23
+
+    nand-cs-pin       = <41>; // P1.09
+    nand-miso-pin     = <26>; // P0.26
+    nand-hold-pin     = <12>; // P0.12
+
+    led-red-pin       = <13>; // P0.13, LED1 on nRF DK
+    led-green-pin     = <14>; // P0.14, LED2 on nRF DK
+    led-blue-pin      = <15>; // P0.15, LED3 on nRF DK
+
+    led-debug-pin     = <16>; // P0.16, LED4 on nRF DK
+    devboard-pin      = <3>;  // P0.03, connected to VDD on nRF DK
+
+    charge-pin        = <25>; // P0.25, Button4 on nRF DK
+    
+    button-pin        = <11>; // P0.11, Button1 on nRF DK
+
+    watchdog-sec      = <90>;
+
+  };
+
+};
+
+&spi3 {
+  compatible = "nordic,nrf-spim";
+  status = "okay";
+  sck-pin = <28>;
+  mosi-pin = <04>;
+  miso-pin = <26>;
+  //dcx-pin = <30>;
+  cs-gpios = <&gpio0 03 GPIO_ACTIVE_LOW>;
+};
+
+&i2c0 {
+  sda-pin = < 32 >;
+  scl-pin = < 25 >;
+  bme680@38 {
+		compatible = "bosch,bme680";
+		label      = "BME680";
+    reg        = <0x38>;
+  };
+};
+
+
+&spi1 {
+  status = "disabled";
+};
+
+&spi2 {
+  status = "disabled";
+};
+
+&spi0 {
+  status = "disabled";
+};
+
+//&i2c1 {
+  //status = "disabled";
+//};
+
+&uart1 {
+  status = "disabled";
+};
+
+&button2 {
+  status = "disabled";
+};
+
+&qspi {
+  status = "disabled";
+};

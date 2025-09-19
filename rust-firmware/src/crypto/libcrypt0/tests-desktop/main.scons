@@ -1,0 +1,85 @@
+import scons_compiledb
+
+LIBS=['ssl', 'crypto']
+
+# Set the project name and version
+project_name = 'libcrypt0'
+project_version = '0.0.1'
+
+# Set the compiler and linker options
+env = Environment(
+  OBJDIR='build',
+  CPPPATH = [
+    '.',
+    '../../src',
+    '../../include',
+    '../../lib/SHA3IUF',
+    '../../lib/secp256k1/include',
+    '../../lib/secp256k1/src',
+    '/opt/homebrew/opt/openssl/include',
+  ],
+  CPPDEFINES = [
+    'ENABLE_MODULE_RECOVERY', 'STATIC_IN_RELEASE=static', #, 'HAVE_CONFIG_H',
+  ],
+  LIBPATH = [
+    '/opt/homebrew/opt/openssl/lib',
+  ],
+) # My environment options
+
+env.VariantDir('build', '.', duplicate=0)
+
+#env.Append(CPPPATH=[Dir('../../src')])
+
+env.Append(CCFLAGS=['-Wall', '-Wextra'])
+env.Append(CXXFLAGS=['-std=c++11'])
+
+# Define the source files for the library
+sources = [
+  '../../src/crypt0.c',
+  '../../src/crypt0_rlp.c',
+  '../../src/crypt0_eth.c',
+  '../../src/crypt0_sha.c',
+  '../../src/crypt0_hmac.c',
+  '../../src/crypt0_pbkdf2.c',
+  '../../src/crypt0_bip39.c',
+  '../../src/crypt0_bip39_english.c',
+  '../../src/crypt0_secp256k1.c',
+  '../../src/crypt0_aes_ccm.c',
+  #'DumpHex.c',
+  '../../lib/SHA3IUF/sha3.c',
+  '../../lib/secp256k1/src/secp256k1.c',
+  '../../lib/secp256k1/src/precomputed_ecmult.c',
+  '../../lib/secp256k1/src/precomputed_ecmult_gen.c',
+]
+
+#env.VariantDir('build', '..', duplicate=0)
+#env.VariantDir('build', '../..', duplicate=0)
+
+#env.VariantDir('buildfuckyou', '.', duplicate=0)
+#obj_files = env.Object(sources, variant_dir='build')
+#print(obj_files)
+
+
+# Create a library target
+#crypt0 = env.Library('libcrypt0', [sources, obj_files])
+#crypt0 = env.Library('libcrypt0', obj_files)
+
+# Build one or more test runners.
+test = env.Program(
+  target = 'aes_ccm_test', 
+  source = ['src-tests/test_aes_ccm.cpp', sources],
+  LIBS   = [LIBS],
+)
+
+# Depend on the runner to ensure that it's built before running it.
+test_alias = Alias('test', [test], test[0].path)
+
+# Simply required.  Without it, 'test' is never considered out of date.
+AlwaysBuild(test_alias)
+#AlwaysBuild(crypt0)
+
+# Enable compile db
+scons_compiledb.enable(env)
+env.CompileDb()
+
+

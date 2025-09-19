@@ -1,0 +1,10 @@
+build
+Testing
+cmake_install.cmake
+CMakeCache.txt
+CMakeFiles
+CTestTestfile.cmake
+Makefile
+compile_commands.json
+.DS_Store
+
