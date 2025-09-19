@@ -1,6 +1,7 @@
 #![no_std]
 extern crate alloc;
-use alloc::{boxed::Box};
+use alloc::{boxed::Box, rc::Rc};
+use core::cell::Cell;
 
 #[cfg(feature = "minifb")]
 extern crate std;
@@ -86,16 +87,25 @@ pub extern "C" fn rust_main() -> ! {
     log_info!("Creating Slint UI");
     match MainWindow::new() {
         Ok(ui) => {
-          
+            let brightness_request: Rc<Cell<Option<u8>>> = Rc::new(Cell::new(None));
+            {
+                let br = brightness_request.clone();
+                ui.on_brightness_changed(move |brightness_value| {
+                    log_info!("Brightness callback triggered with value: {}", brightness_value);
+                    br.set(Some(brightness_value as u8));
+                });
+            }
             log_info!("Starting Slint UI event loop");
 
             firmware.indicator.turn_on(LedColor::Blue);
-
-            log_info!("Starting main UI loop with line-by-line rendering");
-            
             // Super loop for embedded systems with line-by-line rendering
             loop {
                 slint::platform::update_timers_and_animations();
+
+                if let Some(new_brightness) = brightness_request.get() {
+                    firmware.display.set_brightness(new_brightness);
+                    brightness_request.set(None);
+                }
 
                 let is_pressed = firmware.touch.is_pressed();
 

@@ -23,12 +23,12 @@ component BrightnessLogo inherits Rectangle {
     
     // Brightness scale (slider) - only visible when scale-shown is true
     if scale-shown: Rectangle {
-        x: -70px; // Position to the left of the button
-        y: 30px;  // Position below the button
+        x: -200px; // Position to the left of the button
+        y: 10px;  // Position below the button
         width: 140px;
         height: 24px;
         background: white;
-        border-color: #bdd7;
+        border-color: transparent;
         border-width: 1px;
         
         // Scale background track
@@ -89,22 +89,22 @@ component BrightnessLogo inherits Rectangle {
                 if (pressed) {
                     pressed = false;
                     scale-shown = !scale-shown;
-                    if (scale-shown) {
-                        hide-timer.restart();
-                    }
+                    // if (scale-shown) {
+                    //     hide-timer.restart();
+                    // }
                 }
             }
         }
     }
     
-    // Auto-hide timer
-    hide-timer := Timer {
-        interval: hide-timer-duration;
-        running: scale-shown;
-        triggered => {
-            scale-shown = false;
-        }
-    }
+    // // Auto-hide timer
+    // hide-timer := Timer {
+    //     interval: hide-timer-duration;
+    //     running: scale-shown;
+    //     triggered => {
+    //         scale-shown = false;
+    //     }
+    // }
 }
 
 export component MainWindow inherits Window {
@@ -137,7 +137,8 @@ export component MainWindow inherits Window {
         x: 320px - 24px - 10px; // 10px margin from right edge
         y: 5px; // 5px margin from top
         brightness-changed(value) => {
-            debug("Brightness changed to: " + value);
+            // Forward the callback to MainWindow level so Rust can catch it
+            root.brightness-changed(value);
         }
     }
     
@@ -294,4 +295,7 @@ export component MainWindow inherits Window {
     
     // Callback for when unlock animation completes
     callback unlocked();
+
+    // Callback for brightness changes - expose BrightnessLogo callback at MainWindow level
+    callback brightness-changed(int);
 }
