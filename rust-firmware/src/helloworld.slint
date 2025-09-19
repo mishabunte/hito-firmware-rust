@@ -2,17 +2,27 @@ import { VerticalBox, HorizontalBox } from "std-widgets.slint";
 import "MinecraftRegular-Bmg3.otf";
 
 component BrightnessLogo inherits Rectangle {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
+    
+    // Position properties (can be set from parent)
+    in property <length> pos-x: 0px;
+    in property <length> pos-y: 0px;
+    
+    // Apply position
+    x: pos-x;
+    y: pos-y;
     
     // Properties
     property <int> brightness: 95;
     property <bool> scale-shown: false;
-    property <bool> pressed: false;
+    property <bool> logo_pressed: false;
+    property <bool> scale-pressed: false;
     property <duration> hide-timer-duration: 5000ms;
     
     // Callbacks
     callback brightness-changed(int);
+    callback scale-shown-cb(bool);
     
     // Brightness icon button
     Image {
@@ -23,9 +33,9 @@ component BrightnessLogo inherits Rectangle {
     
     // Brightness scale (slider) - only visible when scale-shown is true
     if scale-shown: Rectangle {
-        x: -200px; // Position to the left of the button
-        y: 10px;  // Position below the button
-        width: 140px;
+        x: -225px; // Position to the left of the button
+        y: 148px;  // Position below the button
+        width: 195px;
         height: 24px;
         background: white;
         border-color: transparent;
@@ -37,7 +47,7 @@ component BrightnessLogo inherits Rectangle {
             y: parent.height / 2 - 2px;
             width: parent.width;
             height: 4px;
-            background: #bdd7;
+            background: #4740403c;
         }
         
         // Scale filled portion
@@ -46,7 +56,7 @@ component BrightnessLogo inherits Rectangle {
             y: parent.height / 2 - 2px;
             width: parent.width * brightness / 100;
             height: 4px;
-            background: #73ae;
+            background: #474040eb;
         }
         
         // Scale handle (brightness icon)
@@ -66,10 +76,13 @@ component BrightnessLogo inherits Rectangle {
             pointer-event(event) => {
                 if (event.kind == PointerEventKind.down || event.kind == PointerEventKind.move) {
                     if (scale-touch.pressed) {
+                      scale-pressed = true;
                         // Update brightness based on touch position
                         brightness = max(1, min(100, round(scale-touch.mouse-x * 100 / scale-touch.width)));
                         brightness-changed(brightness);
                     }
+                } else if (event.kind == PointerEventKind.up) {
+                    scale-pressed = false;
                 }
             }
         }
@@ -84,27 +97,29 @@ component BrightnessLogo inherits Rectangle {
         
         pointer-event(event) => {
             if (event.kind == PointerEventKind.down) {
-                pressed = true;
+                logo_pressed = true;
             } else if (event.kind == PointerEventKind.up) {
-                if (pressed) {
-                    pressed = false;
+                if (logo_pressed) {
+                    logo_pressed = false;
                     scale-shown = !scale-shown;
-                    // if (scale-shown) {
-                    //     hide-timer.restart();
-                    // }
+                    scale-shown-cb(scale-shown);
+                    if (scale-shown) {
+                        hide-timer.restart();
+                    }
                 }
             }
         }
     }
     
-    // // Auto-hide timer
-    // hide-timer := Timer {
-    //     interval: hide-timer-duration;
-    //     running: scale-shown;
-    //     triggered => {
-    //         scale-shown = false;
-    //     }
-    // }
+    // Auto-hide timer
+    hide-timer := Timer {
+        interval: hide-timer-duration;
+        running: scale-shown && !scale-pressed;
+        triggered => {
+            scale-shown = false;
+            scale-shown-cb(scale-shown);
+        }
+    }
 }
 
 export component MainWindow inherits Window {
@@ -121,6 +136,7 @@ export component MainWindow inherits Window {
     property <int> lock-frame: 0;
     property <bool> is-unlocked: false;
     property <duration> animation-duration: 60ms;
+    property <bool> show-text: true;
     
     // Key and lock positions (matching C code coordinates)
     property <length> key-start-x: 89px;
@@ -134,11 +150,15 @@ export component MainWindow inherits Window {
     
     // Brightness control in top-right corner
     BrightnessLogo {
-        x: 320px - 24px - 10px; // 10px margin from right edge
-        y: 5px; // 5px margin from top
+        pos-x: 320px - 24px - 10px; // 10px margin from right edge
+        pos-y: 5px; // 5px margin from top
         brightness-changed(value) => {
             // Forward the callback to MainWindow level so Rust can catch it
             root.brightness-changed(value);
+            debug("Brightness changed to: " + value);
+        }
+        scale-shown-cb(pressed) => {
+            show-text = !pressed;
         }
     }
     
@@ -153,6 +173,7 @@ export component MainWindow inherits Window {
         x: 30px;
         wrap: word-wrap;
         width: 260px;
+        visible: show-text;
     }
 
     // Lock sprite with animation frames

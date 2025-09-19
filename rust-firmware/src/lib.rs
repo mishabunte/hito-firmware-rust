@@ -91,7 +91,6 @@ pub extern "C" fn rust_main() -> ! {
             {
                 let br = brightness_request.clone();
                 ui.on_brightness_changed(move |brightness_value| {
-                    log_info!("Brightness callback triggered with value: {}", brightness_value);
                     br.set(Some(brightness_value as u8));
                 });
             }
@@ -103,6 +102,7 @@ pub extern "C" fn rust_main() -> ! {
                 slint::platform::update_timers_and_animations();
 
                 if let Some(new_brightness) = brightness_request.get() {
+                    log_info!("Setting brightness to {}", new_brightness);
                     firmware.display.set_brightness(new_brightness);
                     brightness_request.set(None);
                 }
