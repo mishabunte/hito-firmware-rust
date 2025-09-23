@@ -1,4 +1,5 @@
 import { HitoWindow } from "HitoWindow.slint";
+import { Router, Screen } from "Router.slint";
 import "RobotoMono-Light.ttf";
 
 export component LockScreen inherits HitoWindow {
@@ -22,18 +23,9 @@ export component LockScreen inherits HitoWindow {
 
     property <bool> key_shown: true; // To control key visibility
 
-    // Handle brightness scale visibility changes
+    // Handle brightness scale visibility changes        show-text = !shown;
     brightness-scale-shown-changed(shown) => {
         show-text = !shown;
-    }
-
-    callback lockscreen-brightness-changed(int);
-
-    // Handle the inherited parent callback:
-    brightness-changed(value) => {
-        // do child-specific work...
-        // then optionally forward as your own callback:
-        lockscreen-brightness-changed(value);
     }
 
 
@@ -164,6 +156,7 @@ export component LockScreen inherits HitoWindow {
                 lock-frame += 1;
             } else {
                 // Animation complete - trigger unlock callback
+                Router.navigate(Screen.TestScreen);
                 root.unlocked();
             }
         }

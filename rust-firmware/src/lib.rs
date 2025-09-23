@@ -85,12 +85,13 @@ pub extern "C" fn rust_main() -> ! {
     let mut last_mouse_pos = (0xffff, 0xffff);
 
     log_info!("Creating Slint UI");
-    match LockScreen::new() {
+    match MainWindow::new() {
         Ok(ui) => {
             let brightness_request: Rc<Cell<Option<u8>>> = Rc::new(Cell::new(None));
+            let bc = ui.global::<BrightnessController>();
             {
                 let br = brightness_request.clone();
-                ui.on_lockscreen_brightness_changed(move |brightness_value| {
+                bc.on_brightness_changed(move |brightness_value| {
                     br.set(Some(brightness_value as u8));
                 });
             }
