@@ -29,7 +29,7 @@ export component BrightnessLogo inherits Rectangle {
 
     // Brightness icon button
     Image {
-        source: @image-url("../res/img/brightness.png");
+        source: @image-url("../../res/img/brightness.png");
         width: parent.width;
         height: parent.height;
         visible: !scale-shown;
@@ -65,7 +65,7 @@ export component BrightnessLogo inherits Rectangle {
 
         // Scale handle (brightness icon)
         Image {
-            source: @image-url("../res/img/brightness.png");
+            source: @image-url("../../res/img/brightness.png");
             x: parent.width * brightness / 100 - self.width / 2;
             y: 0px;
             width: 20px;
