@@ -11,7 +11,17 @@ extern crate panic_halt;
 
 mod hito_firmware;
 mod drivers;
-mod crypto;
+pub mod crypto {
+    pub mod libcrypt0pro {
+        pub mod stellar {
+            mod address;  // This will look for address.rs
+            pub use address::*;
+            
+            mod transaction;
+            pub use transaction::*;
+        }
+    }
+}
 mod platform;
 
 pub use drivers::logging::*;

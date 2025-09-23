@@ -16,7 +16,7 @@ component BrightnessLogo inherits Rectangle {
     
     // Brightness icon button
     Image {
-        source: @image-url("../res/img/brightness.png");
+        source: @image-url("../../res/img/brightness.png");
         width: parent.width;
         height: parent.height;
     }
@@ -51,7 +51,7 @@ component BrightnessLogo inherits Rectangle {
         
         // Scale handle (brightness icon)
         Image {
-            source: @image-url("../res/img/brightness.png");
+            source: @image-url("../../res/img/brightness.png");
             x: parent.width * brightness / 100 - self.width / 2;
             y: 0px;
             width: 24px;
@@ -89,22 +89,10 @@ component BrightnessLogo inherits Rectangle {
                 if (pressed) {
                     pressed = false;
                     scale-shown = !scale-shown;
-                    // if (scale-shown) {
-                    //     hide-timer.restart();
-                    // }
                 }
             }
         }
     }
-    
-    // // Auto-hide timer
-    // hide-timer := Timer {
-    //     interval: hide-timer-duration;
-    //     running: scale-shown;
-    //     triggered => {
-    //         scale-shown = false;
-    //     }
-    // }
 }
 
 export component MainWindow inherits Window {
@@ -157,7 +145,7 @@ export component MainWindow inherits Window {
 
     // Lock sprite with animation frames
     Image {
-        source: @image-url("../res/img/lock.png");
+        source: @image-url("../../res/img/lock.png");
         x: lock-x + first-frame-offset*1px; // Adjusted to align with key
         y: lock-y;
         width: 46px - first-frame-offset*1px;
@@ -178,7 +166,7 @@ export component MainWindow inherits Window {
     
     // Lock sprite with animation frames
     Image {
-        source: @image-url("../res/img/lock.png");
+        source: @image-url("../../res/img/lock.png");
         x: lock-x;
         y: lock-y;
         width: 46px;
@@ -206,7 +194,7 @@ export component MainWindow inherits Window {
         visible: key_shown;
         
         Image {
-            source: @image-url("../res/img/lock.png");
+            source: @image-url("../../res/img/lock.png");
             width: 27px;
             height: 34px;
             // Key is at x=322 in the sprite sheet
