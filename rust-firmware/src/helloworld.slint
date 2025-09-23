@@ -6,13 +6,9 @@ component BrightnessLogo inherits Rectangle {
     height: 20px;
     
     // Position properties (can be set from parent)
-    in property <length> pos-x: 0px;
-    in property <length> pos-y: 0px;
-    
-    // Apply position
-    x: pos-x;
-    y: pos-y;
-    
+    in property <length> scale-x: -260px;
+    in property <length> scale-y: 0px;
+
     // Properties
     property <int> brightness: 95;
     property <bool> scale-shown: false;
@@ -33,8 +29,8 @@ component BrightnessLogo inherits Rectangle {
     
     // Brightness scale (slider) - only visible when scale-shown is true
     if scale-shown: Rectangle {
-        x: -225px; // Position to the left of the button
-        y: 148px;  // Position below the button
+        x: scale-x; // Position to the left of the button
+        y: scale-y;  // Position below the button
         width: 195px;
         height: 24px;
         background: white;
@@ -150,8 +146,8 @@ export component MainWindow inherits Window {
     
     // Brightness control in top-right corner
     BrightnessLogo {
-        pos-x: 320px - 24px - 10px; // 10px margin from right edge
-        pos-y: 5px; // 5px margin from top
+        x: 320px - 24px - 10px; // 10px margin from right edge
+        y: 5px; // 5px margin from top
         brightness-changed(value) => {
             // Forward the callback to MainWindow level so Rust can catch it
             root.brightness-changed(value);
