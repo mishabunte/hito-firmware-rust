@@ -1,5 +1,5 @@
 import { VerticalBox, HorizontalBox } from "std-widgets.slint";
-import "RobotoMono-Light.ttf";
+import "../../res/fonts/RobotoMono-Light.ttf";
 import { BrightnessLogo } from "BrightnessController.slint";
 
 export component HitoWindow inherits Window {
@@ -18,10 +18,10 @@ export component HitoWindow inherits Window {
 
     // Brightness control in top-right corner
     brightness-control := BrightnessLogo {
-        scale-x: is-lockscreen ? -225px : -225px; // Use component default (-225px) if not lock screen
-        scale-y: is-lockscreen ? 175px : 0px; // Use component default (0px) if not lock screen
-        x: parent.width - 20px - 10px; // 10px margin from right edge
-        y: 5px; // 5px margin from top
+        scale-x: is-lockscreen ? -225px : -225px;
+        scale-y: is-lockscreen ? 175px : 0px;
+        x: parent.width - 20px - 10px;
+        y: 5px;
         visible: show-brightness;
         scale-shown-cb(shown) => {
             brightness-scale-shown = shown;
