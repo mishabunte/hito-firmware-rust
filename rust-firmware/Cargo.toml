@@ -29,7 +29,12 @@ sha2 = { version = "0.10", default-features = false }
 hmac = { version = "0.12", default-features = false }
 base32 = { version = "0.5.1", default-features = false }
 crc = { version = "3.3.0", default-features = false }
-stellar-xdr = { version = "23.0.0", default-features = false }
+stellar-xdr = { version = "23.0.0", default-features = true, features = [] }
+base64ct = "1.8.0"
+heapless = "0.9.1"
+stellar-strkey = "0.0.13"
+hex = "0.4"
+thiserror = "2.0.16"
 
 # Embedded dependencies (for zephyr feature)
 cortex-m = { version = "0.7", optional = true }
