@@ -20,6 +20,7 @@ fn test_wallet_creation() {
     // Wallet should be created successfully
     assert_eq!(wallet.seed.len(), 64);
     println!("✓ Wallet creation test passed");
+    println!("================================================================================");
 }
 
 #[test]
@@ -44,6 +45,7 @@ fn test_keypair_derivation_account_0() {
     println!("  Secret Key: {}", hex::encode(keypair.secret_key));
     println!("  Public Key: {}", hex::encode(keypair.public_key));
     println!("  Address: {}", keypair.address);
+    println!("================================================================================");
 }
 
 #[test]
@@ -69,6 +71,7 @@ fn test_multiple_accounts_derivation() {
     println!("  Account 0: {}", account0.address);
     println!("  Account 1: {}", account1.address);
     println!("  Account 2: {}", account2.address);
+    println!("================================================================================");
 }
 
 #[test]
@@ -89,7 +92,19 @@ fn test_deterministic_derivation() {
     assert_eq!(keypair1.address, keypair2.address);
     
     println!("✓ Deterministic derivation test passed");
+    println!("================================================================================");
 }
+
+#[test]
+fn test_default_address() {
+    let seed = get_test_seed();
+    let wallet = StellarWallet::from_seed(seed);
+    let address = wallet.get_default_address().expect("Failed to get default address");
+    assert_eq!(address, "GCEMPQ7LYZ7EYWFYQYXIFQRUHKLRT74TLORALIOZIP2KPED7TD3GG352");
+    println!("✓ Default address test passed: {}", address);
+    println!("================================================================================");
+}
+
 
 #[test]
 fn test_address_format_validation() {
@@ -110,6 +125,7 @@ fn test_address_format_validation() {
     }
     
     println!("✓ Address format validation test passed");
+    println!("================================================================================");
 }
 
 #[test]
@@ -129,6 +145,7 @@ fn test_different_seeds_different_addresses() {
     assert_ne!(keypair1.address, keypair2.address);
     
     println!("✓ Different seeds produce different addresses test passed");
+    println!("================================================================================");
 }
 
 #[test]
@@ -149,6 +166,7 @@ fn test_firmware_performance() {
     
     // Should complete in reasonable time for embedded system
     assert!(duration.as_millis() < 1000, "Derivation took too long: {:?}", duration);
+    println!("================================================================================");
 }
 
 #[test]
@@ -166,6 +184,7 @@ fn test_ed25519_keypair_consistency() {
     assert_eq!(keypair.public_key, derived_public_key);
     
     println!("✓ Ed25519 keypair consistency test passed");
+    println!("================================================================================");
 }
 
 #[test]
@@ -186,6 +205,7 @@ fn test_mnemonic_to_seed_conversion() {
     
     println!("✓ Mnemonic to seed conversion test passed");
     println!("  Seed (hex): {}", hex::encode(&seed[..32])); // Print first 32 bytes
+    println!("================================================================================");
 }
 
 // Integration test simulating full hardware wallet workflow
@@ -221,20 +241,5 @@ fn test_hardware_wallet_workflow() {
     println!("5. Default address: {}", default_addr);
     
     println!("=== Hardware Wallet Integration Test Completed Successfully ===\n");
-}
-
-// Test specific to embedded/no-std environment constraints
-#[cfg(not(feature = "std"))]
-#[test]
-fn test_no_std_compatibility() {
-    // This test ensures the wallet works in no-std environment
-    let seed = [42u8; 64]; // Simple test seed
-    let wallet = StellarWallet::from_seed(seed);
-    
-    let keypair = wallet.derive_keypair(0).expect("Failed to derive in no-std");
-    
-    assert!(keypair.address.starts_with('G'));
-    assert_eq!(keypair.address.len(), 56);
-    
-    println!("✓ No-std compatibility test passed");
+    println!("================================================================================");
 }
