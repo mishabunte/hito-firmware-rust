@@ -155,7 +155,7 @@ export component LockScreen inherits HitoWindow {
                 lock-frame += 1;
             } else {
                 // Animation complete - trigger unlock callback
-                Router.navigate(Screen.TestScreen);
+                Router.navigate(Screen.EnterPin);
                 root.unlocked();
             }
         }
