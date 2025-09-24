@@ -1,0 +1,233 @@
+import { HitoWindow } from "HitoWindow.slint";
+import { Router, Screen } from "Router.slint";
+
+export global Palette {
+    in-out property <brush> green: #E6FF83;
+    in-out property <brush> red: #FF6B6B;
+    in-out property <brush> grey: #F2F2F2;
+    in-out property <brush> black: #000000;
+    in-out property <brush> white: #FFFFFF;
+}
+
+component PassChar {
+    property <bool> pressed: false;
+    in-out property <string> content: "0";
+    Rectangle {
+        width: 50px;
+        height: 50px;
+        border-color: Palette.green;
+        border-width: 4px;
+        border-radius: self.width/30;
+        background: pressed ? Palette.green : transparent;
+        Rectangle {
+            width: 46px;
+            height: 46px;
+            border-color: Palette.black;
+            border-width: 1px;
+        }
+        Text {
+            text: content;
+            font-size: 20px;
+            color: Palette.black;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            width: parent.width;
+            height: parent.height;
+        }
+        TouchArea {
+            width: parent.width;
+            height: parent.height;
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down) {
+                    pressed = true;
+                    root.clicked();
+                    debug("Clicked pin", content);
+                } else if (event.kind == PointerEventKind.up) {
+                    pressed = false;
+                }
+            }
+        }
+    }
+    callback clicked();
+}
+
+component PinGrid {
+    property <length> spacing: 50px;
+    VerticalLayout {
+        y: 55px;
+        spacing: 40px;
+        alignment: center;
+        HorizontalLayout {
+            spacing: spacing;
+            for i in ["1", "2", "3", "4", "5"]:
+                PassChar {content: i;
+                    clicked() => {
+                        number-clicked(i);
+                    }
+                }
+        }
+        HorizontalLayout {
+            spacing: spacing;
+            for i in ["6", "7", "8", "9", "0"]:
+                PassChar {content: i;
+                    clicked() => {
+                        number-clicked(i);
+                    }
+                }
+        }
+    }
+    callback number-clicked(string);
+}
+
+component EraseButton {
+    property <bool> pressed: false;
+    in-out property <string> content: "X";
+    callback clicked();
+    Text {
+        text: content;
+        width: 30px;
+        height: 30px;
+        font-size: 20px;
+        // border-width: 1px;
+        // border-radius: 20px;
+        color: pressed ? #d3d3d3 : red;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        TouchArea {
+        width: parent.width;
+        height: parent.height;
+        pointer-event(event) => {
+                if (event.kind == PointerEventKind.down) {
+                    pressed = true;
+                    root.clicked();
+                    debug("Clicked erase", content);
+                } else if (event.kind == PointerEventKind.up) {
+                    pressed = false;
+                }
+            }
+        }
+    }
+}
+
+// Лучшее решение с Repeater - работает стабильнее чем for loop
+
+// Замените ваш компонент EnteredPassword на этот:
+
+component EnteredPassword {
+    in-out property <string> password: "";
+    property <bool> erase-pressed: false;
+    property <length> start-x: 75px;
+    property <length> step-x: 30px;
+    
+    Rectangle {
+        x: start-x + 0 * step-x;
+        y: 70px;
+        width: 20px;
+        height: 20px;
+        border-radius: 1px;
+        background: Palette.black;
+        visible: password.character-count >= 1;
+    }
+    
+    Rectangle {
+        x: start-x + 1 * step-x;
+        y: 70px;
+        width: 20px;
+        height: 20px;
+        border-radius: 1px;
+        background: Palette.black;
+        visible: password.character-count >= 2;
+    }
+    
+    Rectangle {
+        x: start-x + 2 * step-x;
+        y: 70px;
+        width: 20px;
+        height: 20px;
+        border-radius: 1px;
+        background: Palette.black;
+        visible: password.character-count >= 3;
+    }
+    
+    Rectangle {
+        x: start-x + 3 * step-x;
+        y: 70px;
+        width: 20px;
+        height: 20px;
+        border-radius: 1px;
+        background: Palette.black;
+        visible: password.character-count >= 4;
+    }
+    
+    Rectangle {
+        x: start-x + 4 * step-x;
+        y: 70px;
+        width: 20px;
+        height: 20px;
+        border-radius: 1px;
+        background: Palette.black;
+        visible: password.character-count >= 5;
+    }
+    
+    Rectangle {
+        x: start-x + 5 * step-x;
+        y: 70px;
+        width: 20px;
+        height: 20px;
+        border-radius: 1px;
+        background: Palette.black;
+        visible: password.character-count >= 6;
+    }
+    
+    callback erase-button-pressed();
+}
+
+export component EnterPinScreen inherits HitoWindow {
+    property <string> entered-password: "";
+    Rectangle {
+        y: 10px;
+        background: Palette.green;
+        width: 180px;
+        height: 30px;
+        visible: !parent.brightness-scale-shown;
+        Text {
+            y: 1px;
+            text: "ENTER PASSCODE";
+            font-size: 20px;
+            font-family: "Roboto Mono";
+            font-italic: false;
+            font-weight: 1000;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+            width: 260px;
+        }
+    }
+    EraseButton {
+        x: 280px;
+        y: 68px;
+        clicked() => {
+            entered-password = "";
+            remove-char();
+        }
+    }
+    EnteredPassword {
+        x: 0px;
+        y: 2px;
+        password: entered-password;
+    }
+    HorizontalLayout {
+        x: 30px;
+        alignment: start;
+        spacing: 50px;
+        PinGrid {
+            number-clicked(n) => {
+                if (entered-password.character-count < 6) {
+                    entered-password = entered-password + n;
+                    append-char(n);
+                }
+            }
+        }
+    }
+    callback append-char(string);
+    callback remove-char();
+}
