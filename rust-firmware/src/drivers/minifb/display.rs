@@ -22,17 +22,39 @@ impl DisplayImpl {
 
         ((r8 as u32) << 16) | ((g8 as u32) << 8) | ((b8 as u32) << 0)
     }
+
+    pub fn draw_screen_corners(&mut self) {
+      let color = 0x0000;
+
+      self.fill_rect(0, 0, 2, 2, color);
+      self.fill_rect(2, 0, 2, 1, color);
+      self.fill_rect(0, 2, 1, 2, color);
+
+      self.fill_rect(318, 0, 2, 2, color);
+      self.fill_rect(316, 0, 2, 1, color);
+      self.fill_rect(319, 2, 1, 2, color);
+
+      self.fill_rect(318, 238, 2, 2, color);
+      self.fill_rect(316, 239, 2, 1, color);
+      self.fill_rect(319, 236, 1, 2, color);
+
+      self.fill_rect(0, 238, 2, 2, color);
+      self.fill_rect(2, 239, 2, 1, color);
+      self.fill_rect(0, 236, 1, 2, color);
+    }
 }
 
 impl Display for DisplayImpl {
 
     fn init(&mut self) {
         simulator_window_init();
+        self.draw_screen_corners();
         log_info!("Minifb Display initialized");
     }
 
     fn update(&mut self) {
         simulator_window_update();
+        self.draw_screen_corners();
     }
     
     fn draw_rect(&self, x: u16, y: u16, w: u16, h: u16, rgb565: u16) {
