@@ -24,7 +24,7 @@ use slint::platform::software_renderer::MinimalSoftwareWindow;
 #[cfg(any(feature = "minifb", feature = "zephyr"))]
 slint::include_modules!();
 
-use crate::{drivers::{Display, Indicator, LedColor, Touch}, platform::{MyPlatform, Timer}, platform::DisplayWrapper};
+use crate::{drivers::{Display, Indicator, LedColor, Touch, Battery}, platform::{MyPlatform, Timer}, platform::DisplayWrapper};
 
 #[cfg(feature = "zephyr")]
 extern "C" {
@@ -96,6 +96,14 @@ pub extern "C" fn rust_main() -> ! {
                 });
             }
             log_info!("Starting Slint UI event loop");
+            let battery_request: Rc<Cell<bool>> = Rc::new(Cell::new(false));
+            let battery = ui.global::<BatteryController>();
+            {
+                let br = battery_request.clone();
+                battery.on_battery_level_request(move || {
+                    br.set(true);
+                });
+            }
 
             firmware.indicator.turn_on(LedColor::Blue);
             // Super loop for embedded systems with line-by-line rendering
@@ -106,6 +114,13 @@ pub extern "C" fn rust_main() -> ! {
                     log_info!("Setting brightness to {}", new_brightness);
                     firmware.display.set_brightness(new_brightness);
                     brightness_request.set(None);
+                }
+
+                if battery_request.get() {
+                    let level = firmware.battery.get_level();
+                    log_info!("Battery level requested: {}", level);
+                    battery.set_battery_level(level);
+                    battery_request.set(false);
                 }
 
                 let is_pressed = firmware.touch.is_pressed();

@@ -37,7 +37,7 @@ export component BrightnessLogo inherits Rectangle {
 
     // Brightness scale (slider) - only visible when scale-shown is true
     if scale-shown: Rectangle {
-        x: scale-x; // Position to the left of the button
+        x: (scale-x - 85px); // Position to the left of the button
         y: scale-y;  // Position below the button
         width: 190px;
         height: 20px;

@@ -9,5 +9,4 @@ pub use display::DisplayImpl;
 pub use touch::TouchImpl;
 pub use timer::ZephyrTimer;
 pub use indicator::IndicatorImpl;
-
-
+pub use battery::BatteryImpl;

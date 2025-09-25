@@ -1,6 +1,7 @@
 import { VerticalBox, HorizontalBox } from "std-widgets.slint";
 import "../../res/fonts/RobotoMono-Light.ttf";
-import { BrightnessLogo } from "BrightnessController.slint";
+import { BrightnessLogo} from "BrightnessController.slint";
+import { BatteryLevel, BatteryController } from "Battery.slint";
 
 export component HitoWindow inherits Window {
     width: 320px;
@@ -16,17 +17,33 @@ export component HitoWindow inherits Window {
     // Internal brightness control state
     property <bool> brightness-scale-shown: false;
 
-    // Brightness control in top-right corner
-    brightness-control := BrightnessLogo {
-        scale-x: is-lockscreen ? -225px : -225px;
-        scale-y: is-lockscreen ? 175px : 0px;
-        x: parent.width - 20px - 10px;
-        y: 5px;
-        visible: show-brightness;
-        scale-shown-cb(shown) => {
-            brightness-scale-shown = shown;
-            root.brightness-scale-shown-changed(shown);
+    // Layout container for positioning elements
+    HorizontalLayout {
+        width: parent.width;
+        spacing: 7px;
+        padding-right: 9px;
+        padding-top: 5px;
+        alignment: end;
+        // Brightness control in top-right corner
+        brightness-control := BrightnessLogo {
+          width: 20px;
+          height: 20px;
+          scale-x: -(parent.width / 2 - self.width / 2 - parent.padding-right - parent.spacing - 20px);
+          scale-y: is-lockscreen ? 175px : 0px;
+          visible: show-brightness;
+          scale-shown-cb(shown) => {
+              brightness-scale-shown = shown;
+              root.brightness-scale-shown-changed(shown);
+          }
         }
+      
+        Rectangle {
+          width: 20px;
+          height: 20px;
+          battery-indicator := BatteryLevel {
+            visible: show-brightness;
+        }
+      }
     }
 
     // Global touch area to hide brightness scale when clicking outside - only active when scale is shown
@@ -51,4 +68,5 @@ export component HitoWindow inherits Window {
     }
 
     callback brightness-scale-shown-changed(bool);
+    callback battery-level-requested() -> int;
 }

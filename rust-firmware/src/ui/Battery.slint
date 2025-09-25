@@ -1,0 +1,43 @@
+export global BatteryController {
+    in-out property <int> battery-level: 75; // Battery level from 1 to 100
+    callback battery-level-request();
+}
+
+export component BatteryLevel inherits Rectangle {
+    width: 20px;
+    height: 12px;
+
+    // Properties
+    in-out property <int> battery-level: BatteryController.battery-level;
+    
+    // Request battery level update when component is shown
+    init => {
+        BatteryController.battery-level-request();
+    }
+    
+    // Timer to periodically request battery level updates (every 30 seconds)
+    Timer {
+        interval: 5s;
+        running: true;
+        triggered => {
+            BatteryController.battery-level-request();
+            debug("Battery level requested via timer" + battery-level);
+        }
+    }
+    
+    // Battery outline image
+    Image {
+        source: @image-url("../../res/img/battery.png");
+        width: parent.width;
+        height: parent.height;
+    }
+    
+    // Battery level indicator (fill) - matches C firmware color logic
+    Rectangle {
+        x: 2px;
+        y: 2px;
+        width: max(2px, (parent.width - 6px) * battery-level / 100);
+        height: parent.height - 4px;
+        background: battery-level < 33 ? #fc0606 : (battery-level < 55 ? #fee400 : #24e40a);
+    }
+}

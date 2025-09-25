@@ -69,6 +69,9 @@ extern "C" {
     pub fn hito_debug_led_off();
     pub fn hito_debug_led_blink(n: u8);
 
+    // Battery functions
+    pub fn hito_battery_level() -> i32;
+
     // Logging functions - raw FFI
     pub fn printk(fmt: *const core::ffi::c_char, ...);
 }

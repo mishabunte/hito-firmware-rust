@@ -1,4 +1,5 @@
-use crate::drivers::{ Display,   DisplayImpl };
+use crate::drivers::{ Display, DisplayImpl };
+use crate::drivers::{ Battery, BatteryImpl };
 use crate::drivers::{ Touch,     TouchImpl };
 use crate::drivers::{ Indicator, IndicatorImpl, LedColor, BlinkSpeed };
 
@@ -11,6 +12,7 @@ pub struct HitoFirmware {
     pub display:   DisplayImpl,
     pub touch:     TouchImpl,
     pub indicator: IndicatorImpl,
+    pub battery:   BatteryImpl,
 }
 
 
@@ -20,6 +22,7 @@ impl HitoFirmware {
             indicator: IndicatorImpl::new(),
             display:   DisplayImpl::new(),
             touch:     TouchImpl::new(),
+            battery:   BatteryImpl::new(),
         }
     }
 
