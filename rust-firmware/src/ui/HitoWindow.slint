@@ -15,7 +15,7 @@ export component HitoWindow inherits Window {
     in property <bool> is-lockscreen: false;
 
     // Internal brightness control state
-    property <bool> brightness-scale-shown: false;
+    out property <bool> brightness-scale-shown: false;
 
     // Layout container for positioning elements
     HorizontalLayout {
