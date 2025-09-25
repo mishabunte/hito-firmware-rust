@@ -17,8 +17,10 @@ pub mod crypto {
             mod address;  // This will look for address.rs
             pub use address::*;
             
-            mod transaction;
-            pub use transaction::*;
+            mod transaction_parser;
+            mod transaction_serializer;
+            pub use transaction_parser::*;
+            pub use transaction_serializer::*;
         }
     }
 }

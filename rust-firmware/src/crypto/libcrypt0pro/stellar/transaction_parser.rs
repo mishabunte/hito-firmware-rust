@@ -2,14 +2,10 @@
 
 extern crate alloc;
 use alloc::{string::String, vec::Vec, format};
-use stellar_strkey::Contract;
-use core::str::{Bytes, FromStr};
 
 use stellar_xdr::curr::{
     TransactionEnvelope, TransactionV1Envelope, FeeBumpTransactionEnvelope,
     TransactionV0Envelope, Uint256,
-    Transaction, TransactionV0, FeeBumpTransaction,
-    ScVal, LedgerKey,
     AssetCode,
     LiquidityPoolParameters,
     PublicKey, FeeBumpTransactionInnerTx,
@@ -17,6 +13,7 @@ use stellar_xdr::curr::{
     DecoratedSignature, TimeBounds, LedgerBounds, Preconditions, PreconditionsV2,
     Memo, Int64, Uint32, Uint64, ReadXdr, WriteXdr, SequenceNumber,
 };
+
 use heapless::{Vec as HeaplessVec, String as HeaplessString};
 
 use crate::printk;
@@ -31,7 +28,7 @@ pub const MAX_CLAIMANTS: usize = 10;
 pub const MAX_STRING_LEN: usize = 64;
 pub const MAX_DATA_VALUE_LEN: usize = 64;
 pub const MAX_ASSET_CODE_LEN: usize = 12;
-const MAX_XDR_LEN: usize = 8192; // Maximum expected XDR length
+pub const MAX_XDR_LEN: usize = 8192; // Maximum expected XDR length
 
 pub type BoundedString = HeaplessString<MAX_STRING_LEN>;
 pub type BoundedVec<T> = HeaplessVec<T, MAX_OPERATIONS>;
