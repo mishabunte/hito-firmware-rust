@@ -3,11 +3,7 @@ import { EnterPinScreen } from "EnterPinScreen.slint";
 import { Router, Screen } from "Router.slint";
 
 import { BrightnessController } from "BrightnessController.slint";
-<<<<<<< HEAD
 import { BatteryController } from "Battery.slint";
-=======
-import { TestScreen } from "TestScreen.slint";
->>>>>>> bdef489f7768790daadf5a93ea0799232156754b
 
 export { BrightnessController, BatteryController }
 
@@ -17,6 +13,5 @@ export component MainWindow inherits Window {
 
     // Main navigation container
     if Router.current == Screen.Lock: LockScreen {}
-    if Router.current == Screen.TestScreen: TestScreen {}
     if Router.current == Screen.EnterPin: EnterPinScreen {}
 }
