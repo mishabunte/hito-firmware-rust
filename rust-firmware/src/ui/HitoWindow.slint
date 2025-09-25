@@ -1,0 +1,54 @@
+import { VerticalBox, HorizontalBox } from "std-widgets.slint";
+import "../../res/fonts/RobotoMono-Light.ttf";
+import { BrightnessLogo } from "BrightnessController.slint";
+
+export component HitoWindow inherits Window {
+    width: 320px;
+    height: 240px;
+    background: white;
+
+    default-font-family: "Roboto Mono";
+
+    // Properties that can be overridden by child components
+    in property <bool> show-brightness: true;
+    in property <bool> is-lockscreen: false;
+
+    // Internal brightness control state
+    out property <bool> brightness-scale-shown: false;
+
+    // Brightness control in top-right corner
+    brightness-control := BrightnessLogo {
+        scale-x: is-lockscreen ? -225px : -225px;
+        scale-y: is-lockscreen ? 175px : 0px;
+        x: parent.width - 20px - 10px;
+        y: 5px;
+        visible: show-brightness;
+        scale-shown-cb(shown) => {
+            brightness-scale-shown = shown;
+            root.brightness-scale-shown-changed(shown);
+        }
+    }
+
+    // Global touch area to hide brightness scale when clicking outside - only active when scale is shown
+    if brightness-scale-shown: TouchArea {
+        width: parent.width;
+        height: parent.height;
+        z: -1; // Above other elements to capture all clicks
+
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                // Check if click is outside brightness control area
+                if (self.mouse-x < brightness-control.x - 10px ||
+                    self.mouse-x > brightness-control.x + brightness-control.width + 200px ||
+                    self.mouse-y < brightness-control.y - 10px ||
+                    self.mouse-y > brightness-control.y + brightness-control.height + 10px) {
+                    brightness-control.scale-shown = false;
+                    brightness-scale-shown = false;
+                    root.brightness-scale-shown-changed(false);
+                }
+            }
+        }
+    }
+
+    callback brightness-scale-shown-changed(bool);
+}

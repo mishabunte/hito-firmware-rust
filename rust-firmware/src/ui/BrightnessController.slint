@@ -1,0 +1,127 @@
+export global BrightnessController {
+    property <int> brightness: 50; // Brightness level from 1 to 100
+    property <duration> hide-timer-duration: 2000ms; // Duration before auto-hiding the scale
+
+    callback brightness-changed(int);
+    callback scale-shown-cb(bool);
+    callback brightness-scale-shown-changed(bool);
+}
+
+export component BrightnessLogo inherits Rectangle {
+    width: 20px;
+    height: 20px;
+
+    // Position properties (can be set from parent)
+    in property <length> scale-x: -225px;
+    in property <length> scale-y: 0px;
+
+    // Properties
+    property <int> brightness: 95;
+    in-out property <bool> scale-shown: false;
+    property <bool> logo_pressed: false;
+    property <bool> scale-pressed: false;
+    property <duration> hide-timer-duration: 5000ms;
+
+
+    // Callbacks
+    // callback brightness-changed(int);
+    callback scale-shown-cb(bool);
+
+    // Brightness icon button
+    Image {
+        source: @image-url("../../res/img/brightness.png");
+        width: parent.width;
+        height: parent.height;
+        visible: !scale-shown;
+    }
+
+    // Brightness scale (slider) - only visible when scale-shown is true
+    if scale-shown: Rectangle {
+        x: scale-x; // Position to the left of the button
+        y: scale-y;  // Position below the button
+        width: 190px;
+        height: 20px;
+        background: white;
+        border-color: transparent;
+        border-width: 1px;
+
+        // Scale background track
+        Rectangle {
+            x: 0px;
+            y: parent.height / 2 - 2px;
+            width: parent.width;
+            height: 4px;
+            background: #4740403c;
+        }
+
+        // Scale filled portion
+        Rectangle {
+            x: 0px;
+            y: parent.height / 2 - 2px;
+            width: parent.width * brightness / 100;
+            height: 4px;
+            background: #474040eb;
+        }
+
+        // Scale handle (brightness icon)
+        Image {
+            source: @image-url("../../res/img/brightness.png");
+            x: parent.width * brightness / 100 - self.width / 2;
+            y: 0px;
+            width: 20px;
+            height: 20px;
+        }
+
+        // Touch area for the scale
+        scale-touch := TouchArea {
+            width: parent.width;
+            height: parent.height * 3; // Larger touch area
+
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down || event.kind == PointerEventKind.move) {
+                    if (scale-touch.pressed) {
+                      scale-pressed = true;
+                        // Update brightness based on touch position
+                        brightness = max(1, min(100, round(scale-touch.mouse-x * 100 / scale-touch.width)));
+                        BrightnessController.brightness-changed(brightness);
+                    }
+                } else if (event.kind == PointerEventKind.up) {
+                    scale-pressed = false;
+                }
+            }
+        }
+    }
+
+    // Main touch area for the brightness button
+    TouchArea {
+        width: parent.width + 20px; // Larger touch area
+        height: parent.height + 20px;
+        x: -10px;
+        y: -10px;
+
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                logo_pressed = true;
+            } else if (event.kind == PointerEventKind.up) {
+                if (logo_pressed) {
+                    logo_pressed = false;
+                    scale-shown = !scale-shown;
+                    scale-shown-cb(scale-shown);
+                    if (scale-shown) {
+                        hide-timer.restart();
+                    }
+                }
+            }
+        }
+    }
+
+    // Auto-hide timer
+    hide-timer := Timer {
+        interval: hide-timer-duration;
+        running: scale-shown && !scale-pressed;
+        triggered => {
+            scale-shown = false;
+            scale-shown-cb(scale-shown);
+        }
+    }
+}

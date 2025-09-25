@@ -71,7 +71,7 @@ impl Display for DisplayImpl {
         self.fill_rect_internal(x, y, w, h, rgb565);
     }
 
-    fn set_brightness(&mut self, brightness: u8) {
+    fn set_brightness(&self, brightness: u8) {
         self.set_brightness(brightness);
     }
 

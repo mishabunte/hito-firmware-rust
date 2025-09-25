@@ -45,8 +45,7 @@ impl Display for DisplayImpl {
         simulator_window_fill_rect(x, y, w, h, color32);
     }
 
-    fn set_brightness(&mut self, brightness: u8) {
-        self.brightness = brightness;
+    fn set_brightness(&self, brightness: u8) {
     }
 
     fn draw_line(&mut self, y: u16, x_start: u16, x_end: u16, pixels: &[u16]) {

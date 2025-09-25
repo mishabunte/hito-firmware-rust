@@ -1,0 +1,20 @@
+// Screen enumeration for navigation
+export enum Screen {
+    Lock,
+    TestScreen,
+    EnterPin,
+    // Add more screens here as needed
+}
+
+// Global router state
+export global Router {
+    in-out property <Screen> current: Screen.Lock;
+
+    // Navigation function
+    callback navigate(Screen);
+
+    // Handle navigation
+    navigate(to) => {
+        current = to;
+    }
+}
