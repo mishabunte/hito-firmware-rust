@@ -1,0 +1,175 @@
+import { HitoWindow} from "HitoWindow.slint";
+import { Router, Screen } from "Router.slint";
+import { Palette } from "Palette.slint";
+import { VerticalBox } from "std-widgets.slint";
+
+component TextWithBackground inherits Text {
+    in-out property<string> header-title: self.text;
+    property <length> text-width: self.width;
+    property <length> text-height: self.height;
+    // in-out property <bool> font-italic: false;
+    // in-out property <int> font-weight: 200;
+    // in-out property <string> font-family: "Roboto Mono";
+    // in-out property <length> font-size: 20px;
+    in-out property <brush> font-color: Palette.black;
+    if header-title != "": Rectangle {
+        background: Palette.green;
+        width: 1.1 * parent.text-width;
+        height: 1.1 * parent.text-height;
+        textProp := Text {
+            text: header-title;
+            font-size: root.font-size;
+            font-family: root.font-family;
+            font-italic: root.font-italic;
+            font-weight: root.font-weight;
+            color: root.font-color;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}
+
+component SignButton {
+    property <bool> pressed: false;
+    in-out property <string> content: "SIGN";
+    in property <length> button-width;
+    in property <length> button-height;
+    Rectangle {
+        width: button-width > 1.5 * text.width ? button-width : 1.5 * text.width;
+        height: button-height > 1.5 * text.height ? button-height : 1.5 * text.height;
+        border-color: Palette.black;
+        border-width: 4px;
+        border-radius: self.width/300;
+        background: pressed ? Palette.green : transparent;
+        text := Text {
+            text: content;
+            font-size: 20px;
+            color: Palette.black;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        Rectangle {
+            width: button-width - 4px;
+            height: button-height - 4px;
+            border-color: Palette.green;
+            border-width: 1px;
+        }
+        TouchArea {
+            width: root.width;
+            height: root.height;
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down) {
+                    pressed = true;
+                    root.clicked();
+                    debug("Clicked pin", content);
+                } else if (event.kind == PointerEventKind.up) {
+                    pressed = false;
+                }
+            }
+        }
+    }
+    callback clicked();
+}
+
+component Spacer inherits Rectangle {
+    width: 1px;
+    height: 1px;
+    background: transparent;
+    horizontal-stretch: 1;
+    vertical-stretch: 1;
+}
+
+export component SendStellarScreen inherits HitoWindow {
+    // Indicate this is not the lock screen
+    is-lockscreen: false;
+    show-brightness: true; // Show brightness control on home screen
+    // header-title: "SEND STELLAR";
+    HorizontalLayout {
+      x: 0px;
+      y: 0px;
+      alignment: end;
+      padding-left: 30px;
+      padding-right: 24px;
+      padding-top: 45px;
+      width: parent.width;
+      height: parent.height - 100px;
+      VerticalLayout {
+        width: 100px;
+        height: 100px;
+        alignment: start;
+        Text {
+            text: "Amount:";
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            font-size: 20px;
+            color: black;
+        }
+        Spacer {
+          height: 5px;
+        }
+        TextWithBackground {
+            header-title: "0.0000001";
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            font-size: 20px;
+            color: black;
+        }
+        Spacer {
+          height: 5px;
+        }
+        Text {
+            text: "XLM";
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            font-size: 20px;
+            font-weight: 1000;
+            color: black;
+        }
+        Spacer {
+          height: 30px;
+        }
+        SignButton {
+            x: 0px;
+            button-width: 100px;
+            button-height: 75px;
+        }
+      }
+    }
+    HorizontalLayout {
+      x: 0px;
+      y: 0px;
+      padding-left: 30px;
+      padding-right: 24px;
+      padding-top: 53px;
+      alignment: start;
+      width: parent.width;
+      height: parent.height;
+      VerticalLayout {
+        alignment: start;
+        vertical-stretch: 1;
+        Image {
+            source: @image-url("../../res/img/stellar-logo.png");
+            width: 75px;
+            height: 75px;
+        }
+        Spacer {
+          height: 10px;
+        }
+        Text {
+            text: "To:";
+            font-size: 20px;
+            color: black;
+            wrap: word-wrap;
+            width: 130px;
+        }
+        Text {
+            text: "GA4NA...\nAOTPS";
+            font-size: 20px;
+            color: black;
+            font-weight: 1000;
+            wrap: word-wrap;
+            width: 130px;
+        }
+      }
+    }
+}
