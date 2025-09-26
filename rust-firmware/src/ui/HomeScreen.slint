@@ -1,0 +1,72 @@
+import { HitoWindow } from "HitoWindow.slint";
+import { Router, Screen } from "Router.slint";
+import { Palette } from "Palette.slint";
+
+component BaseButton {
+    property <bool> pressed: false;
+    in-out property <string> content: "0";
+    in property <length> button-width;
+    in property <length> button-height;
+    Rectangle {
+        width: button-width > 1.5 * text.width ? button-width : 1.5 * text.width;
+        height: button-height > 1.5 * text.height ? button-height : 1.5 * text.height;
+        border-color: Palette.black;
+        border-width: 1px;
+        border-radius: self.width/300;
+        background: pressed ? Palette.green : transparent;
+        text := Text {
+            text: content;
+            font-size: 20px;
+            color: Palette.black;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        TouchArea {
+            width: root.width;
+            height: root.height;
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down) {
+                    pressed = true;
+                    root.clicked();
+                    debug("Clicked pin", content);
+                } else if (event.kind == PointerEventKind.up) {
+                    pressed = false;
+                }
+            }
+        }
+    }
+    callback clicked();
+}
+export component HomeScreen inherits HitoWindow {
+    // Indicate this is not the lock screen
+    is-lockscreen: false;
+    show-brightness: true; // Show brightness control on home screen
+
+    // Title text
+    Text {
+        text: "Home Screen";
+        font-size: 24px;
+        color: black;
+        horizontal-alignment: center;
+        y: 100px;
+        width: parent.width;
+    }
+    HorizontalLayout {
+      x: 10px;
+      y: 160px;
+      width: 300px;
+      height: 50px;
+      spacing: 10px;
+        BaseButton { 
+          content: "Receive";
+          button-width: 125px;
+          button-height: 50px;
+        }
+        BaseButton { 
+          content: "Send";
+          button-width: 125px;
+          button-height: 50px;
+        }
+    }
+  callback clicked();
+}
