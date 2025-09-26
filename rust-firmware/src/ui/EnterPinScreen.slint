@@ -1,13 +1,6 @@
 import { HitoWindow } from "HitoWindow.slint";
 import { Router, Screen } from "Router.slint";
-
-export global Palette {
-    in-out property <brush> green: #E6FF83;
-    in-out property <brush> red: #FF6B6B;
-    in-out property <brush> grey: #F2F2F2;
-    in-out property <brush> black: #000000;
-    in-out property <brush> white: #FFFFFF;
-}
+import { Palette } from "Palette.slint";
 
 component PassChar {
     property <bool> pressed: false;
@@ -180,24 +173,7 @@ component EnteredPassword {
 
 export component EnterPinScreen inherits HitoWindow {
     property <string> entered-password: "";
-    Rectangle {
-        y: 10px;
-        background: Palette.green;
-        width: 180px;
-        height: 30px;
-        visible: !parent.brightness-scale-shown;
-        Text {
-            y: 1px;
-            text: "ENTER PASSCODE";
-            font-size: 20px;
-            font-family: "Roboto Mono";
-            font-italic: false;
-            font-weight: 1000;
-            horizontal-alignment: center;
-            wrap: word-wrap;
-            width: 260px;
-        }
-    }
+    header-title: "ENTER PASSCODE";
     EraseButton {
         x: 280px;
         y: 68px;
