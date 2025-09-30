@@ -1,17 +1,29 @@
 import { HitoWindow } from "HitoWindow.slint";
-import { Router, Screen } from "Router.slint";
+import { Router } from "Router.slint";
 import "../../res/fonts/RobotoMono-Light.ttf";
+import { BaseButton } from "BaseButton.slint";
 
 export component TestScreen inherits HitoWindow {
     header-title: "Test Screen";
     Text {
-        text: "Test screen!)";
+        text: "This is a test screen!";
         font-size: 20px;
+        font-family: "Roboto Mono";
         color: black;
         horizontal-alignment: center;
         y: 120px;
         x: 30px;
         wrap: word-wrap;
         width: 260px;
+    }
+    BaseButton {
+        x: 100px;
+        y: 200px;
+        button-width: 100px;
+        button-height: 50px;
+        content: "Go to Enter PIN";
+        clicked() => {
+            Router.navigate();
+        }
     }
 }

@@ -1,5 +1,5 @@
 import { HitoWindow } from "HitoWindow.slint";
-import { Router, Screen } from "Router.slint";
+import { Router } from "Router.slint";
 
 export component LockScreen inherits HitoWindow {
     // Animation properties
@@ -154,9 +154,7 @@ export component LockScreen inherits HitoWindow {
             if (lock-frame < 5) {
                 lock-frame += 1;
             } else {
-                // Animation complete - trigger unlock callback
-                Router.navigate(Screen.EnterPin);
-                root.unlocked();
+                Router.navigate();
             }
         }
     }
@@ -169,7 +167,4 @@ export component LockScreen inherits HitoWindow {
         key-is-pressed = false;
         lock-frame = 0; // Start animation from frame 0
     }
-
-    // Callback for when unlock animation completes
-    callback unlocked();
 }

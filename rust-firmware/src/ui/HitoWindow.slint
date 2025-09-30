@@ -3,11 +3,12 @@ import "../../res/fonts/RobotoMono-Light.ttf";
 import { BrightnessLogo} from "BrightnessController.slint";
 import { BatteryLevel, BatteryController } from "Battery.slint";
 import { Palette } from "Palette.slint";
+import { Router } from "Router.slint";
 
 component HeaderBar {
-    in-out property<string> title;
+    in-out property<string> header-title: "";
     in property<bool> brightness-scale-shown: false;
-    if title != "": Rectangle {
+    if header-title != "": Rectangle {
         y: 10px;
         background: Palette.green;
         width: 1.1*header.width;
@@ -15,7 +16,7 @@ component HeaderBar {
         visible: !parent.brightness-scale-shown;
         header := Text {
             y: 1px;
-            text: title;
+            text: header-title;
             font-size: 20px;
             font-family: "Roboto Mono";
             font-italic: false;
@@ -42,7 +43,7 @@ export component HitoWindow inherits Window {
     out property <bool> brightness-scale-shown: false;
     HeaderBar {
         y: 0px;
-        title: root.header-title;
+        header-title: header-title;
         brightness-scale-shown: root.brightness-scale-shown;
     }
 

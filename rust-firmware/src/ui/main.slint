@@ -1,17 +1,17 @@
-import { LockScreen } from "LockScreen.slint";
-import { EnterPinScreen } from "EnterPinScreen.slint";
-import { Router, Screen } from "Router.slint";
-
 import { BrightnessController } from "BrightnessController.slint";
 import { BatteryController } from "Battery.slint";
+import { HitoWindow } from "HitoWindow.slint";
+import { LockScreen } from "LockScreen.slint";
+import { EnterPinScreen } from "EnterPinScreen.slint";
+import { TestScreen } from "TestScreen.slint";
+import { TestScreen2 } from "TestScreen2.slint";
+import { Router } from "Router.slint";
 
-export { BrightnessController, BatteryController }
+export { BrightnessController, BatteryController, Router }
+export { LockScreen, EnterPinScreen, TestScreen, TestScreen2, HitoWindow }
 
-export component MainWindow inherits Window {
+// Minimal main window that doesn't pre-load all screens
+export component MainWindow inherits HitoWindow {
     width: 320px;
     height: 240px;
-
-    // Main navigation container
-    if Router.current == Screen.Lock: LockScreen {}
-    if Router.current == Screen.EnterPin: EnterPinScreen {}
 }

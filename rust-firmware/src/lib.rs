@@ -1,7 +1,7 @@
 #![no_std]
 extern crate alloc;
 use alloc::{boxed::Box, rc::Rc};
-use core::cell::Cell;
+use core::mem::MaybeUninit;
 
 #[cfg(feature = "minifb")]
 extern crate std;
@@ -13,18 +13,32 @@ mod hito_firmware;
 mod drivers;
 mod crypto;
 mod platform;
-
-pub use drivers::logging::*;
+mod ui;
 
 use hito_firmware::HitoFirmware;
-
-// For now, let's use a simpler approach with the existing platform
 use slint::platform::software_renderer::MinimalSoftwareWindow;
+use ui::{ScreenManager};
 
 #[cfg(any(feature = "minifb", feature = "zephyr"))]
 slint::include_modules!();
 
-use crate::{drivers::{Display, Indicator, LedColor, Touch, Battery}, platform::{MyPlatform, Timer}, platform::DisplayWrapper};
+use crate::{
+    drivers::{Battery, Display, Indicator, LedColor, Touch}, 
+    platform::{DisplayWrapper, MyPlatform, Timer}, ui::screen_manager::ScreenType
+};
+
+// Constants in flash memory
+const DISPLAY_WIDTH: u32 = 320;
+const DISPLAY_HEIGHT: u32 = 240;
+const INVALID_MOUSE_POS: (u16, u16) = (0xffff, 0xffff);
+
+// For desktop, we can use regular static storage
+pub static mut LINE_BUFFER: [slint::platform::software_renderer::Rgb565Pixel; 320] = 
+    [slint::platform::software_renderer::Rgb565Pixel(0); 320];
+
+pub static mut PLATFORM_STORAGE: MaybeUninit<MyPlatform> = MaybeUninit::uninit();
+
+pub static mut LAST_MOUSE_POS: (u16, u16) = INVALID_MOUSE_POS;
 
 #[cfg(feature = "zephyr")]
 extern "C" {
@@ -50,147 +64,149 @@ unsafe impl core::alloc::GlobalAlloc for ZephyrAllocator {
 #[global_allocator]
 static GLOBAL: ZephyrAllocator = ZephyrAllocator;
 
-/// Unified main function callable from C (for embedded target)
-#[no_mangle]
-pub extern "C" fn rust_main() -> ! {
-    let mut firmware = HitoFirmware::new();
-    firmware.init_hardware();
+fn handle_touch_events(
+    firmware: &mut HitoFirmware,
+    window: &MinimalSoftwareWindow,
+) {
+    let is_pressed = firmware.touch.is_pressed();
     
-    // Use ReusedBuffer for embedded displays (more memory efficient)
-    let window = MinimalSoftwareWindow::new(
-        slint::platform::software_renderer::RepaintBufferType::ReusedBuffer
-    );
-    
-    window.set_size(slint::PhysicalSize::new(320, 240));
-
-    log_info!("Creating platform");
-
-    let platform = MyPlatform {
-        window: window.clone(),
-        timer: Timer::new(),
-    };
-
-    log_info!("Setting platform");
-
-    let platform_box = Box::new(platform);
-
-    log_info!("Platform boxed");
-
-    slint::platform::set_platform(platform_box).unwrap();
-
-    log_info!("Platform set successfully");
-
-    let mut line_buffer = [slint::platform::software_renderer::Rgb565Pixel(0); 320];
-
-    let mut last_mouse_pos = (0xffff, 0xffff);
-
-    log_info!("Creating Slint UI");
-    match MainWindow::new() {
-        Ok(ui) => {
-            let brightness_request: Rc<Cell<Option<u8>>> = Rc::new(Cell::new(None));
-            let bc = ui.global::<BrightnessController>();
-            {
-                let br = brightness_request.clone();
-                bc.on_brightness_changed(move |brightness_value| {
-                    br.set(Some(brightness_value as u8));
-                });
-            }
-            log_info!("Starting Slint UI event loop");
-            let battery_request: Rc<Cell<bool>> = Rc::new(Cell::new(false));
-            let battery = ui.global::<BatteryController>();
-            {
-                let br = battery_request.clone();
-                battery.on_battery_level_request(move || {
-                    br.set(true);
-                });
-            }
-
-            firmware.indicator.turn_on(LedColor::Blue);
-            // Super loop for embedded systems with line-by-line rendering
-            loop {
-                slint::platform::update_timers_and_animations();
-
-                if let Some(new_brightness) = brightness_request.get() {
-                    log_info!("Setting brightness to {}", new_brightness);
-                    firmware.display.set_brightness(new_brightness);
-                    brightness_request.set(None);
-                }
-
-                if battery_request.get() {
-                    let level = firmware.battery.get_level();
-                    log_info!("Battery level requested: {}", level);
-                    battery.set_battery_level(level);
-                    battery_request.set(false);
-                }
-
-                let is_pressed = firmware.touch.is_pressed();
-
-                // Check the touch screen or input device using your driver.
-                if is_pressed == Some(true) {
-                  // convert the event from the driver into a `slint::platform::WindowEvent`
-                  // and pass it to the window.
-                  let pos = firmware.touch.get_position();
-                  let event = slint::platform::WindowEvent::PointerPressed {
-                      position: slint::LogicalPosition {
-                          x: pos.0 as f32,
-                          y: pos.1 as f32,
-                      },
-                      button: slint::platform::PointerEventButton::Left,
-                  };
-                  log_info!("Touch pressed at ({}, {})", pos.0, pos.1);
-                  window.try_dispatch_event(event).unwrap();
-                }
-
-                if firmware.touch.has_touch() {
-                    let pos = firmware.touch.get_position();
-                    if last_mouse_pos != pos {
-                      last_mouse_pos = pos;
-                      let event = slint::platform::WindowEvent::PointerMoved {
-                        position: slint::LogicalPosition {
-                            x: pos.0 as f32,
-                            y: pos.1 as f32,
-                        },
-                      };
-                      window.try_dispatch_event(event).unwrap();
-                    }
-                  }
-
-                if is_pressed == Some(false) {
-                    let pos = firmware.touch.get_position();
-                    let event = slint::platform::WindowEvent::PointerReleased {
-                        position: slint::LogicalPosition {
-                            x: pos.0 as f32,
-                            y: pos.1 as f32,
-                        },
-                        button: slint::platform::PointerEventButton::Left,
-                    };
-                    log_info!("Touch released at ({}, {})", pos.0, pos.1);
-                    window.try_dispatch_event(event).unwrap();
-                }
-
-                window.draw_if_needed(|renderer| {                    
-                    // Render line by line using our display wrapper
-                    renderer.render_by_line(DisplayWrapper {
-                        display: &mut firmware.display,
-                        line_buffer: &mut line_buffer,
-                    });
-                });
-
-                firmware.display.update();
-            }
+    match is_pressed {
+        Some(true) => {
+            let pos = firmware.touch.get_position();
+            let event = slint::platform::WindowEvent::PointerPressed {
+                position: slint::LogicalPosition {
+                    x: pos.0 as f32,
+                    y: pos.1 as f32,
+                },
+                button: slint::platform::PointerEventButton::Left,
+            };
+            
+            let _ = window.try_dispatch_event(event);
         }
-        Err(_) => {
-            log_info!("Failed to create Slint UI");
-            panic!("Failed to create Slint UI");
+        Some(false) => {
+            let pos = firmware.touch.get_position();
+            let event = slint::platform::WindowEvent::PointerReleased {
+                position: slint::LogicalPosition {
+                    x: pos.0 as f32,
+                    y: pos.1 as f32,
+                },
+                button: slint::platform::PointerEventButton::Left,
+            };
+            
+            let _ = window.try_dispatch_event(event);
+        }
+        None => {}
+    }
+    if firmware.touch.has_touch() {
+        let pos = firmware.touch.get_position();
+        
+        unsafe {
+            if LAST_MOUSE_POS != pos {
+                LAST_MOUSE_POS = pos;
+                let event = slint::platform::WindowEvent::PointerMoved {
+                    position: slint::LogicalPosition {
+                        x: pos.0 as f32,
+                        y: pos.1 as f32,
+                    },
+                };
+                let _ = window.try_dispatch_event(event);
+            }
         }
     }
 }
 
-// ARM EABI unwinding stub for embedded targets
+fn run_main_loop(
+    mut firmware: HitoFirmware,
+    window: Rc<MinimalSoftwareWindow>,
+    mut screen_manager: ScreenManager,
+) -> ! {
+    firmware.indicator.turn_on(LedColor::Blue);
+    log_info!("Starting embedded event loop");
+
+    loop {
+        slint::platform::update_timers_and_animations();
+        let brightness_request = screen_manager.brightness_request.clone();
+        let battery_request = screen_manager.battery_request.clone();
+
+        // Handle brightness changes
+        if let Some(new_brightness) = brightness_request.take() {
+            firmware.display.set_brightness(new_brightness);
+            log_info!("Brightness set to {}", new_brightness);
+        }
+
+        // Handle battery requests (currently no UI to update, but keep for future)
+        if battery_request.replace(false) {
+            let level = firmware.battery.get_level();
+            log_info!("Battery level: {}", level);
+        }
+
+        // Handle touch events
+        handle_touch_events(&mut firmware, &*window);
+
+        // Check for screen navigation (e.g., LockScreen unlock)
+        let _ = screen_manager.handle_navigation();
+
+        // Render frame using static line buffer
+        window.draw_if_needed(|renderer| {
+            unsafe {
+                renderer.render_by_line(DisplayWrapper {
+                    display: &mut firmware.display,
+                    line_buffer: &mut LINE_BUFFER,
+                });
+            }
+        });
+
+        firmware.display.update();
+    }
+}
+
+// Common initialization function
+fn initialize_platform(window: Rc<MinimalSoftwareWindow>) {
+    unsafe {
+        let platform = MyPlatform {
+            window: window,
+            timer: Timer::new(),
+        };
+        
+        PLATFORM_STORAGE.write(platform);
+        let platform_box = Box::from_raw(PLATFORM_STORAGE.as_mut_ptr());
+        slint::platform::set_platform(platform_box).unwrap();
+    }
+}
+
+/// Unified main function callable from C (for embedded target) or regular main (for desktop)
+#[no_mangle]
+pub extern "C" fn rust_main() -> ! {
+    // Initialize firmware
+    let mut firmware = HitoFirmware::new();
+    firmware.init_hardware();
+    
+    // Create window with appropriate buffer type
+    let window = MinimalSoftwareWindow::new(
+            slint::platform::software_renderer::RepaintBufferType::ReusedBuffer
+    );
+
+    window.set_size(slint::PhysicalSize::new(DISPLAY_WIDTH, DISPLAY_HEIGHT));
+
+    log_info!("Initializing platform");
+
+    // Initialize platform (common code)
+    initialize_platform(window.clone());
+
+    log_info!("Platform initialized");
+
+    // Create working screen manager
+    let mut screen_manager = ScreenManager::new().expect("Failed to create screen manager");
+
+    // Start with the Lock screen
+    screen_manager.navigate_to(ScreenType::Lock).unwrap();
+
+    // Run platform-specific main loop
+    run_main_loop(firmware, window, screen_manager)
+}
+// ARM EABI unwinding stub for embedded targets only
 #[cfg(feature = "zephyr")]
 #[no_mangle]
 pub extern "C" fn __aeabi_unwind_cpp_pr0() {
-    // Stub implementation - do nothing
-    // This function is used for C++ exception unwinding, 
-    // which we don't use in our no_std embedded environment
+    // Stub for C++ exception unwinding (unused in no_std)
 }

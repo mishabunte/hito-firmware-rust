@@ -1,0 +1,38 @@
+import { Palette } from "Palette.slint";
+
+component BaseButton {
+    property <bool> pressed: false;
+    in-out property <string> content: "0";
+    in property <length> button-width;
+    in property <length> button-height;
+    in property <bool> border-shown: true;
+    Rectangle {
+        width: button-width > 1.5 * text.width ? button-width : 1.5 * text.width;
+        height: button-height > 1.5 * text.height ? button-height : 1.5 * text.height;
+        border-color: border-shown ? Palette.black : transparent;
+        border-width: border-shown ? 1px : 0px;
+        border-radius: self.width/300;
+        background: pressed ? Palette.green : transparent;
+        text := Text {
+            text: content;
+            font-size: 20px;
+            color: Palette.black;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        TouchArea {
+            width: button-width;
+            height: button-height;
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down) {
+                    pressed = true;
+                } else if (event.kind == PointerEventKind.up) {
+                    pressed = false;
+                    root.clicked();
+                    debug("Clicked pin", content);
+                }
+            }
+        }
+    }
+    callback clicked();
+}
