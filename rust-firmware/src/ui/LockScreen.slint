@@ -22,6 +22,8 @@ export component LockScreen inherits HitoWindow {
 
     property <bool> key_shown: true; // To control key visibility
 
+    back-shown: false; // No back button on lock screen
+
     // Handle brightness scale visibility changes        show-text = !shown;
     brightness-scale-shown-changed(shown) => {
         show-text = !shown;

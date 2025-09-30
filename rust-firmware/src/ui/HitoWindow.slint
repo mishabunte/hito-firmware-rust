@@ -4,6 +4,7 @@ import { BrightnessLogo} from "BrightnessController.slint";
 import { BatteryLevel, BatteryController } from "Battery.slint";
 import { Palette } from "Palette.slint";
 import { Router } from "Router.slint";
+import { BaseButton } from "BaseButton.slint";
 
 component HeaderBar {
     in-out property<string> header-title: "";
@@ -27,6 +28,14 @@ component HeaderBar {
     }
 }
 
+component BackButton inherits BaseButton {
+    content: "<";
+    border-shown: false;
+    clicked() => {
+        Router.back();
+    }
+}
+
 export component HitoWindow inherits Window {
     width: 320px;
     height: 240px;
@@ -38,6 +47,7 @@ export component HitoWindow inherits Window {
     in property <bool> show-brightness: true;
     in property <bool> is-lockscreen: false;
     in-out property <string> header-title: "";
+    in-out property <bool> back-shown: true;
 
     // Internal brightness control state
     out property <bool> brightness-scale-shown: false;
@@ -45,6 +55,20 @@ export component HitoWindow inherits Window {
         y: 0px;
         header-title: header-title;
         brightness-scale-shown: root.brightness-scale-shown;
+    }
+
+    HorizontalLayout {
+        width: parent.width;
+        alignment: start;
+        VerticalLayout {
+            alignment: start;
+            BackButton {
+                button-width: 40px;
+                x: 10px;
+                in-font-size: 30px;
+                visible: back-shown;
+            }
+        }
     }
 
     // Layout container for positioning elements
