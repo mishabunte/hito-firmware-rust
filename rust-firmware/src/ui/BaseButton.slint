@@ -5,6 +5,7 @@ component BaseButton {
     in-out property <string> content: "0";
     in property <length> button-width;
     in property <length> button-height;
+    in property <length> in-font-size: 20px;
     in property <bool> border-shown: true;
     Rectangle {
         width: button-width > 1.5 * text.width ? button-width : 1.5 * text.width;
@@ -12,17 +13,17 @@ component BaseButton {
         border-color: border-shown ? Palette.black : transparent;
         border-width: border-shown ? 1px : 0px;
         border-radius: self.width/300;
-        background: pressed ? Palette.green : transparent;
+        background: pressed && border-shown ? Palette.green : transparent;
         text := Text {
             text: content;
-            font-size: 20px;
-            color: Palette.black;
+            font-size: root.in-font-size;
+            color: pressed && !border-shown ? Palette.green : Palette.black;
             horizontal-alignment: center;
             vertical-alignment: center;
         }
         TouchArea {
-            width: button-width;
-            height: button-height;
+            width: parent.width;
+            height: parent.height;
             pointer-event(event) => {
                 if (event.kind == PointerEventKind.down) {
                     pressed = true;
