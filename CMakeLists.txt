@@ -9,8 +9,8 @@ project(hito_firmware_zephyr)
 file(GLOB_RECURSE RUST_SOURCES 
     "${CMAKE_CURRENT_SOURCE_DIR}/rust-firmware/src/*.rs"
     "${CMAKE_CURRENT_SOURCE_DIR}/rust-firmware/build.rs"
-    "${CMAKE_CURRENT_SOURCE_DIR}/rust-firmware/src/helloworld.slint"
     "${CMAKE_CURRENT_SOURCE_DIR}/rust-firmware/Cargo.toml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/rust-firmware/src/ui/*.slint"
 )
 
 set(RUST_LIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/rust-firmware/target/thumbv7em-none-eabi/release/libhito_firmware_rust.a)
@@ -43,6 +43,7 @@ set(SOURCE_FILES
   rust-firmware/src/drivers/zephyr/zephyr_drivers/ft6336_ctp.c
   rust-firmware/src/drivers/zephyr/zephyr_drivers/hito_pin_config.c
   rust-firmware/src/drivers/zephyr/zephyr_drivers/timer.c
+  rust-firmware/src/drivers/zephyr/zephyr_drivers/hito_battery.c
 )
 
 # Include directories for the C drivers
