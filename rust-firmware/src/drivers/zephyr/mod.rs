@@ -1,6 +1,7 @@
 mod display;
 mod touch;
 mod indicator;
+mod battery;
 pub mod timer;
 pub mod ffi;
 pub mod logging;

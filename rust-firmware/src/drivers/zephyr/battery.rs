@@ -15,7 +15,7 @@ impl BatteryImpl {
 }
 
 impl Battery for BatteryImpl {
-    fn get_level() -> i32 {
+    fn get_level(&self) -> i32 {
         unsafe { ffi::hito_battery_level() }
     }
 }
