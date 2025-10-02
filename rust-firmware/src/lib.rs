@@ -1,7 +1,7 @@
 #![no_std]
 extern crate alloc;
 use alloc::{boxed::Box, rc::Rc};
-use core::mem::MaybeUninit;
+use core::{cell::Cell, mem::MaybeUninit};
 
 #[cfg(feature = "minifb")]
 extern crate std;
@@ -16,14 +16,12 @@ mod hito_firmware;
 mod drivers;
 mod crypto;
 mod platform;
-mod ui;
 pub mod vault;
 
 pub use vault::{HitoVault, VaultError, VaultResult};
 
 use hito_firmware::HitoFirmware;
 use slint::platform::software_renderer::MinimalSoftwareWindow;
-use ui::{ScreenManager};
 
 #[cfg(any(feature = "minifb", feature = "zephyr"))]
 slint::include_modules!();
@@ -47,7 +45,7 @@ pub fn current_stack_used() -> usize {
 
 use crate::{
     drivers::{Battery, Display, Indicator, LedColor, Touch}, 
-    platform::{DisplayWrapper, MyPlatform, Timer}, ui::screen_manager::ScreenType
+    platform::{DisplayWrapper, MyPlatform, Timer},
 };
 
 
@@ -173,15 +171,31 @@ fn handle_touch_events(
 fn run_main_loop(
     mut firmware: HitoFirmware,
     window: Rc<MinimalSoftwareWindow>,
-    mut screen_manager: ScreenManager,
 ) -> ! {
     firmware.indicator.turn_on(LedColor::Blue);
     log_info!("Starting embedded event loop");
 
+    let ui = MainWindow::new().expect("Failed to create MainWindow");
+
+    let brightness_request = Rc::new(Cell::new(None));
+    {
+      let br = brightness_request.clone();
+      ui.global::<BrightnessController>().on_brightness_changed(move |brightness_value| {
+          br.set(Some(brightness_value as u8));
+      });
+    }
+
+    let battery_request: Rc<Cell<bool>> = Rc::new(Cell::new(false));
+    let battery = ui.global::<BatteryController>();
+    {
+        let br = battery_request.clone();
+        battery.on_battery_level_request(move || {
+            br.set(true);
+        });
+    }
+
     loop {
         slint::platform::update_timers_and_animations();
-        let brightness_request = screen_manager.brightness_request.clone();
-        let battery_request = screen_manager.battery_request.clone();
 
         // Handle brightness changes
         if let Some(new_brightness) = brightness_request.take() {
@@ -189,19 +203,15 @@ fn run_main_loop(
             log_info!("Brightness set to {}", new_brightness);
         }
 
-        // Handle battery requests (currently no UI to update, but keep for future)
-        if battery_request.replace(false) {
+        if battery_request.get() {
             let level = firmware.battery.get_level();
-            log_info!("Battery level: {}", level);
+            log_info!("Battery level requested: {}", level);
+            battery.set_battery_level(level);
+            battery_request.set(false);
         }
 
         // Handle touch events
         handle_touch_events(&mut firmware, &*window);
-
-        // Check for screen navigation (e.g., LockScreen unlock)
-        let _ = screen_manager.handle_navigation(|| {
-            firmware.display.fill_rect(0, 0, 320, 240, 0xFFFF);
-        });
 
         // Render frame using static line buffer
         window.draw_if_needed(|renderer| {
@@ -262,24 +272,18 @@ pub extern "C" fn rust_main() -> ! {
 
     log_info!("Platform initialized");
 
-    // Create working screen manager
-    let mut screen_manager = ScreenManager::new().expect("Failed to create screen manager");
-
-    // Start with the Lock screen
-    screen_manager.navigate_to(ScreenType::Lock, || {
-    }).expect("Failed to switch to Lock screen");
-
     let mut vault = HitoVault::new();
-
+    log_info!("Vault created");
     vault.initialize();
-
-    vault.set_passcode(b"000000", None).expect("Failed to set passcode");
-
+    log_info!("Vault initialized");
+    //vault.set_passcode(b"000000", None).expect("Failed to set passcode");
+    log_info!("Passcode set");
     //vault.unlock_with_password(b"001000").expect("Failed to unlock vault");
     vault.unlock_with_password(b"000000").expect("Failed to unlock vault");
+    log_info!("Vault unlocked");
 
     // Run platform-specific main loop
-    run_main_loop(firmware, window, screen_manager)
+    run_main_loop(firmware, window);
 }
 // ARM EABI unwinding stub for embedded targets only
 #[cfg(feature = "zephyr")]

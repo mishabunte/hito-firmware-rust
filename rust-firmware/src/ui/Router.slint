@@ -14,5 +14,24 @@ export enum ScreenEnum {
 
 export global Router {
     callback navigate(page: ScreenEnum);
+    in-out property <ScreenEnum> current: ScreenEnum.Lock;
     callback back();
+
+    // Handle navigation
+    navigate(to) => {
+        current = to;
+    }
+    back() => {
+        // Simple back navigation logic
+        if current == ScreenEnum.Send || current == ScreenEnum.Receive || current == ScreenEnum.Settings {
+            current = ScreenEnum.Home;
+        } else if current == ScreenEnum.Home {
+            current = ScreenEnum.Lock;
+        } else if current == ScreenEnum.EnterPin {
+            current = ScreenEnum.Lock;
+        } else {
+            // Default fallback
+            current = ScreenEnum.Lock;
+        }
+    }
 }

@@ -2,7 +2,7 @@ use alloc::rc::{Rc};
 use core::cell::{Cell};
 use alloc::vec::Vec;
 use slint::ComponentHandle;
-use crate::log_info;
+use crate::{log_info, HitoWindow};
 
 use crate::{LockScreen, TestScreen, TestScreen2, Router, BrightnessController, EnterPinScreen, HomeScreen, ScreenEnum, SendScreen, ReceiveScreen, SettingsScreen};
 
@@ -74,25 +74,27 @@ fn slint_screen_to_type(screen: ScreenEnum) -> ScreenType {
 
 fn make_screen(kind: ScreenType, to_next: &Rc<Cell<Option<ScreenType>>>, to_prev: &Rc<Cell<bool>>, brightness_request: &Rc<Cell<Option<u8>>>, battery_request: &Rc<Cell<bool>>) -> Result<Screen, slint::PlatformError>
 {
+    let ui = HitoWindow::new()?;
+    {
+      let to_next_request = Rc::clone(to_next);
+      ui.global::<Router>().on_navigate(move |screen| {
+          // Convert slint Screen enum to ScreenType
+          let screen_type = slint_screen_to_type(screen);
+          to_next_request.set(Some(screen_type));
+      });
+
+      let to_prev_flag = Rc::clone(to_prev);
+      ui.global::<Router>().on_back(move || to_prev_flag.set(true));
+
+      let br = brightness_request.clone();
+      ui.global::<BrightnessController>().on_brightness_changed(move |brightness_value| {
+          br.set(Some(brightness_value as u8));
+      });
+    }
+
     match kind {
         ScreenType::Lock => {
             let c = LockScreen::new()?;
-            {
-                let to_next_request = Rc::clone(to_next);
-                c.global::<Router>().on_navigate(move |screen| {
-                    // Convert slint Screen enum to ScreenType
-                    let screen_type = slint_screen_to_type(screen);
-                    to_next_request.set(Some(screen_type));
-                });
-
-                let to_prev_flag = Rc::clone(to_prev);
-                c.global::<Router>().on_back(move || to_prev_flag.set(true));
-
-                let br = brightness_request.clone();
-                c.global::<BrightnessController>().on_brightness_changed(move |brightness_value| {
-                    br.set(Some(brightness_value as u8));
-                });
-            }
             Ok(Screen::Lock(c))
         }
         ScreenType::TestScreen => {
@@ -281,7 +283,6 @@ impl ScreenManager {
             &self.brightness_request,
             &self.battery_request,
         )?;
-        new.show()?;
         self.current = Some(new);
         self.current_type = Some(target);
         Ok(())

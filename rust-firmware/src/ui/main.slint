@@ -6,16 +6,21 @@ import { HomeScreen } from "HomeScreen.slint";
 import { EnterPinScreen } from "EnterPinScreen.slint";
 import { TestScreen } from "TestScreen.slint";
 import { TestScreen2 } from "TestScreen2.slint";
-import { Router, ScreenEnum } from "Router.slint";
+import { Router, ScreenEnum as Screen } from "Router.slint";
 import { ReceiveScreen } from "ReceiveScreen.slint";
 import { SendScreen } from "SendScreen.slint";
 import { SettingsScreen } from "SettingsScreen.slint";
 
 export { BrightnessController, BatteryController, Router } // Export controllers and router for global access
-export { LockScreen, EnterPinScreen, TestScreen, TestScreen2, HitoWindow, HomeScreen, ReceiveScreen, SendScreen, SettingsScreen } // Export screens for pre-loading
 
-// Minimal main window that doesn't pre-load all screens
 export component MainWindow inherits HitoWindow {
-    width: 320px;
-    height: 240px;
+    // Main navigation container
+    if Router.current == Screen.Lock: LockScreen {}
+    if Router.current == Screen.TestScreen: TestScreen {}
+    if Router.current == Screen.EnterPin: EnterPinScreen {}
+    if Router.current == Screen.TestScreen2: TestScreen2 {}
+    if Router.current == Screen.Home: HomeScreen {}
+    if Router.current == Screen.Send: SendScreen {}
+    if Router.current == Screen.Receive: ReceiveScreen {}
+    if Router.current == Screen.Settings: SettingsScreen {}
 }
