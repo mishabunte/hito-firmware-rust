@@ -21,6 +21,7 @@ static INIT_HUK: Once = Once::new();
 static mut HUK_WRITTEN: bool = false;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(C)]
 enum entropy_len_t {
   ENTROPY_LEN_16 = 16,
   ENTROPY_LEN_24 = 24,
@@ -97,6 +98,7 @@ pub enum VaultError {
 
 pub type VaultResult<T> = Result<T, VaultError>;
 
+#[repr(C)]
 pub struct HitoVault {
   initialized: bool,
   vaultIsUnlocked: bool,
@@ -112,7 +114,8 @@ pub struct HitoVault {
   mnemonic: [u8; 215],
   entropy_len: entropy_len_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
+#[repr(C)]
 pub struct VaultEncryptedBlock {
   magic: u32,                    // encrypted block magic 0xD0364141
   steps_count: u32,              // pbkdf2 steps count for key generation
@@ -166,8 +169,10 @@ fn derive_hardware_key(salt: &[u8]) -> VaultResult<[u8; 32]> {
         derived.as_mut_ptr(),
         derived.len() as i32
       )) != 0 {
+        log_info!("Failed to derive hardware key");
         return Err(VaultError::HardwareKeyError);
       }
+      //log_info!("Derived hardware key: {:?}", derived);
       derived
     };
     Ok(derived)
@@ -229,14 +234,22 @@ impl HitoVault {
     for (i, block) in vault_slice.iter().enumerate() {
       if block.magic == 0xffffffff {
         if i == 0 {
+          log_info!("Vault is empty");
           // Vault is empty, return error
           return Err(VaultError::EmptyVault);
         }
+        log_info!("Found last valid block at index {}", i - 1);
+
+        //print the block for debugging
+        log_info!("Last valid block: magic={:x}, steps_count={}, crc16_ccitt={:x}", block.magic, block.steps_count, block.crc16_ccitt);
+
+        log_info!("Returning last valid block");
         // Return the previous block (last valid one)
         return Ok(&vault_slice[i - 1]);
       }
     }
     
+    log_info!("Vault is full, returning last block");
     // If we reach here, all blocks are filled, return the last one
     vault_slice.last().ok_or(VaultError::BlockNotFound)
   }
@@ -308,6 +321,8 @@ impl HitoVault {
   ) -> VaultResult<[u8; 96]> {
     // Derive AES key using the unified key derivation method
     let aes_key = self.derive_encryption_key(passcode, block.steps_count, progress_handler)?;
+
+    log_info!("Derived AES key: {:x?}", aes_key);
     
     // Decrypt using AES-CCM
     let mut decrypted = [0u8; 96];
@@ -329,9 +344,11 @@ impl HitoVault {
     };
     
     if result != 96 {
+      log_info!("Failed to decrypt block");
       return Err(VaultError::CryptoError);
     }
-    
+
+    log_info!("Decrypted block: {:?}", decrypted);
     Ok(decrypted)
   }
 
@@ -520,6 +537,7 @@ impl HitoVault {
   ) -> VaultResult<()> {
     // If vault is empty but we have entropy, generate seed from entropy
     if self.is_empty() && self.entropy_len as usize != 0 {
+      log_info!("Generating seed from entropy");
       let result = unsafe {
         crypto::ffi::crypt0_bip39_entropy_to_seed_en(
           self.entropy.as_ptr(),
@@ -528,6 +546,8 @@ impl HitoVault {
           64
         )
       };
+
+      log_info!("Generated seed from entropy");
       
       if result != crypto::ffi::CRYPT0_OK {
         return Err(VaultError::CryptoError);
@@ -559,6 +579,8 @@ impl HitoVault {
   pub fn unlock_with_password(&mut self, password: &[u8]) -> VaultResult<()> {
     // Get the last block
     let block = self.last_block()?;
+
+    log_info!("Last block retrieved: magic={:x}, steps_count={}, crc16_ccitt={:x}", block.magic, block.steps_count, block.crc16_ccitt);
     
     // Decrypt the block
     let decrypted = self.block_decrypt(block, password, None)?;
@@ -618,7 +640,7 @@ impl HitoVault {
     {
       // For Zephyr target, use actual flash operations
       unsafe {
-        ffi::hitoVaultWriteFlash(offset, data, len)
+        ffi::hitoVaultWriteFlash(offset as *const u8, data as *const u8, len)
       }
     }
     

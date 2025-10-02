@@ -1,7 +1,15 @@
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub enum hw_unique_key_slot {
+  HUK_KEYSLOT_KDR = 0,  // Device Root Key (when HUK_HAS_KMU is not defined)
+  HUK_KEYSLOT_MKEK = 2, // Master Key Encryption Key  
+  HUK_KEYSLOT_MEXT = 4, // Master External Storage Encryption Key
+}
+
 extern "C" {
   pub fn rust_hw_unique_key_is_written();
   pub fn hw_unique_key_derive_key(
-    keyslot: u8,
+    keyslot: hw_unique_key_slot,
     context: *const u8,
     context_len: usize,
     salt: *const u8,
@@ -56,17 +64,14 @@ extern "C" {
     block_flash: *const super::VaultEncryptedBlock,
     block_ram: *const super::VaultEncryptedBlock
   ) -> bool;
-  pub fn hitoVaultWriteFlash(
-    address: *const super::VaultEncryptedBlock,
-    data: *const super::VaultEncryptedBlock,
-    size: usize
-  ) -> bool;
   pub fn hitoVaultSaveToRam(block_ram: *const super::VaultEncryptedBlock);
   pub fn crypt0_rng(output: *mut u8, len: usize) -> bool;
   pub fn crypt0_crc16_ccitt(data: *const u8, len: usize) -> u16;
   pub fn hitoVaultResetCount() -> u32;
+
+  //bridge to bool hitoVaultWriteFlash(const void *offset, const void *data, size_t len)
+  pub fn hitoVaultWriteFlash(offset: *const u8, data: *const u8, len: usize) -> bool;
 }
 
-const HUK_KEYSLOT_MKEK: u8 = 0;
-
+pub const HUK_KEYSLOT_MKEK: hw_unique_key_slot = hw_unique_key_slot::HUK_KEYSLOT_MKEK;
 pub const CRYPT0_OK: i32 = 0;
