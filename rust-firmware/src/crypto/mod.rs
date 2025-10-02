@@ -1,3 +1,3 @@
-mod ffi;
+pub mod ffi;
 
 pub mod crypt0;

@@ -14,6 +14,9 @@ mod drivers;
 mod crypto;
 mod platform;
 mod ui;
+pub mod vault;
+
+pub use vault::{HitoVault, VaultError, VaultResult};
 
 use hito_firmware::HitoFirmware;
 use slint::platform::software_renderer::MinimalSoftwareWindow;
@@ -200,6 +203,15 @@ pub extern "C" fn rust_main() -> ! {
 
     // Start with the Lock screen
     screen_manager.navigate_to(ScreenType::Lock).unwrap();
+
+    let mut vault = HitoVault::new();
+
+    vault.initialize();
+
+    vault.set_passcode(b"000000", None).expect("Failed to set passcode");
+
+    //vault.unlock_with_password(b"001000").expect("Failed to unlock vault");
+    vault.unlock_with_password(b"000000").expect("Failed to unlock vault");
 
     // Run platform-specific main loop
     run_main_loop(firmware, window, screen_manager)
