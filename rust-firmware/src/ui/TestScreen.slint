@@ -1,6 +1,6 @@
 import { HitoWindow } from "HitoWindow.slint";
-import { Router } from "Router.slint";
-import "../../res/fonts/RobotoMono-Light.ttf";
+import { Router, ScreenEnum } from "Router.slint";
+import "../../res/fonts/RobotoMono.ttf";
 import { BaseButton } from "BaseButton.slint";
 
 export component TestScreen inherits HitoWindow {
@@ -23,7 +23,7 @@ export component TestScreen inherits HitoWindow {
         button-height: 50px;
         content: "Go to Enter PIN";
         clicked() => {
-            Router.navigate();
+            Router.navigate(ScreenEnum.Home);
         }
     }
 }

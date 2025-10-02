@@ -1,5 +1,5 @@
 import { HitoWindow } from "HitoWindow.slint";
-import { Router } from "Router.slint";
+import { Router, ScreenEnum } from "Router.slint";
 
 export component LockScreen inherits HitoWindow {
     // Animation properties
@@ -156,7 +156,7 @@ export component LockScreen inherits HitoWindow {
             if (lock-frame < 5) {
                 lock-frame += 1;
             } else {
-                Router.navigate();
+                Router.navigate(ScreenEnum.EnterPin);
             }
         }
     }
