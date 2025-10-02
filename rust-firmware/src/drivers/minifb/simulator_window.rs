@@ -8,15 +8,20 @@ use once_cell::sync::OnceCell;
 use std::thread_local;
 use std::vec;
 use std::vec::Vec;
+use std::string::String;
 
 use minifb::{Key, MouseButton, Window, WindowOptions};
 use std::fs;
+use font8x8::UnicodeFonts;
 
 use resvg::tiny_skia::Pixmap;
 use resvg::usvg::{Options, Tree};
 use resvg::render;
 use resvg::tiny_skia::{Transform};
 use resvg::usvg::fontdb::Database;
+
+const GLYPH_W: u32 = 8;
+const GLYPH_H: u32 = 8;
 
 /* ---------- global holder ---------- */
 /*
@@ -69,6 +74,16 @@ pub fn simulator_window_update() {
         let mut win = win_cell.borrow_mut();
 
         win.update();
+    });
+}
+
+pub fn simulator_window_set_memory_stats(heap_bytes: usize, stack_bytes: usize) {
+    WINDOW.with(|cell| {
+        let win_cell = cell.get().expect("simulator_window_init() not called");
+        let mut win = win_cell.borrow_mut();
+
+        win.heap_bytes = heap_bytes;
+        win.stack_bytes = stack_bytes;
     });
 }
 
@@ -126,6 +141,15 @@ pub fn simulator_window_draw_line(y: u16, x_start: u16, x_end: u16, pixels: &[u1
     });
 }
 
+pub fn simulator_window_draw_buffer(buffer: &[u16]) {
+    WINDOW.with(|cell| {
+        let win_cell = cell.get().expect("simulator_window_init() not called");
+        let mut window = win_cell.borrow_mut();
+
+        window.draw_buffer(buffer);
+    });
+}
+
 pub fn simulator_window_is_mouse_pressed() -> Option<bool> {
     WINDOW.with(|cell| {
         let win_cell = cell.get().expect("simulator_window_init() not called");
@@ -151,6 +175,8 @@ struct SimulatorWindow {
     window: Window,
     buffer: Vec<u32>,
     mouse_clicked: bool,
+    heap_bytes: usize,
+    stack_bytes: usize,
 }
 
 use std::fmt;
@@ -174,11 +200,13 @@ impl SimulatorWindow {
             ..WindowOptions::default()
         };
         let window = Window::new(NAME, WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize, opts).unwrap();
-        let mut this = Self { 
+        let mut this = Self {
             //window: Rc::new(window),
             window: window,
             buffer: vec![0u32; WINDOW_WIDTH as usize * WINDOW_HEIGHT as usize],
             mouse_clicked: false,
+            heap_bytes: 0,
+            stack_bytes: 0,
         };
         this.init_background_png();
         this
@@ -325,9 +353,84 @@ impl SimulatorWindow {
         */
     }
 
-    pub fn update(&mut self) {
+    pub fn draw_text(&mut self, text: &str, mut x: u32, mut y: u32, color: u32) {
+        for ch in text.chars() {
+            if ch == '\n' { y += GLYPH_H + 1; x = 0; continue; }
 
+            // Try blocks in order (Basic Latin, Latin-1, Cyrillic, etc.)
+            let glyph_rows = font8x8::BASIC_FONTS.get(ch);
+                // .or_else(|| font8x8::Cyrillic::new().get(ch))
+                // .or_else(|| font8x8::BoxDrawing::new().get(ch));
+
+            if let Some(rows) = glyph_rows {
+                for (row, bits) in rows.iter().enumerate() {
+                    let py = y + row as u32;
+                    if py >= WINDOW_HEIGHT { continue; }
+                    for col in 0..8 {
+                        let px = x + col;
+                        if px >= WINDOW_WIDTH { continue; }
+                        if (bits >> col) & 0x01 != 0 {
+                            let idx = (py * WINDOW_WIDTH + px) as usize;
+                            if idx < self.buffer.len() {
+                                self.buffer[idx] = color;
+                            }
+                        }
+                    }
+                }
+            }
+            x += GLYPH_W + 1;
+        }
+    }
+
+    fn get_memory_usage_labels(&self) -> (String, String, String) {
+        let to_label = |i: usize| -> String {
+            if i < 10_000 {
+                std::format!("{} B", i)
+            } else if i < 1_000_000 {
+                std::format!("{:.1} KB", (i as f32) / 1024.0)
+            } else {
+                std::format!("{:.1} MB", (i as f32) / 1_048_576.0)
+            }
+        };
+
+        let label1 = std::format!("Heap: {}", to_label(self.heap_bytes));
+        let label2 = std::format!("Stack: {}", to_label(self.stack_bytes));
+        let label3 = std::format!("Total: {}", to_label(self.heap_bytes + self.stack_bytes));
+
+        (label1, label2, label3)
+    }
+
+
+    fn draw_memory_overlay(&mut self) {
+        let (label1, label2, label3) = self.get_memory_usage_labels();
+
+        // Draw semi-transparent background for text
+        let overlay_x = 160;
+        let overlay_y = 400;
+        let overlay_width = 200;
+        let overlay_height = 40;
+
+        for y in overlay_y..overlay_y + overlay_height {
+            for x in overlay_x..overlay_x + overlay_width {
+                if x < WINDOW_WIDTH && y < WINDOW_HEIGHT {
+                    let index = (y * WINDOW_WIDTH + x) as usize;
+                    if index < self.buffer.len() {
+                        // Semi-transparent dark background
+                        self.buffer[index] = 0x202020;
+                    }
+                }
+            }
+        }
+
+        self.draw_text(&label1, overlay_x + 5, overlay_y + 5, 0x00FF00);
+        self.draw_text(&label2, overlay_x + 5, overlay_y + 15, 0x00FF00);
+        self.draw_text(&label3, overlay_x + 5, overlay_y + 25, 0xFFFF00);
+    }
+
+    pub fn update(&mut self) {
         if self.window.is_open() {
+            self.draw_memory_overlay();
+
             self.window.update_with_buffer(&self.buffer, WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize).unwrap();
         }
 
