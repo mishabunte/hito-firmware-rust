@@ -1,5 +1,18 @@
 // Global router state
+export enum ScreenEnum {
+    // Home, 
+    // Send
+    Lock, 
+    TestScreen,
+    EnterPin, 
+    TestScreen2, 
+    Home,
+    Send,
+    Receive,
+    Settings,
+}
+
 export global Router {
-    callback navigate();
+    callback navigate(page: ScreenEnum);
     callback back();
 }

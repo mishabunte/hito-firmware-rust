@@ -1,5 +1,5 @@
 import { HitoWindow } from "HitoWindow.slint";
-import { Router } from "Router.slint";
+import { Router, ScreenEnum } from "Router.slint";
 import { Palette } from "Palette.slint";
 import { BaseButton } from "BaseButton.slint";
 
@@ -148,6 +148,7 @@ component EnteredPassword {
 export component EnterPinScreen inherits HitoWindow {
     property <length> line-y: 65px;
     in-out property <int> entered-password-count: 0;
+    back-shown: false;
     Rectangle {
         y: 10px;
         background: Palette.green;
@@ -184,9 +185,11 @@ export component EnterPinScreen inherits HitoWindow {
         x: 30px;
         y: 70px;
         number-clicked(n) => {
-            if (entered-password-count < 6) {
+            if (entered-password-count < 5) {
                 entered-password-count = entered-password-count + 1;
                 append-char(n);
+            } else {
+                Router.navigate(ScreenEnum.Home); // Go to home screen when full pin entered
             }
         }
     }

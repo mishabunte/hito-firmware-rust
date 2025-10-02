@@ -6,6 +6,9 @@ use core::mem::MaybeUninit;
 #[cfg(feature = "minifb")]
 extern crate std;
 
+#[cfg(feature = "minifb")]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 #[cfg(feature = "zephyr")]
 extern crate panic_halt;
 
@@ -25,14 +28,32 @@ use ui::{ScreenManager};
 #[cfg(any(feature = "minifb", feature = "zephyr"))]
 slint::include_modules!();
 
+#[cfg(feature = "minifb")]
+static BASE_STACK_REMAINING: AtomicUsize = AtomicUsize::new(8388608);
+
+#[cfg(feature = "minifb")]
+pub fn init_stack_baseline() {
+    // let rem = stacker::remaining_stack();
+    // log_info!("Initial stack remaining: {:?}", rem);
+    // BASE_STACK_REMAINING.store(rem.unwrap_or(0), Ordering::Relaxed);
+}
+
+#[cfg(feature = "minifb")]
+pub fn current_stack_used() -> usize {
+    let base = BASE_STACK_REMAINING.load(Ordering::Relaxed);
+    let now  = stacker::remaining_stack();
+    return base.saturating_sub(now.unwrap_or(0))
+}
+
 use crate::{
     drivers::{Battery, Display, Indicator, LedColor, Touch}, 
     platform::{DisplayWrapper, MyPlatform, Timer}, ui::screen_manager::ScreenType
 };
 
+
 // Constants in flash memory
-const DISPLAY_WIDTH: u32 = 320;
-const DISPLAY_HEIGHT: u32 = 240;
+const DISPLAY_WIDTH: usize = 320;
+const DISPLAY_HEIGHT: usize = 240;
 const INVALID_MOUSE_POS: (u16, u16) = (0xffff, 0xffff);
 
 // For desktop, we can use regular static storage
@@ -42,6 +63,37 @@ pub static mut LINE_BUFFER: [slint::platform::software_renderer::Rgb565Pixel; 32
 pub static mut PLATFORM_STORAGE: MaybeUninit<MyPlatform> = MaybeUninit::uninit();
 
 pub static mut LAST_MOUSE_POS: (u16, u16) = INVALID_MOUSE_POS;
+
+#[cfg(feature = "minifb")]
+static HEAP_ALLOCATED: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(feature = "minifb")]
+struct TrackingAllocator;
+
+#[cfg(feature = "minifb")]
+unsafe impl std::alloc::GlobalAlloc for TrackingAllocator {
+    unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
+        let ptr = std::alloc::System.alloc(layout);
+        if !ptr.is_null() {
+            HEAP_ALLOCATED.fetch_add(layout.size(), Ordering::Relaxed);
+        }
+        ptr
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
+        HEAP_ALLOCATED.fetch_sub(layout.size(), Ordering::Relaxed);
+        std::alloc::System.dealloc(ptr, layout);
+    }
+}
+
+#[cfg(feature = "minifb")]
+#[global_allocator]
+static GLOBAL: dhat::Alloc = dhat::Alloc;
+
+#[cfg(feature = "minifb")]
+pub fn get_heap_usage() -> usize {
+    dhat::HeapStats::get().curr_bytes
+}
 
 #[cfg(feature = "zephyr")]
 extern "C" {
@@ -147,11 +199,20 @@ fn run_main_loop(
         handle_touch_events(&mut firmware, &*window);
 
         // Check for screen navigation (e.g., LockScreen unlock)
-        let _ = screen_manager.handle_navigation();
+        let _ = screen_manager.handle_navigation(|| {
+            firmware.display.fill_rect(0, 0, 320, 240, 0xFFFF);
+        });
 
         // Render frame using static line buffer
         window.draw_if_needed(|renderer| {
             unsafe {
+                #[cfg(feature = "minifb")]
+                {
+                    let heap_bytes = get_heap_usage();
+                    // Approximate stack usage - rough estimate based on thread stack
+                    let stack_bytes = current_stack_used(); // Placeholder - actual measurement is platform-specific
+                    drivers::minifb::simulator_window_set_memory_stats(heap_bytes, stack_bytes);
+                }
                 renderer.render_by_line(DisplayWrapper {
                     display: &mut firmware.display,
                     line_buffer: &mut LINE_BUFFER,
@@ -186,15 +247,18 @@ pub extern "C" fn rust_main() -> ! {
     
     // Create window with appropriate buffer type
     let window = MinimalSoftwareWindow::new(
-            slint::platform::software_renderer::RepaintBufferType::ReusedBuffer
+            slint::platform::software_renderer::RepaintBufferType::ReusedBuffer,
     );
 
-    window.set_size(slint::PhysicalSize::new(DISPLAY_WIDTH, DISPLAY_HEIGHT));
+    window.set_size(slint::PhysicalSize::new(320, 240));
 
     log_info!("Initializing platform");
 
     // Initialize platform (common code)
     initialize_platform(window.clone());
+
+    #[cfg(feature = "minifb")]
+    let _profiler = dhat::Profiler::builder().build();
 
     log_info!("Platform initialized");
 
@@ -202,7 +266,8 @@ pub extern "C" fn rust_main() -> ! {
     let mut screen_manager = ScreenManager::new().expect("Failed to create screen manager");
 
     // Start with the Lock screen
-    screen_manager.navigate_to(ScreenType::Lock).unwrap();
+    screen_manager.navigate_to(ScreenType::Lock, || {
+    }).expect("Failed to switch to Lock screen");
 
     let mut vault = HitoVault::new();
 

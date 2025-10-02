@@ -1,9 +1,9 @@
 import { VerticalBox, HorizontalBox } from "std-widgets.slint";
-import "../../res/fonts/RobotoMono-Light.ttf";
+import "../../res/fonts/RobotoMono.ttf";
 import { BrightnessLogo} from "BrightnessController.slint";
 import { BatteryLevel, BatteryController } from "Battery.slint";
 import { Palette } from "Palette.slint";
-import { Router } from "Router.slint";
+import { Router, ScreenEnum } from "Router.slint";
 import { BaseButton } from "BaseButton.slint";
 
 component HeaderBar {
@@ -64,6 +64,7 @@ export component HitoWindow inherits Window {
             alignment: start;
             BackButton {
                 button-width: 40px;
+                button-height: 40px;
                 x: 10px;
                 in-font-size: 30px;
                 visible: back-shown;

@@ -1,36 +1,64 @@
 import { HitoWindow } from "HitoWindow.slint";
 import { Palette } from "Palette.slint";
 import { BaseButton } from "BaseButton.slint";
+import { Router, ScreenEnum } from "Router.slint";
+
+component SettingsButton inherits BaseButton {
+    content: "⚙";
+    border-shown: false;
+    clicked() => {
+        Router.navigate(ScreenEnum.Settings);
+    }
+}
+
 
 export component HomeScreen inherits HitoWindow {
     // Indicate this is not the lock screen
     is-lockscreen: false;
+    back-shown: false; // No back button on home screen
     show-brightness: true; // Show brightness control on home screen
-
-    // Title text
-    Text {
-        text: "Home Screen";
-        font-size: 24px;
-        color: black;
-        horizontal-alignment: center;
-        y: 100px;
+    HorizontalLayout {
         width: parent.width;
+        alignment: start;
+        VerticalLayout {
+            alignment: start;
+            SettingsButton {
+                button-width: 40px;
+                button-height: 40px;
+                x: 10px;
+                in-font-size: 30px;
+            }
+        }
     }
     HorizontalLayout {
-      x: 10px;
-      y: 160px;
-      width: 300px;
+      alignment: center;
+      spacing: 30px;
+      y: -20px;
+      Image {
+        source: @image-url("../../res/img/hito_logo.png");
+      }
+    }
+    HorizontalLayout {
+      alignment: start;
+      x: 40px;
+      y: 175px;
       height: 50px;
-      spacing: 10px;
+      spacing: 90px;
         BaseButton { 
-          content: "Receive";
-          button-width: 125px;
-          button-height: 50px;
+          content: "RECEIVE";
+          button-width: 130px;
+          button-height: 40px;
+          clicked => {
+            Router.navigate(ScreenEnum.Receive);
+          }
         }
         BaseButton { 
-          content: "Send";
-          button-width: 125px;
-          button-height: 50px;
+          content: "SEND";
+          button-width: 130px;
+          button-height: 40px;
+          clicked => {
+            Router.navigate(ScreenEnum.Send);
+          }
         }
     }
   callback clicked();
