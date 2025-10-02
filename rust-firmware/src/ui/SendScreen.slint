@@ -1,0 +1,179 @@
+import { HitoWindow} from "HitoWindow.slint";
+import { Router, ScreenEnum } from "Router.slint";
+import { Palette } from "Palette.slint";
+import { VerticalBox } from "std-widgets.slint";
+import { BaseButton } from "BaseButton.slint";
+
+component TextWithBackground inherits Text {
+    in-out property<string> header-title: self.text;
+    property <length> text-width: self.width;
+    property <length> text-height: self.height;
+    in-out property <bool> pressed;
+    // in-out property <bool> font-italic: false;
+    // in-out property <int> font-weight: 200;
+    // in-out property <string> font-family: "Roboto Mono";
+    // in-out property <length> font-size: 20px;
+    in-out property <brush> font-color: Palette.black;
+    if header-title != "": Rectangle {
+        background: pressed ? Palette.grey : Palette.green;
+        width: 1.1 * parent.text-width;
+        height: 1.5 * parent.text-height;
+        border-color: Palette.black;
+        border-width: 2px;
+        border-radius: 10px;
+        textProp := Text {
+            text: header-title;
+            font-size: root.font-size;
+            font-family: root.font-family;
+            font-italic: root.font-italic;
+            font-weight: root.font-weight;
+            color: root.font-color;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}
+
+enum Protocol {
+    Bluetooth,
+    NFC
+}
+
+component SwitchButton {
+    property <bool> pressed: false;
+    in-out property <string> content: "";
+    in property <length> button-width;
+    in property <length> button-height;
+    Rectangle {
+        width: button-width > 1.5 * text.width ? button-width : 1.5 * text.width;
+        height: button-height > 1.5 * text.height ? button-height : 1.5 * text.height;
+        border-color: Palette.black;
+        border-width: 4px;
+        border-radius: self.width/300;
+        background: pressed ? Palette.green : transparent;
+        text := Text {
+            text: content;
+            font-size: 20px;
+            color: Palette.black;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        Rectangle {
+            width: button-width - 4px;
+            height: button-height - 4px;
+            border-color: Palette.green;
+            border-width: 1px;
+        }
+        TouchArea {
+            width: root.width;
+            height: root.height;
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down) {
+                    pressed = true;
+                    root.clicked();
+                    debug("Clicked pin", content);
+                } else if (event.kind == PointerEventKind.up) {
+                    pressed = false;
+                }
+            }
+        }
+    }
+    callback clicked();
+}
+
+component Spacer inherits Rectangle {
+    width: 1px;
+    height: 1px;
+    background: transparent;
+    horizontal-stretch: 1;
+    vertical-stretch: 1;
+}
+
+export component BlueButton {
+    property <bool> pressed: false;
+    in-out property <string> content: "0";
+    in-out property <length> button-width;
+    in-out property <length> button-height;
+    in-out property <length> in-font-size: 20px;
+    in-out property <color> text-color: pressed ? Palette.black : Palette.blue;
+    TextWithBackground {
+        text: root.content;
+        pressed: root.pressed;
+        font-size: root.in-font-size;
+        color: root.text-color;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        TouchArea {
+        width: parent.width;
+        height: parent.height;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                    pressed = true;
+                } else if (event.kind == PointerEventKind.up) {
+                    pressed = false;
+                    root.clicked();
+                    debug("Clicked pin", content);
+                }
+            }
+        }
+      }
+      callback clicked();
+    }
+
+export component SendScreen inherits HitoWindow {
+    in-out property <Protocol> current-protocol: Protocol.NFC;
+    show-brightness: true; // Show brightness control on home screen
+    header-title: "SEND CRYPTO";
+    in property <image> image-src: current-protocol == Protocol.NFC ? @image-url("../../res/img/nfc.png") : @image-url("../../res/img/bt_logo.png");
+    in-out property <string> current-protocol-name: current-protocol == Protocol.NFC ? "NFC" : "Bluetooth";
+    in-out property <string> next-protocol-name: current-protocol == Protocol.NFC ? "Bluetooth" : "NFC";
+    HorizontalLayout {
+      alignment: center;
+      y: 35px;
+      VerticalLayout {
+        width: 200px;
+        Text {
+          text: current-protocol-name + " is active";
+          font-size: 12px;
+          font-family: "Roboto Mono";
+          font-italic: false;
+          font-weight: 500;
+          horizontal-alignment: center;
+          wrap: word-wrap;
+          color: Palette.black;
+          vertical-alignment: center;
+          height: 30px;
+        }
+      }
+    }
+    Image {
+      source: image-src;
+      horizontal-alignment: center;
+      vertical-alignment: center;
+    }
+    HorizontalLayout {}
+    BlueButton {
+        content: "Switch to " + next-protocol-name;
+        y: 190px;
+        clicked => {
+          if (current-protocol == Protocol.NFC) {
+              current-protocol = Protocol.Bluetooth;
+          } else {
+              current-protocol = Protocol.NFC;
+          }
+        }
+    }
+    // SwitchButton {
+    //   content: "Switch to " + next-protocol-name;
+    //   button-height: 40px;
+    //   button-width: 270px;
+    //   y: 190px;
+    //   clicked => {
+    //     if (current-protocol == Protocol.NFC) {
+    //         current-protocol = Protocol.Bluetooth;
+    //     } else {
+    //         current-protocol = Protocol.NFC;
+    //     }
+    //   }
+    // }
+}
