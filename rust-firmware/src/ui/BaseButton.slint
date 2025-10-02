@@ -1,29 +1,31 @@
 import { Palette } from "Palette.slint";
 
-component BaseButton {
+export component BaseButton {
     property <bool> pressed: false;
     in-out property <string> content: "0";
-    in property <length> button-width;
-    in property <length> button-height;
-    in property <length> in-font-size: 20px;
-    in property <bool> border-shown: true;
+    in-out property <length> button-width;
+    in-out property <length> button-height;
+    in-out property <length> in-font-size: 20px;
+    in-out property <bool> border-shown: true;
+    in-out property <color> text-color: pressed && !border-shown ? Palette.green : Palette.black;
+    in-out property <color> background-color: pressed && border-shown ? Palette.green : transparent;
     Rectangle {
-        width: button-width > 1.5 * text.width ? button-width : 1.5 * text.width;
-        height: button-height > 1.5 * text.height ? button-height : 1.5 * text.height;
+        width: button-width;
+        height: button-height;
         border-color: border-shown ? Palette.black : transparent;
-        border-width: border-shown ? 1px : 0px;
+        border-width: border-shown ? 2px : 0px;
         border-radius: self.width/300;
-        background: pressed && border-shown ? Palette.green : transparent;
+        background: root.background-color;
         text := Text {
             text: content;
             font-size: root.in-font-size;
-            color: pressed && !border-shown ? Palette.green : Palette.black;
+            color: root.text-color;
             horizontal-alignment: center;
             vertical-alignment: center;
         }
         TouchArea {
-            width: parent.width;
-            height: parent.height;
+            width: root.button-width;
+            height: root.button-height;
             pointer-event(event) => {
                 if (event.kind == PointerEventKind.down) {
                     pressed = true;
