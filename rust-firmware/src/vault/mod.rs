@@ -1,9 +1,13 @@
 pub mod ffi;
-
+use core::cell::Cell;
 use core::ptr;
 use core::slice;
 use crate::crypto;
 use crate::log_info;
+use crate::now_us;
+extern crate alloc;
+
+type NowFn = fn() -> u64;
 
 #[cfg(feature = "minifb")]
 use std::process::Command;
@@ -19,6 +23,10 @@ static mut HARDWARE_ID: [u8; 128] = [0; 128];
 static INIT_HUK: Once = Once::new();
 #[cfg(feature = "minifb")]
 static mut HUK_WRITTEN: bool = false;
+#[cfg(feature = "minifb")]
+use std::thread;
+#[cfg(feature = "minifb")]
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
@@ -86,7 +94,7 @@ const VAULT_MAIN_PAGE: *const VaultEncryptedBlock = unsafe { VAULT_MAIN_STORAGE.
 #[cfg(feature = "minifb")]
 const VAULT_BACKUP_PAGE: *const VaultEncryptedBlock = unsafe { VAULT_BACKUP_STORAGE.as_ptr() };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum VaultError {
     EmptyVault,
     InvalidPassword,
@@ -97,7 +105,150 @@ pub enum VaultError {
 }
 
 pub type VaultResult<T> = Result<T, VaultError>;
+use alloc::rc::Rc;
 
+use core::cmp::min;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum UnlockPhase {
+    DeriveKeyStep,  // runs HW-derives + a small PBKDF2 batch, contributes to one "step"
+    Finalize,       // do the AES-CCM decrypt using derived key
+    Done,
+}
+
+#[derive(Clone)]
+struct UnlockJob {
+    block: VaultEncryptedBlock,
+    pass_buf: [u8; 32],
+    pass_len: usize,
+    steps_total: u32,
+
+    phase: UnlockPhase,
+    step_idx: u32,
+    key: [u8; 32],
+    derived: [u8; 32],
+
+    hw_iters_left_in_this_step: u32,
+    pbkdf2_iters_left_in_this_step: u32,
+    now: NowFn,
+
+    // outputs
+    result: Option<VaultResult<()>>,
+    decrypted: Option<[u8; 96]>,
+}
+
+impl UnlockJob {
+    fn new(block: &VaultEncryptedBlock, password: &[u8]) -> Self {
+        let mut pass = [0u8; 32];
+        let len = core::cmp::min(password.len(), 32);
+        pass[..len].copy_from_slice(&password[..len]);
+        let mut key = [0u8; 32];
+        key[..len].copy_from_slice(&pass[..len]);
+
+        Self {
+            block: *block,
+            pass_buf: pass,
+            pass_len: len,
+            steps_total: block.steps_count,
+            phase: UnlockPhase::DeriveKeyStep,
+            step_idx: 0,
+            key,
+            derived: [0u8; 32],
+            hw_iters_left_in_this_step: 40,
+            pbkdf2_iters_left_in_this_step: 10,
+            now: now_us,
+            result: None,
+            decrypted: None,
+        }
+    }
+
+    fn progress(&self) -> u8 {
+        if self.steps_total == 0 { 100 }
+        else { ((self.step_idx * 100) / self.steps_total) as u8 }
+    }
+
+    /// Advance a small chunk. Returns Some(progress) when a visible change happened.
+    fn poll(&mut self) -> Option<u8> {
+    let start = (self.now)();            // monotonic tick (provide this)
+    let budget_us = 40000;                  // ~40 ms per UI tick (tune)
+
+    let mut last_progress: Option<u8> = None;
+
+    'budget: loop {
+        match self.phase {
+            UnlockPhase::DeriveKeyStep => {
+                // complete the rest of this step
+                while self.hw_iters_left_in_this_step > 0 {
+                    let hw = match derive_hardware_key(&self.key) {
+                        Ok(k) => k,
+                        Err(_) => { self.result = Some(Err(VaultError::CryptoError)); self.phase = UnlockPhase::Done; last_progress = Some(100); break 'budget; }
+                    };
+                    self.derived.copy_from_slice(&hw);
+                    self.key.copy_from_slice(&self.derived);
+                    self.hw_iters_left_in_this_step -= 1;
+                    if (self.now)() - start >= budget_us { break 'budget; }
+                }
+
+                if self.hw_iters_left_in_this_step == 0 {
+                    // do remaining PBKDF2 for this step
+                    if self.pbkdf2_iters_left_in_this_step > 0 {
+                        let rc = unsafe {
+                            crypto::ffi::crypt0_pbkdf2_hmac_sha256(
+                                self.pbkdf2_iters_left_in_this_step,
+                                self.derived.as_ptr(),
+                                self.derived.len() as u32,
+                                self.pass_buf.as_ptr(),
+                                self.pass_len as i32,
+                                self.key.as_mut_ptr(),
+                                32,
+                            )
+                        };
+                        if rc != 0 {
+                            self.result = Some(Err(VaultError::CryptoError));
+                            self.phase = UnlockPhase::Done;
+                            last_progress = Some(100);
+                            break 'budget;
+                        }
+                        self.pbkdf2_iters_left_in_this_step = 0;
+                    }
+
+                    // step finished
+                    self.step_idx += 1;
+                    last_progress = Some(self.progress());
+                    self.hw_iters_left_in_this_step = 40;
+                    self.pbkdf2_iters_left_in_this_step = 10;
+
+                    if self.step_idx >= self.steps_total {
+                        self.phase = UnlockPhase::Finalize;
+                    }
+
+                    if (self.now)() - start >= budget_us { break 'budget; }
+                }
+            }
+
+            UnlockPhase::Finalize => {
+                match HitoVault::block_decrypt_with_key(&self.block, &self.key) {
+                    Ok(decrypted) => {
+                        self.decrypted = Some(decrypted);
+                        self.result = Some(Ok(()));
+                    }
+                    Err(e) => self.result = Some(Err(e)),
+                }
+                self.phase = UnlockPhase::Done;
+                last_progress = Some(100);
+                break 'budget;
+            }
+
+            UnlockPhase::Done => break 'budget,
+        }
+    }
+
+    last_progress
+}
+}
+
+
+#[derive(Clone)]
 #[repr(C)]
 pub struct HitoVault {
   initialized: bool,
@@ -113,6 +264,7 @@ pub struct HitoVault {
   btc_addr: [u8; 75],
   mnemonic: [u8; 215],
   entropy_len: entropy_len_t,
+  pub unlock_job: Option<UnlockJob>,
 }
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
@@ -213,7 +365,9 @@ impl HitoVault {
            entropy: [0; 32], seed: [0; 64], eth_key: [0; 32], near_key: [0; 32],
            solana_key: [0; 32], solana_addr: [0; 32], eth_addr: [0; 43],
            near_addr: [0; 64], btc_addr: [0; 75], mnemonic: [0; 215],
-           entropy_len: entropy_len_t::ENTROPY_LEN_32 }
+           entropy_len: entropy_len_t::ENTROPY_LEN_32,
+           unlock_job: None
+       }
   }
 
   pub fn initialize(&mut self) {
@@ -222,7 +376,6 @@ impl HitoVault {
       self.initialized = true;
     }
   }
-
   /// Safely find the last valid block in the vault
   pub fn last_block(&self) -> VaultResult<&VaultEncryptedBlock> {
     // Create a safe slice from the vault main page
@@ -256,11 +409,10 @@ impl HitoVault {
 
   /// Derive encryption key from password using the correct C implementation
   pub fn derive_encryption_key(
-    &self,
     password: &[u8],
-    steps_count: u32,
-    progress_handler: Option<fn(u8)>
+    steps_count: u32
   ) -> VaultResult<[u8; 32]> {
+    log_info!("Deriving encryption key with {} steps", steps_count);
     let mut key = [0u8; 32];
     if password.len() == 0 || password.len() > 32 {
       return Err(VaultError::InvalidKeyLength);
@@ -273,83 +425,67 @@ impl HitoVault {
     
     // Each step is 100ms time on NRF5340
     for i in 0..steps_count {
+      let mut derived = [0u8; 32];
       // 40 iterations of hardware key derivation (~8ms time)
       for _j in 0..40 {
         let hw_key = derive_hardware_key(&key)?;
-        key.copy_from_slice(&hw_key);
+        derived.copy_from_slice(&hw_key);
+        key.copy_from_slice(&derived);
       }
       
       let pbkdf2_result = unsafe {
         crypto::ffi::crypt0_pbkdf2_hmac_sha256(
           10,
-          key.as_ptr(),        // Use current key as salt
-          32,
+          derived.as_ptr(),        // Use current key as salt
+          derived.len() as u32,
           password.as_ptr(),
           password.len() as i32,
           key.as_mut_ptr(),    // Output to key
           32
         )
       };
-      
-      if pbkdf2_result != crypto::ffi::CRYPT0_OK {
-        return Err(VaultError::CryptoError);
-      }
-      
-      // Progress reporting
-      if let Some(handler) = progress_handler {
-        let new_progress = ((i * 100) / steps_count) as u8;
-        if progress != new_progress {
-          progress = new_progress;
-          handler(progress);
-        }
-      }
-    }
-    
-    // Final progress callback
-    if let Some(handler) = progress_handler {
-      handler(100);
     }
     
     Ok(key)
   }
 
-  fn block_decrypt(
-    &self,
+  pub fn unlock_job_is_none(&self) -> bool {
+    self.unlock_job.is_none()
+  }
+
+  pub fn block_decrypt(
     block: &VaultEncryptedBlock,
-    passcode: &[u8],
-    progress_handler: Option<fn(u8)>
+    passcode: &[u8]
   ) -> VaultResult<[u8; 96]> {
     // Derive AES key using the unified key derivation method
-    let aes_key = self.derive_encryption_key(passcode, block.steps_count, progress_handler)?;
+    let aes_key = HitoVault::derive_encryption_key(passcode, block.steps_count)?;
+    HitoVault::block_decrypt_with_key(block, &aes_key)
+  }
 
-    log_info!("Derived AES key: {:x?}", aes_key);
-    
-    // Decrypt using AES-CCM
-    let mut decrypted = [0u8; 96];
-    
-    let result = unsafe {
-      crypto::ffi::crypt0_decrypt_aes_ccm(
-        block.encrypted.as_ptr(),
-        96,
-        aes_key.as_ptr(),
-        32,
-        block.nonce.as_ptr(),
-        NONCE_LEN,
-        block.auth_data.as_ptr(),
-        AAD_LEN,
-        block.tag.as_ptr(),
-        TAG_LEN,
-        decrypted.as_mut_ptr()
-      )
-    };
-    
-    if result != 96 {
-      log_info!("Failed to decrypt block");
-      return Err(VaultError::CryptoError);
-    }
-
-    log_info!("Decrypted block: {:?}", decrypted);
-    Ok(decrypted)
+  pub fn block_decrypt_with_key(
+      block: &VaultEncryptedBlock,
+      aes_key: &[u8; 32],
+  ) -> VaultResult<[u8; 96]> {
+      let mut decrypted = [0u8; 96];
+      let result = unsafe {
+          crypto::ffi::crypt0_decrypt_aes_ccm(
+              block.encrypted.as_ptr(),
+              96,
+              aes_key.as_ptr(),
+              32,
+              block.nonce.as_ptr(),
+              NONCE_LEN,
+              block.auth_data.as_ptr(),
+              AAD_LEN,
+              block.tag.as_ptr(),
+              TAG_LEN,
+              decrypted.as_mut_ptr(),
+          )
+      };
+      if result != 96 {
+          return Err(VaultError::CryptoError);
+      }
+      Ok(decrypted)
   }
 
   /// Check if the vault is empty (no valid blocks)
@@ -367,8 +503,7 @@ impl HitoVault {
     entropy_len: entropy_len_t,
     entropy: &[u8],
     seed: &[u8],
-    pass: &[u8],
-    progress_handler: Option<fn(u8)>
+    pass: &[u8]
   ) -> VaultResult<()> {
     // Set magic based on entropy length
     block.magic = match entropy_len {
@@ -391,7 +526,7 @@ impl HitoVault {
     block.encrypted[32..].copy_from_slice(&seed[..64]);
 
     // Generate encryption key
-    let aes_key = self.derive_encryption_key(pass, block.steps_count, progress_handler)?;
+    let aes_key = HitoVault::derive_encryption_key(pass, block.steps_count)?;
 
     // Generate random nonce and auth_data
     let nonce_result = unsafe { crypto::ffi::crypt0_rng(block.nonce.as_mut_ptr(), NONCE_LEN) };
@@ -432,6 +567,54 @@ impl HitoVault {
     Ok(())
   }
 
+  pub fn start_unlock(&mut self, password: &[u8]) -> VaultResult<()> {
+      let block = *self.last_block()?; // copies the block into RAM
+      if password.is_empty() || password.len() > 32 {
+          return Err(VaultError::InvalidKeyLength);
+      }
+      self.unlock_job = Some(UnlockJob::new(&block, password));
+      // Optional: immediately report 0% for UI
+      // self.set_progress(0);
+      Ok(())
+  }
+
+  pub fn poll_unlock(&mut self) -> Result<Option<u8>, VaultError> {
+      let Some(job) = self.unlock_job.as_mut() else {
+          log_info!("No unlock job in progress");
+          return Ok(None);
+      };
+
+      if let Some(p) = job.poll() {
+          // If the job reached Done, take it and commit results while holding &mut self.
+          if matches!(job.phase, UnlockPhase::Done) {
+              let job = self.unlock_job.take().unwrap();
+              let result = job.result.unwrap_or(Err(VaultError::CryptoError));
+              match result {
+                  Ok(()) => {
+                      // Commit decrypted bytes into the vault state
+                      let decrypted = job.decrypted.expect("decrypted present on Ok");
+                      let entropy_len = self.entropy_len as usize;
+                      if entropy_len == 0 || entropy_len > 32 {
+                          return Err(VaultError::InvalidKeyLength);
+                      }
+                      self.entropy[..entropy_len].copy_from_slice(&decrypted[..entropy_len]);
+                      self.seed.copy_from_slice(&decrypted[32..]);
+                      self.vaultIsUnlocked = true;
+                  }
+                  Err(e) => return Err(e),
+              }
+          }
+          return Ok(Some(p));
+      }
+
+      Ok(None)
+  }
+
+
+  pub fn cancel_unlock(&mut self) {
+      self.unlock_job = None;
+      // self.set_progress(0);
+  }
   /// Save vault blocks to flash and RAM (matches C hitoVaultSaveBlock)
   fn vault_save_block(
     &self,
@@ -487,8 +670,7 @@ impl HitoVault {
     entropy: &[u8],
     entropy_len: usize,
     seed: &[u8],
-    new_pass: &[u8],
-    progress_handler: Option<fn(u8)>
+    new_pass: &[u8]
   ) -> VaultResult<()> {
     let mut block_flash = VaultEncryptedBlock {
       magic: 0,
@@ -518,10 +700,10 @@ impl HitoVault {
     };
 
     // Encrypt flash block
-    self.block_encrypt(&mut block_flash, entropy_enum.clone(), entropy, seed, new_pass, progress_handler)?;
+    self.block_encrypt(&mut block_flash, entropy_enum.clone(), entropy, seed, new_pass)?;
     
     // Encrypt RAM block
-    self.block_encrypt(&mut block_ram, entropy_enum, entropy, seed, new_pass, None)?;
+    self.block_encrypt(&mut block_ram, entropy_enum, entropy, seed, new_pass)?;
 
     // Save both blocks using our Rust implementation
     self.vault_save_block(&block_flash, Some(&block_ram))?;
@@ -553,21 +735,20 @@ impl HitoVault {
         return Err(VaultError::CryptoError);
       }
       
-      self.vaultIsUnlocked = true;
+      //self.vaultIsUnlocked = true;
     }
 
     // Check if vault is unlocked
-    if !self.vaultIsUnlocked {
-      return Err(VaultError::InvalidPassword);
-    }
+    // if !self.vaultIsUnlocked {
+    //   return Err(VaultError::InvalidPassword);
+    // }
 
     // Save entropy with new passcode
     self.vault_save(
       &self.entropy,
       self.entropy_len as usize,
       &self.seed,
-      new_pass,
-      progress_handler
+      new_pass
     )?;
 
     log_info!("Vault saved with new passcode");
@@ -581,9 +762,10 @@ impl HitoVault {
     let block = self.last_block()?;
 
     log_info!("Last block retrieved: magic={:x}, steps_count={}, crc16_ccitt={:x}", block.magic, block.steps_count, block.crc16_ccitt);
+    log_info!("Attempting to unlock vault with password: {:?}", password);
     
     // Decrypt the block
-    let decrypted = self.block_decrypt(block, password, None)?;
+    let decrypted = HitoVault::block_decrypt(block, password)?;
     
     // Parse the decrypted data (entropy + seed) and store in vault
     // The first 32 bytes are entropy, next 64 bytes are seed
@@ -595,6 +777,10 @@ impl HitoVault {
     
     self.vaultIsUnlocked = true;
     Ok(())
+  }
+
+  pub fn is_unlocked(&self) -> bool {
+    self.vaultIsUnlocked
   }
 
   #[cfg(feature = "minifb")]

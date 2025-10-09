@@ -2,10 +2,32 @@ import { HitoWindow } from "HitoWindow.slint";
 import { Router, ScreenEnum } from "Router.slint";
 import { Palette } from "Palette.slint";
 import { BaseButton } from "BaseButton.slint";
+import { EnterPinController } from "EnterPinController.slint";
 
 component PassChar inherits BaseButton {
     button-width: 50px;
     button-height: 50px;
+}
+
+component ProgressBar {
+    in-out property <int> progress: 55;
+    in-out property <bool> in-progress: progress > 0 && progress < 100;
+    Rectangle {
+        width: 200px;
+        height: 10px;
+        border-color: Palette.black;
+        border-width: 2px;
+        border-radius: 10px;
+        background: Palette.grey;
+        Rectangle {
+            width: (parent.width - parent.border-width) * progress / 100;
+            height: parent.height - 4px;
+            x: 2px;
+            y: 2px;
+            background: Palette.black;
+            border-radius: 8px;
+        }
+    }
 }
 
 component PinGrid {
@@ -104,6 +126,10 @@ component EraseButton {
 
 component EnteredPassword {
     in-out property <int> password-count: 0;
+    callback reset();
+    reset() => {
+        password-count = 0;
+    }
 
     // Center the password display on the screen
     Rectangle {
@@ -114,20 +140,34 @@ component EnteredPassword {
         
 
         // Display rectangles with proper spacing like C firmware
-        Text {
+        if EnterPinController.decoding-progress == -1: Text {
             text: {
                 password-count == 0 ? "" :
                 password-count == 1 ? "●" :
                 password-count == 2 ? "●●" :
                 password-count == 3 ? "●●●" :
                 password-count == 4 ? "●●●●" :
-                password-count == 5 ? "●●●●●" :
+                password-count == 5 ? "●●●●●" : 
                 password-count == 6 ? "●●●●●●" : "ERROR";
             }
             letter-spacing: 5px;
             font-size: 30px;
             y: - 6px;
             color: Palette.black;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            width: parent.width;
+            height: parent.height;
+        }
+        if EnterPinController.decoding-progress != -1: ProgressBar {
+            progress: EnterPinController.decoding-progress;
+        }
+        if EnterPinController.wrong-passcode: Text {
+            text: "WRONG PASSCODE";
+            letter-spacing: 5px;
+            font-size: 20px;
+            y: -1px;
+            color: Palette.red;
             horizontal-alignment: center;
             vertical-alignment: center;
             width: parent.width;
@@ -170,9 +210,12 @@ export component EnterPinScreen inherits HitoWindow {
         x: 280px;
         y: line-y;
         clicked() => {
+            if (EnterPinController.wrong-passcode) {
+                EnterPinController.wrong-passcode = false;
+            }
             if (entered-password-count > 0) {
                 entered-password-count = entered-password-count - 1;
-                remove-char();
+                EnterPinController.remove-char();
             }
         }
     }
@@ -184,15 +227,18 @@ export component EnterPinScreen inherits HitoWindow {
     PinGrid {
         x: 30px;
         y: 70px;
-        number-clicked(n) => {
-            if (entered-password-count < 5) {
+        number-clicked(digit) => {
+            if (EnterPinController.wrong-passcode) {
+                EnterPinController.wrong-passcode = false;
+            }
+            if (entered-password-count < 6) {
                 entered-password-count = entered-password-count + 1;
-                append-char(n);
-            } else {
-                Router.navigate(ScreenEnum.Home); // Go to home screen when full pin entered
+                EnterPinController.append-char(digit);
+            }
+            if (entered-password-count == 6) {
+                EnterPinController.passcode-entered();
+                entered-password-count = 0;
             }
         }
     }
-    callback append-char(int);
-    callback remove-char();
 }

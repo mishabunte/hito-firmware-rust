@@ -1,0 +1,28 @@
+import { Router, ScreenEnum } from "Router.slint";
+export global EnterPinController {
+  in-out property <int> decoding-progress: -1; // -1 means no progress
+  in-out property <bool> wrong-passcode;
+  callback append-char(digit: int);
+  callback remove-char();
+  callback passcode-entered();
+  callback unlock(result: bool);
+  callback progress-request();
+  callback set-progress(progress: int);
+  callback reset();
+  unlock(result) => {
+      if result {
+          Router.navigate(ScreenEnum.Home);
+      } else {
+          wrong-passcode = true;
+      }
+      reset();
+  }
+  set-progress(progress) => {
+      debug("Setting decoding progress to", progress);
+      decoding-progress = progress;
+  }
+  reset() => {
+      decoding-progress = -1;
+      wrong-passcode = false;
+  }
+}
