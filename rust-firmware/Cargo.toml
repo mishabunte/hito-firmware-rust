@@ -22,6 +22,8 @@ fontdb    = { version = "^0.7", optional = true }
 font8x8   = { version = "0.3.1", optional = true }
 stacker   = { version = "0.1", optional = true }
 dhat      = { version = "0.3.0", optional = true }
+openssl-sys = { version = "0.9", optional = true }
+spin = "0.10.0"
 
 # Embedded dependencies (for zephyr feature)
 cortex-m = { version = "0.7", optional = true }
@@ -52,7 +54,7 @@ slint-build = "1.13"
 
 [features]
 default = ["minifb"]
-minifb = ["dep:minifb", "dep:egui", "dep:eframe", "dep:resvg", "dep:rand", "dep:fontdb", "dep:image", "dep:once_cell", "dep:slint", "slint/compat-1-2", "slint/renderer-software", "slint/backend-winit", "slint/std", "font8x8", "stacker", "dhat"]
+minifb = ["dep:minifb", "dep:egui", "dep:eframe", "dep:resvg", "dep:rand", "dep:fontdb", "dep:image", "dep:once_cell", "dep:slint", "slint/compat-1-2", "slint/renderer-software", "slint/backend-winit", "slint/std", "font8x8", "stacker", "dhat", "openssl-sys"]
 zephyr = [
     "dep:cortex-m", 
     "dep:cortex-m-rt", 
