@@ -1,7 +1,7 @@
 #![no_std]
 extern crate alloc;
 use alloc::{boxed::Box, rc::Rc};
-use core::{cell::Cell, mem::MaybeUninit};
+use core::{mem::MaybeUninit};
 
 #[cfg(feature = "minifb")]
 extern crate std;
@@ -16,11 +16,13 @@ mod hito_firmware;
 mod drivers;
 mod crypto;
 mod platform;
-pub mod vault;
+mod vault;
+mod firmware_state;
 
 pub use vault::{HitoVault, VaultError, VaultResult};
 
 use hito_firmware::HitoFirmware;
+use firmware_state::FirmwareState;
 use slint::platform::software_renderer::MinimalSoftwareWindow;
 
 #[cfg(any(feature = "minifb", feature = "zephyr"))]
@@ -28,6 +30,10 @@ slint::include_modules!();
 
 #[cfg(feature = "minifb")]
 static BASE_STACK_REMAINING: AtomicUsize = AtomicUsize::new(8388608);
+
+use spin::{Once, Mutex};
+
+static STATE: Once<Mutex<FirmwareState>> = Once::new();     
 
 #[cfg(feature = "minifb")]
 pub fn init_stack_baseline() {
@@ -48,10 +54,6 @@ use crate::{
     platform::{DisplayWrapper, MyPlatform, Timer},
 };
 
-
-// Constants in flash memory
-const DISPLAY_WIDTH: usize = 320;
-const DISPLAY_HEIGHT: usize = 240;
 const INVALID_MOUSE_POS: (u16, u16) = (0xffff, 0xffff);
 
 // For desktop, we can use regular static storage
@@ -168,59 +170,127 @@ fn handle_touch_events(
     }
 }
 
+fn register_main_window_callbacks(
+    ui: &MainWindow,
+) {
+    // Brightness
+    ui.global::<BrightnessController>().on_brightness_changed(move |v: i32| {
+        let s = STATE.get().unwrap().lock();
+        s.set_brightness(v as u8);
+    });
+
+    // Battery 
+    ui.global::<BatteryController>().on_battery_level_request(move || {
+        let s = STATE.get().unwrap().lock();
+        s.set_battery_level_requested(true);
+    });
+
+    // PIN input mechanics
+    ui.global::<EnterPinController>().on_append_char(move |digit: i32| {
+        let s = STATE.get().unwrap().lock();
+        s.append_to_pin(digit);
+        log_info!("PIN code updated: {}", s.get_pin());
+    });
+
+    // Remove last char
+    ui.global::<EnterPinController>().on_remove_char(move || {
+        let s = STATE.get().unwrap().lock();
+        s.remove_pin_char();
+        log_info!("PIN code updated: {}", s.get_pin());
+    });
+
+    // Mark password is entered
+    ui.global::<EnterPinController>().on_passcode_entered(move || {
+        let s = STATE.get().unwrap().lock();
+        s.mark_unlock_requested();
+        log_info!("Passcode entered, requesting unlock");
+    });
+}
+
+fn handle_main_window_loop_events(
+    ui: &MainWindow,
+    firmware: &mut HitoFirmware
+) {
+  let ui_weak = ui.as_weak().clone();
+  let s = STATE.get().unwrap().lock();
+  if let Some(new_brightness) = s.take_brightness() {
+      firmware.display.set_brightness(new_brightness);
+      log_info!("Brightness set to {}", new_brightness);
+  }
+  let battery = ui.global::<BatteryController>();
+  if s.is_battery_level_requested() {
+      let level = firmware.battery.get_level();
+      log_info!("Battery level requested: {}", level);
+      battery.set_battery_level(level);
+      s.set_battery_level_requested(false);
+  }
+  let pin_controller = ui.global::<EnterPinController>();
+  // When the UI marks unlock requested:
+  if s.is_unlock_in_progress() {
+      // Start job once
+      if firmware.vault.unlock_job_is_none() {
+          let password = s.get_pin();
+          if let Err(e) = firmware.vault.start_unlock(password.as_bytes()) {
+              log_info!("Failed to start unlock: {:?}", e);
+              pin_controller.set_wrong_passcode(true);
+              pin_controller.invoke_set_progress(-1);
+              s.unlock_finished();
+          } else {
+              pin_controller.invoke_set_progress(0);
+          }
+      }
+
+      // Drive one small chunk per frame
+      match firmware.vault.poll_unlock() {
+          Ok(Some(p)) => {
+              // You can update Slint progress here too, or rely on vault.set_progress callback
+              ui.global::<EnterPinController>().invoke_set_progress(p as i32);
+          }
+          Ok(None) => {
+              // nothing changed this tick
+          }
+          Err(e) => {
+              log_info!("Unlock failed: {:?}", e);
+              pin_controller.set_wrong_passcode(true);
+              pin_controller.invoke_set_progress(-1);
+              s.unlock_finished();
+              s.unlock_failed();
+          }
+      }
+
+      // If finished successfully, mark UI
+      if firmware.vault.is_unlocked() {
+          log_info!("Unlock successful");
+          pin_controller.set_wrong_passcode(false);
+          pin_controller.invoke_set_progress(-1);
+          s.unlock_finished();
+          ui.global::<EnterPinController>().invoke_unlock(true);
+      }
+  }
+
+}
+
 fn run_main_loop(
     mut firmware: HitoFirmware,
     window: Rc<MinimalSoftwareWindow>,
 ) -> ! {
-    firmware.indicator.turn_on(LedColor::Blue);
-    log_info!("Starting embedded event loop");
+    let ui = MainWindow::new().unwrap();
 
-    let ui = MainWindow::new().expect("Failed to create MainWindow");
-
-    let brightness_request = Rc::new(Cell::new(None));
-    {
-      let br = brightness_request.clone();
-      ui.global::<BrightnessController>().on_brightness_changed(move |brightness_value| {
-          br.set(Some(brightness_value as u8));
-      });
-    }
-
-    let battery_request: Rc<Cell<bool>> = Rc::new(Cell::new(false));
-    let battery = ui.global::<BatteryController>();
-    {
-        let br = battery_request.clone();
-        battery.on_battery_level_request(move || {
-            br.set(true);
-        });
-    }
+    register_main_window_callbacks(&ui);
 
     loop {
         slint::platform::update_timers_and_animations();
 
-        // Handle brightness changes
-        if let Some(new_brightness) = brightness_request.take() {
-            firmware.display.set_brightness(new_brightness);
-            log_info!("Brightness set to {}", new_brightness);
-        }
+        handle_main_window_loop_events(&ui, &mut firmware);
 
-        if battery_request.get() {
-            let level = firmware.battery.get_level();
-            log_info!("Battery level requested: {}", level);
-            battery.set_battery_level(level);
-            battery_request.set(false);
-        }
-
-        // Handle touch events
         handle_touch_events(&mut firmware, &*window);
 
-        // Render frame using static line buffer
         window.draw_if_needed(|renderer| {
             unsafe {
                 #[cfg(feature = "minifb")]
                 {
                     let heap_bytes = get_heap_usage();
-                    // Approximate stack usage - rough estimate based on thread stack
-                    let stack_bytes = current_stack_used(); // Placeholder - actual measurement is platform-specific
+                    let stack_bytes = current_stack_used();
                     drivers::minifb::simulator_window_set_memory_stats(heap_bytes, stack_bytes);
                 }
                 renderer.render_by_line(DisplayWrapper {
@@ -248,6 +318,13 @@ fn initialize_platform(window: Rc<MinimalSoftwareWindow>) {
     }
 }
 
+#[inline]
+pub fn now_us() -> u64 {
+    unsafe {
+        PLATFORM_STORAGE.assume_init_ref().timer.get_time() / 1_000
+    }
+}
+
 /// Unified main function callable from C (for embedded target) or regular main (for desktop)
 #[no_mangle]
 pub extern "C" fn rust_main() -> ! {
@@ -272,16 +349,11 @@ pub extern "C" fn rust_main() -> ! {
 
     log_info!("Platform initialized");
 
-    let mut vault = HitoVault::new();
-    log_info!("Vault created");
-    vault.initialize();
-    log_info!("Vault initialized");
-    //vault.set_passcode(b"000000", None).expect("Failed to set passcode");
-    log_info!("Passcode set");
-    //vault.unlock_with_password(b"001000").expect("Failed to unlock vault");
-    vault.unlock_with_password(b"000000").expect("Failed to unlock vault");
-    log_info!("Vault unlocked");
-
+    STATE.call_once(|| Mutex::new(FirmwareState::new()));
+    // let state = FirmwareState::new();
+    firmware.indicator.turn_on(LedColor::Blue);
+    log_info!("Starting embedded event loop");
+    
     // Run platform-specific main loop
     run_main_loop(firmware, window);
 }
