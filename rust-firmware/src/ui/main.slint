@@ -10,8 +10,10 @@ import { Router, ScreenEnum as Screen } from "Router.slint";
 import { ReceiveScreen } from "ReceiveScreen.slint";
 import { SendScreen } from "SendScreen.slint";
 import { SettingsScreen } from "SettingsScreen.slint";
+import { EnterPinController } from "EnterPinController.slint";
+import { PairWithTheAppScreen } from "PairWithTheAppScreen.slint";
 
-export { BrightnessController, BatteryController, Router } // Export controllers and router for global access
+export { BrightnessController, BatteryController, Router, EnterPinController } // Export controllers and router for global access
 
 export component MainWindow inherits HitoWindow {
     // Main navigation container
@@ -23,4 +25,5 @@ export component MainWindow inherits HitoWindow {
     if Router.current == Screen.Send: SendScreen {}
     if Router.current == Screen.Receive: ReceiveScreen {}
     if Router.current == Screen.Settings: SettingsScreen {}
+    if Router.current == Screen.PairWithTheApp: PairWithTheAppScreen {}
 }

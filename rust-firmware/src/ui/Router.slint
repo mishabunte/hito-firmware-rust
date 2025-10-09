@@ -10,6 +10,7 @@ export enum ScreenEnum {
     Send,
     Receive,
     Settings,
+    PairWithTheApp,
 }
 
 export global Router {
@@ -25,12 +26,11 @@ export global Router {
         // Simple back navigation logic
         if current == ScreenEnum.Send || current == ScreenEnum.Receive || current == ScreenEnum.Settings {
             current = ScreenEnum.Home;
-        } else if current == ScreenEnum.Home {
-            current = ScreenEnum.Lock;
-        } else if current == ScreenEnum.EnterPin {
-            current = ScreenEnum.Lock;
-        } else {
-            // Default fallback
+        }
+        else if current == ScreenEnum.PairWithTheApp {
+            current = ScreenEnum.Settings;
+        }
+        else {
             current = ScreenEnum.Lock;
         }
     }

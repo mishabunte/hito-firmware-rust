@@ -1,6 +1,59 @@
 import { TestScreen2 } from "TestScreen2.slint";
+import { HitoWindow } from "HitoWindow.slint";
+import { Palette } from "Palette.slint";
+import { BaseButton } from "BaseButton.slint";
+import { Spacer } from "Spacer.slint";
+import { Router, ScreenEnum } from "Router.slint";
 
-export component SettingsScreen inherits TestScreen2 {
-    header-title: "Settings";
+component SettingsOptionButton inherits BaseButton {
+    button-width: 240px;
+    button-height: 30px;
+    border-shown: true;
+    text-color-pressed: Palette.green;
+    text-color-unpressed: Palette.black;
+    background-color-unpressed: transparent;
+    background-color-pressed: Palette.green;
+    border-color: Palette.green;
+    border-radius: 10px;
+}
+
+export component SettingsScreen inherits HitoWindow {
+    VerticalLayout {
+        width: 320px;
+        alignment: start;
+        y: 35px;
+        spacing: 10px;
+        SettingsOptionButton {
+            content: "Pair with the app";
+            clicked => {
+                Router.navigate(ScreenEnum.PairWithTheApp);
+            }
+        }
+        SettingsOptionButton {
+            content: "Show seed phrase";
+            clicked => {
+                Router.navigate(ScreenEnum.Send);
+            }
+        }
+        SettingsOptionButton {
+            content: "Device info";
+            clicked => {
+                Router.navigate(ScreenEnum.Send);
+            }
+        }
+        Spacer { height: 2px; }
+        SettingsOptionButton {
+            content: "Change passcode";
+            clicked => {
+                Router.navigate(ScreenEnum.Send);
+            }
+        }
+        SettingsOptionButton {
+            content: "Factory reset";
+            clicked => {
+                Router.navigate(ScreenEnum.Send);
+            }
+        }
+    }
     // Additional UI elements for the Settings screen can be added here
 }
