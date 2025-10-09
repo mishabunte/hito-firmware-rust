@@ -43,6 +43,95 @@ export component HitoWindow inherits Window {
 
     default-font-family: "Roboto Mono";
 
+    // Screen corners
+    // Top left 
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: 2px;
+        height: 2px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 2px;
+        y: 0px;
+        width: 2px;
+        height: 1px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 0px;
+        y: 2px;
+        width: 1px;
+        height: 2px;
+        background: Palette.black;
+    }
+    // Top right
+    Rectangle {
+        x: 318px;
+        y: 0px;
+        width: 2px;
+        height: 2px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 316px;
+        y: 0px;
+        width: 2px;
+        height: 1px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 319px;
+        y: 2px;
+        width: 1px;
+        height: 2px;
+        background: Palette.black;
+    }
+    // Bottom right
+    Rectangle {
+        x: 318px;
+        y: 238px;
+        width: 2px;
+        height: 2px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 316px;
+        y: 239px;
+        width: 2px;
+        height: 1px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 319px;
+        y: 236px;
+        width: 1px;
+        height: 2px;
+        background: Palette.black;
+    }
+    // Bottom right
+    Rectangle {
+        x: 0px;
+        y: 238px;
+        width: 2px;
+        height: 2px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 0px;
+        y: 239px;
+        width: 2px;
+        height: 1px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 0px;
+        y: 236px;
+        width: 1px;
+        height: 2px;
+        background: Palette.black;
+    }
     // Properties that can be overridden by child components
     in property <bool> show-brightness: true;
     in property <bool> is-lockscreen: false;
