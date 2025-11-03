@@ -67,10 +67,12 @@ export component SwitchButton {
     callback clicked();
 }
 
-export component SendScreen inherits HitoWindow {
+export component SendScreenView{
+    width: 320px;
+    height: 240px;
     in-out property <Protocol> current-protocol: Protocol.NFC;
-    show-brightness: true; // Show brightness control on home screen
-    header-title: "SEND CRYPTO";
+    // show-brightness: true; // Show brightness control on home screen
+    // header-title: "SEND CRYPTO";
     in property <image> image-src: current-protocol == Protocol.NFC ? @image-url("../../res/img/nfc.png") : @image-url("../../res/img/bt_logo.png");
     in-out property <string> current-protocol-name: current-protocol == Protocol.NFC ? "NFC" : "Bluetooth";
     in-out property <string> next-protocol-name: current-protocol == Protocol.NFC ? "Bluetooth" : "NFC";

@@ -1,6 +1,47 @@
-import {TestScreen2} from "TestScreen2.slint";
+import {TestScreen2View} from "TestScreen2.slint";
+import {BaseButton} from "BaseButton.slint";
+    
 
-export component ReceiveScreen inherits TestScreen2 {
-    header-title: "Receive";
-    // Additional UI elements for the Receive screen can be added here
+component BlockchainNetworkButton {
+    in-out property <string> content;
+    in-out property <image> img-url;
+    VerticalLayout {
+      Image {
+          source: img-url;
+          height: 58px;
+      }
+      Text {
+          text: content;
+      }
+    }
+}
+
+export component ReceiveScreenView {
+    width: 320px;
+    height: 240px;
+    VerticalLayout {
+      y: 20px;
+        HorizontalLayout {
+            alignment: space-evenly;
+            BlockchainNetworkButton {
+                content: "Bitcoin";
+                img-url: @image-url("../../res/img/btc_logo.png");
+            }
+            BlockchainNetworkButton {
+                content: "Ethereum";
+                img-url: @image-url("../../res/img/eth_logo.png");
+            }
+        }
+        HorizontalLayout {
+            alignment: space-evenly;
+            BlockchainNetworkButton {
+                content: "Litecoin";
+                img-url: @image-url("icons/litecoin.png");
+            }
+            BlockchainNetworkButton {
+                content: "Ripple";
+                img-url: @image-url("icons/ripple.png");
+            }
+        }
+    }
 }

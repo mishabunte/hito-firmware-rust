@@ -11,11 +11,12 @@ export enum ScreenEnum {
     Receive,
     Settings,
     PairWithTheApp,
+    DeviceInfo,
 }
 
 export global Router {
     callback navigate(page: ScreenEnum);
-    in-out property <ScreenEnum> current: ScreenEnum.Lock;
+    in-out property <ScreenEnum> current: ScreenEnum.Receive;
     callback back();
 
     // Handle navigation
@@ -27,7 +28,7 @@ export global Router {
         if current == ScreenEnum.Send || current == ScreenEnum.Receive || current == ScreenEnum.Settings {
             current = ScreenEnum.Home;
         }
-        else if current == ScreenEnum.PairWithTheApp {
+        else if current == ScreenEnum.PairWithTheApp || current == ScreenEnum.DeviceInfo {
             current = ScreenEnum.Settings;
         }
         else {

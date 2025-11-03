@@ -10,8 +10,9 @@ component PassChar inherits BaseButton {
 }
 
 component ProgressBar {
-    in-out property <int> progress: 55;
+    in-out property <int> progress; // -1 means no progress
     in-out property <bool> in-progress: progress > 0 && progress < 100;
+
     Rectangle {
         width: 200px;
         height: 10px;
@@ -24,8 +25,17 @@ component ProgressBar {
             height: parent.height - 4px;
             x: 2px;
             y: 2px;
-            background: Palette.black;
+            background: EnterPinController.wrong-passcode ? Palette.red : Palette.black;
             border-radius: 8px;
+        }
+        visible: progress != -1;
+    }
+    Timer {
+        interval: 2000ms;
+        running: EnterPinController.wrong-passcode;
+        triggered => {
+            progress = -1;
+            EnterPinController.set-progress(-1);
         }
     }
 }
@@ -162,17 +172,17 @@ component EnteredPassword {
         if EnterPinController.decoding-progress != -1: ProgressBar {
             progress: EnterPinController.decoding-progress;
         }
-        if EnterPinController.wrong-passcode: Text {
-            text: "WRONG PASSCODE";
-            letter-spacing: 5px;
-            font-size: 20px;
-            y: -1px;
-            color: Palette.red;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            width: parent.width;
-            height: parent.height;
-        }
+        // if EnterPinController.wrong-passcode: Text {
+        //     text: "WRONG PASSCODE";
+        //     letter-spacing: 5px;
+        //     font-size: 20px;
+        //     y: -1px;
+        //     color: Palette.red;
+        //     horizontal-alignment: center;
+        //     vertical-alignment: center;
+        //     width: parent.width;
+        //     height: parent.height;
+        // }
         // Show underline when empty like C firmware
         Rectangle {
             width: 100px;
@@ -185,27 +195,13 @@ component EnteredPassword {
     }
 }
 
-export component EnterPinScreen inherits HitoWindow {
+export component EnterPinScreenView {
+    width: 320px;
+    height: 240px;
     property <length> line-y: 65px;
     in-out property <int> entered-password-count: 0;
-    back-shown: false;
-    Rectangle {
-        y: 10px;
-        background: Palette.green;
-        width: 180px;
-        height: 30px;
-        visible: !parent.brightness-scale-shown;
-        Text {
-            y: 1px;
-            text: "ENTER PASSCODE";
-            font-size: 20px;
-            font-italic: false;
-            font-weight: 1000;
-            horizontal-alignment: center;
-            wrap: word-wrap;
-            width: 260px;
-        }
-    }
+    // back-shown: false;
+    // header-title: "ENTER PASSCODE";
     EraseButton {
         x: 280px;
         y: line-y;

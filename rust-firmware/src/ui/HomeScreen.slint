@@ -11,12 +11,13 @@ component SettingsButton inherits BaseButton {
     }
 }
 
-
-export component HomeScreen inherits HitoWindow {
+export component HomeScreenView {
     // Indicate this is not the lock screen
-    is-lockscreen: false;
-    back-shown: false; // No back button on home screen
-    show-brightness: true; // Show brightness control on home screen
+    // is-lockscreen: false;
+    // back-shown: false; // No back button on home screen
+    // show-brightness: true; // Show brightness control on home screen
+    width: 320px;
+    height: 240px;
     HorizontalLayout {
         width: parent.width;
         alignment: start;
