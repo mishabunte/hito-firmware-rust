@@ -19,7 +19,8 @@ mod platform;
 mod vault;
 mod firmware_state;
 
-pub use vault::{HitoVault, VaultError, VaultResult};
+pub use vault::vault::{HitoVault, VaultError, VaultResult};
+pub use firmware_state::DeviceInfo;
 
 use hito_firmware::HitoFirmware;
 use firmware_state::FirmwareState;
@@ -51,7 +52,7 @@ pub fn current_stack_used() -> usize {
 
 use crate::{
     drivers::{Battery, Display, Indicator, LedColor, Touch}, 
-    platform::{DisplayWrapper, MyPlatform, Timer},
+    platform::{DisplayWrapper, MyPlatform, Timer}, vault::bootloader_version,
 };
 
 const INVALID_MOUSE_POS: (u16, u16) = (0xffff, 0xffff);
@@ -172,6 +173,7 @@ fn handle_touch_events(
 
 fn register_main_window_callbacks(
     ui: &MainWindow,
+    firmware: &mut HitoFirmware
 ) {
     // Brightness
     ui.global::<BrightnessController>().on_brightness_changed(move |v: i32| {
@@ -204,6 +206,13 @@ fn register_main_window_callbacks(
         let s = STATE.get().unwrap().lock();
         s.mark_unlock_requested();
         log_info!("Passcode entered, requesting unlock");
+    });
+
+    // Device info request
+    ui.global::<DeviceInfoController>().on_request_device_info(move || {
+        let s = STATE.get().unwrap().lock();
+        s.mark_device_info_requested();
+        log_info!("Device info requested");
     });
 }
 
@@ -252,7 +261,7 @@ fn handle_main_window_loop_events(
           Err(e) => {
               log_info!("Unlock failed: {:?}", e);
               pin_controller.set_wrong_passcode(true);
-              pin_controller.invoke_set_progress(-1);
+              //pin_controller.invoke_set_progress(-1);
               s.unlock_finished();
               s.unlock_failed();
           }
@@ -263,9 +272,25 @@ fn handle_main_window_loop_events(
           log_info!("Unlock successful");
           pin_controller.set_wrong_passcode(false);
           pin_controller.invoke_set_progress(-1);
+          s.mark_device_info_requested();
           s.unlock_finished();
           ui.global::<EnterPinController>().invoke_unlock(true);
       }
+  }
+
+  // Device info request handling
+  let device_info_controller = ui.global::<DeviceInfoController>();
+  if s.is_device_info_requested() {
+      log_info!("Providing device info to UI");
+      let info = firmware.vault.get_device_info().unwrap();
+      log_info!("Device info: FW ver {}, BL ver {}, SN {}, FR count {}", 
+          info.firmware_version, info.bootloader_version, info.serial_number, info.factory_reset_count);
+      device_info_controller.set_firmware_version(slint::SharedString::from(&info.firmware_version[10..]));
+      device_info_controller.set_bootloader_version(slint::SharedString::from(&info.bootloader_version));
+      device_info_controller.set_serial_number(slint::SharedString::from(&info.serial_number));
+      device_info_controller.set_factory_reset_count(info.factory_reset_count);
+      device_info_controller.invoke_request_factory_reset_string();
+      s.clear_device_info_requested();
   }
 
 }
@@ -276,7 +301,7 @@ fn run_main_loop(
 ) -> ! {
     let ui = MainWindow::new().unwrap();
 
-    register_main_window_callbacks(&ui);
+    register_main_window_callbacks(&ui, &mut firmware);
 
     loop {
         slint::platform::update_timers_and_animations();

@@ -1,0 +1,65 @@
+import { HitoWindow } from "HitoWindow.slint";
+import { DeviceInfoController } from "DeviceInfoController.slint";
+import { Spacer } from "Spacer.slint";
+import { Palette } from "Palette.slint";
+
+export component DeviceInfoScreenView {
+    // Indicate this is not the lock screen
+    //header-title: "DEVICE INFO";
+    width: 320px;
+    height: 240px;
+    HorizontalLayout {
+      // width: parent.width;
+      // height: parent.height;
+      alignment: center;
+    VerticalLayout {
+        // width: parent.width;
+        // height: parent.height;
+        alignment: start;
+        padding-top: 60px; 
+
+        Text {
+            text: "Firmware: " + DeviceInfoController.firmware-version;
+            font-size: 20px;
+            font-weight: 600;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            color: #000000;
+        }
+        Text {
+            text: "Bootloader: " + DeviceInfoController.bootloader-version;
+            font-size: 20px;
+            font-weight: 600;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            color: #000000;
+        }
+        Spacer { height: 10px; }
+        Text {
+            text: "Serial number";
+            font-size: 20px;
+            font-weight: 600;
+            color: #000000;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: DeviceInfoController.serial-number;
+            font-size: 20px;
+            font-weight: 600;
+            color: Palette.blue;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+        }
+        Spacer { height: 5px; }
+        Text {
+            text: DeviceInfoController.factory-reset-string;
+            font-size: 20px;
+            font-weight: 600;
+            color: #000000;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+        }
+    }
+    }
+}

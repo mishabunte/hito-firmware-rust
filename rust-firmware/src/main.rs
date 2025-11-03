@@ -3,6 +3,7 @@ mod drivers;
 mod crypto;
 mod platform;
 mod vault;
+mod firmware_state;
 
 // #[cfg(any(feature = "minifb", feature = "zephyr"))]
 // slint::include_modules!();

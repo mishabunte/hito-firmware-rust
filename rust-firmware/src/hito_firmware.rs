@@ -7,7 +7,7 @@ use crate::drivers::{ Indicator, IndicatorImpl, LedColor, BlinkSpeed };
 
 #[cfg(feature = "zephyr")]
 use crate::drivers::zephyr::logging;
-use crate::vault::{ HitoVault };
+use crate::vault::vault::HitoVault;
 
 pub struct HitoFirmware {
     pub display:   DisplayImpl,
