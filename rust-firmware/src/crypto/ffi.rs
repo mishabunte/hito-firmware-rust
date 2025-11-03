@@ -22,6 +22,18 @@ extern "C" {
     tag: *mut u8,
     tag_len: usize
   ) -> c_int;
+  pub fn crypt0_secp256k1_public_key(
+    privkey: *const u8,
+    privlen: usize,
+    pubkey: *mut u8,
+    publen: usize
+  ) -> i32;
+  pub fn crypt0_sha3_keccak(
+    data: *const u8,
+    data_len: usize,
+    out: *mut u8,
+    outlen: usize
+  ) -> c_int;
   pub fn crypt0_pbkdf2_hmac_sha256(
     steps: u32,
     salt: *const u8,
