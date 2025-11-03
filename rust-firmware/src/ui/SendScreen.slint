@@ -10,21 +10,21 @@ component TextWithBackground inherits Text {
     property <length> text-width: self.width;
     property <length> text-height: self.height;
     in-out property <bool> pressed;
-    in-out property <brush> font-color: Palette.black;
+    in-out property <brush> font-color: Palette.blue;
     if header-title != "": Rectangle {
-        background: pressed ? Palette.green : Palette.white;
+        background: Palette.white;
         width: 1.1 * parent.text-width;
         height: 1.5 * parent.text-height;
-        border-color: Palette.green;
-        border-width: 2px;
-        border-radius: 10px;
+        // border-color: Palette.green;
+        // border-width: 2px;
+        // border-radius: 10px;
         textProp := Text {
             text: header-title;
             font-size: root.font-size;
             font-family: root.font-family;
             font-italic: root.font-italic;
             font-weight: root.font-weight;
-            color: root.font-color;
+            color: pressed ? Palette.black :root.font-color;
             horizontal-alignment: center;
             vertical-alignment: center;
         }
