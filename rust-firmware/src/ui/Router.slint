@@ -1,20 +1,38 @@
-// Screen enumeration for navigation
-export enum Screen {
-    Lock,
+// Global router state
+export enum ScreenEnum {
+    // Home, 
+    // Send
+    Lock, 
     TestScreen,
-    EnterPin,
-    // Add more screens here as needed
+    EnterPin, 
+    TestScreen2, 
+    Home,
+    Send,
+    Receive,
+    Settings,
+    PairWithTheApp,
+    DeviceInfo,
 }
 
-// Global router state
 export global Router {
-    in-out property <Screen> current: Screen.Lock;
-
-    // Navigation function
-    callback navigate(Screen);
+    callback navigate(page: ScreenEnum);
+    in-out property <ScreenEnum> current: ScreenEnum.Receive;
+    callback back();
 
     // Handle navigation
     navigate(to) => {
         current = to;
+    }
+    back() => {
+        // Simple back navigation logic
+        if current == ScreenEnum.Send || current == ScreenEnum.Receive || current == ScreenEnum.Settings {
+            current = ScreenEnum.Home;
+        }
+        else if current == ScreenEnum.PairWithTheApp || current == ScreenEnum.DeviceInfo {
+            current = ScreenEnum.Settings;
+        }
+        else {
+            current = ScreenEnum.Lock;
+        }
     }
 }

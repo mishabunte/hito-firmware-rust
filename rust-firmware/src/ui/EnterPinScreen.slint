@@ -1,47 +1,43 @@
 import { HitoWindow } from "HitoWindow.slint";
-import { Router, Screen } from "Router.slint";
+import { Router, ScreenEnum } from "Router.slint";
 import { Palette } from "Palette.slint";
+import { BaseButton } from "BaseButton.slint";
+import { EnterPinController } from "EnterPinController.slint";
 
-component PassChar {
-    property <bool> pressed: false;
-    in-out property <string> content: "0";
+component PassChar inherits BaseButton {
+    button-width: 50px;
+    button-height: 50px;
+}
+
+component ProgressBar {
+    in-out property <int> progress; // -1 means no progress
+    in-out property <bool> in-progress: progress > 0 && progress < 100;
+
     Rectangle {
-        width: 50px;
-        height: 50px;
+        width: 200px;
+        height: 10px;
         border-color: Palette.black;
-        border-width: 1px;
-        border-radius: self.width/30;
-        background: pressed ? Palette.green : transparent;
-        // Rectangle {
-        //     width: 46px;
-        //     height: 46px;
-        //     border-color: Palette.black;
-        //     border-width: 1px;
-        // }
-        Text {
-            text: content;
-            font-size: 20px;
-            color: Palette.black;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            width: parent.width;
-            height: parent.height;
+        border-width: 2px;
+        border-radius: 10px;
+        background: Palette.grey;
+        Rectangle {
+            width: (parent.width - parent.border-width) * progress / 100;
+            height: parent.height - 4px;
+            x: 2px;
+            y: 2px;
+            background: EnterPinController.wrong-passcode ? Palette.red : Palette.black;
+            border-radius: 8px;
         }
-        TouchArea {
-            width: parent.width;
-            height: parent.height;
-            pointer-event(event) => {
-                if (event.kind == PointerEventKind.down) {
-                    pressed = true;
-                    root.clicked();
-                    debug("Clicked pin", content);
-                } else if (event.kind == PointerEventKind.up) {
-                    pressed = false;
-                }
-            }
+        visible: progress != -1;
+    }
+    Timer {
+        interval: 2000ms;
+        running: EnterPinController.wrong-passcode;
+        triggered => {
+            progress = -1;
+            EnterPinController.set-progress(-1);
         }
     }
-    callback clicked();
 }
 
 component PinGrid {
@@ -52,24 +48,62 @@ component PinGrid {
         alignment: center;
         HorizontalLayout {
             spacing: spacing;
-            for i in ["1", "2", "3", "4", "5"]:
-                PassChar {content: i;
-                    clicked() => {
-                        number-clicked(i);
-                    }
+            PassChar {content: "1";
+                clicked() => {
+                    number-clicked(1);
                 }
+            }
+            PassChar {content: "2";
+                clicked() => {
+                    number-clicked(2);
+                }
+            }
+            PassChar {content: "3";
+                clicked() => {
+                    number-clicked(3);
+                }
+            }
+            PassChar {content: "4";
+                clicked() => {
+                    number-clicked(4);
+                }
+            }
+            PassChar {content: "5";
+                clicked() => {
+                    number-clicked(5);
+                }
+            }     
         }
         HorizontalLayout {
             spacing: spacing;
-            for i in ["6", "7", "8", "9", "0"]:
-                PassChar {content: i;
-                    clicked() => {
-                        number-clicked(i);
-                    }
+            PassChar {content: "6";
+                clicked() => {
+                    number-clicked(6);
                 }
+            }
+            PassChar {content: "7";
+                clicked() => {
+                    number-clicked(7);
+                }
+            }
+            PassChar {content: "8";
+                clicked() => {
+                    number-clicked(8);
+                }
+            }
+            PassChar {content: "9";
+                clicked() => {
+                    number-clicked(9);
+                }
+            }
+            PassChar {content: "0";
+                clicked() => {
+                    number-clicked(0);
+                }
+            }
         }
     }
-    callback number-clicked(string);
+    callback number-clicked(int);
 }
 
 component EraseButton {
@@ -81,8 +115,6 @@ component EraseButton {
         width: 30px;
         height: 30px;
         font-size: 20px;
-        // border-width: 1px;
-        // border-radius: 20px;
         color: pressed ? #d3d3d3 : red;
         horizontal-alignment: center;
         vertical-alignment: center;
@@ -92,10 +124,10 @@ component EraseButton {
         pointer-event(event) => {
                 if (event.kind == PointerEventKind.down) {
                     pressed = true;
-                    root.clicked();
-                    debug("Clicked erase", content);
                 } else if (event.kind == PointerEventKind.up) {
                     pressed = false;
+                    root.clicked();
+                    debug("Clicked erase", content);
                 }
             }
         }
@@ -103,7 +135,11 @@ component EraseButton {
 }
 
 component EnteredPassword {
-    in-out property <string> password: "";
+    in-out property <int> password-count: 0;
+    callback reset();
+    reset() => {
+        password-count = 0;
+    }
 
     // Center the password display on the screen
     Rectangle {
@@ -114,16 +150,16 @@ component EnteredPassword {
         
 
         // Display rectangles with proper spacing like C firmware
-        Text {
+        if EnterPinController.decoding-progress == -1: Text {
             text: {
-                    password.character-count == 0 ? "" :
-                    password.character-count == 1 ? "●" :
-                    password.character-count == 2 ? "●●" :
-                    password.character-count == 3 ? "●●●" :
-                    password.character-count == 4 ? "●●●●" :
-                    password.character-count == 5 ? "●●●●●" :
-                    password.character-count == 6 ? "●●●●●●" : "ERROR";
-                }
+                password-count == 0 ? "" :
+                password-count == 1 ? "●" :
+                password-count == 2 ? "●●" :
+                password-count == 3 ? "●●●" :
+                password-count == 4 ? "●●●●" :
+                password-count == 5 ? "●●●●●" : 
+                password-count == 6 ? "●●●●●●" : "ERROR";
+            }
             letter-spacing: 5px;
             font-size: 30px;
             y: - 6px;
@@ -133,6 +169,20 @@ component EnteredPassword {
             width: parent.width;
             height: parent.height;
         }
+        if EnterPinController.decoding-progress != -1: ProgressBar {
+            progress: EnterPinController.decoding-progress;
+        }
+        // if EnterPinController.wrong-passcode: Text {
+        //     text: "WRONG PASSCODE";
+        //     letter-spacing: 5px;
+        //     font-size: 20px;
+        //     y: -1px;
+        //     color: Palette.red;
+        //     horizontal-alignment: center;
+        //     vertical-alignment: center;
+        //     width: parent.width;
+        //     height: parent.height;
+        // }
         // Show underline when empty like C firmware
         Rectangle {
             width: 100px;
@@ -140,57 +190,51 @@ component EnteredPassword {
             x: (parent.width - self.width) / 2;
             y: parent.height - 5px;
             background: Palette.black;
-            visible: password.character-count == 0;
+            visible: false; // Disabled for now
         }
     }
 }
 
-export component EnterPinScreen inherits HitoWindow {
+export component EnterPinScreenView {
+    width: 320px;
+    height: 240px;
     property <length> line-y: 65px;
-    property <string> entered-password: "●●●●";
-    Rectangle {
-        y: 10px;
-        background: Palette.green;
-        width: 180px;
-        height: 30px;
-        visible: !parent.brightness-scale-shown;
-        Text {
-            y: 1px;
-            text: "ENTER PASSCODE";
-            font-size: 20px;
-            font-italic: false;
-            font-weight: 1000;
-            horizontal-alignment: center;
-            wrap: word-wrap;
-            width: 260px;
-        }
-    }
+    in-out property <int> entered-password-count: 0;
+    // back-shown: false;
+    // header-title: "ENTER PASSCODE";
     EraseButton {
         x: 280px;
         y: line-y;
         clicked() => {
-            entered-password = "";
-            remove-char();
+            if (EnterPinController.wrong-passcode) {
+                EnterPinController.wrong-passcode = false;
+            }
+            if (entered-password-count > 0) {
+                entered-password-count = entered-password-count - 1;
+                EnterPinController.remove-char();
+            }
         }
     }
     EnteredPassword {
         x: 0px;
         y: line-y;
-        password: entered-password;
+        password-count: entered-password-count;
     }
-    HorizontalLayout {
+    PinGrid {
         x: 30px;
-        alignment: start;
-        spacing: 50px;
-        PinGrid {
-            number-clicked(n) => {
-                if (entered-password.character-count < 6) {
-                    entered-password = entered-password + n;
-                    append-char(n);
-                }
+        y: 70px;
+        number-clicked(digit) => {
+            if (EnterPinController.wrong-passcode) {
+                EnterPinController.wrong-passcode = false;
+            }
+            if (entered-password-count < 6) {
+                entered-password-count = entered-password-count + 1;
+                EnterPinController.append-char(digit);
+            }
+            if (entered-password-count == 6) {
+                EnterPinController.passcode-entered();
+                entered-password-count = 0;
             }
         }
     }
-    callback append-char(string);
-    callback remove-char();
 }

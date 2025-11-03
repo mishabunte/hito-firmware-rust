@@ -1,4 +1,5 @@
-use crate::drivers::{ Display,   DisplayImpl };
+use crate::drivers::{ Display, DisplayImpl };
+use crate::drivers::{ Battery, BatteryImpl };
 use crate::drivers::{ Touch,     TouchImpl };
 use crate::drivers::{ Indicator, IndicatorImpl, LedColor, BlinkSpeed };
 
@@ -6,11 +7,14 @@ use crate::drivers::{ Indicator, IndicatorImpl, LedColor, BlinkSpeed };
 
 #[cfg(feature = "zephyr")]
 use crate::drivers::zephyr::logging;
+use crate::vault::vault::HitoVault;
 
 pub struct HitoFirmware {
     pub display:   DisplayImpl,
     pub touch:     TouchImpl,
     pub indicator: IndicatorImpl,
+    pub battery:   BatteryImpl,
+    pub vault:     HitoVault,
 }
 
 
@@ -20,6 +24,8 @@ impl HitoFirmware {
             indicator: IndicatorImpl::new(),
             display:   DisplayImpl::new(),
             touch:     TouchImpl::new(),
+            battery:   BatteryImpl::new(),
+            vault:     HitoVault::new(),
         }
     }
 
@@ -30,6 +36,11 @@ impl HitoFirmware {
         self.display.init();
         self.indicator.init();
         self.touch.init();
+        self.vault.initialize();
+        #[cfg(feature = "minifb")]
+        {
+            self.vault.set_passcode(b"000000", None).expect("Failed to set passcode");
+        }
 
         #[cfg(feature = "zephyr")]
         logging::log_info("Hardware initialization complete");

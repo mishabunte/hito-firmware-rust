@@ -13,6 +13,9 @@ pub use touch::Touch;
 mod indicator;
 pub use indicator::{Indicator, LedColor, BlinkSpeed};
 
+mod battery;
+pub use battery::Battery;
+
 pub mod logging;
 
 #[cfg(feature = "minifb")]
@@ -22,13 +25,13 @@ pub use minifb::led_desktop::DesktopLedDriver;
 pub mod minifb;
 
 #[cfg(feature = "minifb")]
-pub use minifb::{DisplayImpl, TouchImpl, IndicatorImpl};
+pub use minifb::{DisplayImpl, TouchImpl, IndicatorImpl, BatteryImpl};
 
 #[cfg(feature = "zephyr")]
 pub mod zephyr;
 
 #[cfg(feature = "zephyr")]
-pub use zephyr::{DisplayImpl, TouchImpl, IndicatorImpl};
+pub use zephyr::{DisplayImpl, TouchImpl, IndicatorImpl, BatteryImpl};
 
 /*
 pub struct Bitmap565<'a> {

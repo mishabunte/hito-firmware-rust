@@ -1,16 +1,18 @@
 import { HitoWindow } from "HitoWindow.slint";
-import { Router, Screen } from "Router.slint";
+import { Router, ScreenEnum } from "Router.slint";
 
-export component LockScreen inherits HitoWindow {
+export component LockScreenView {
+    width: 320px;
+    height: 240px;
     // Animation properties
     property <bool> key-is-pressed: false;
-    is-lockscreen: true; // Indicate this is the lock screen
+    //is-lockscreen: true; // Indicate this is the lock screen
     property <length> key-offset: 0px;
     property <length> key-offset-start: 0px;
     property <int> lock-frame: 0;
     property <bool> is-unlocked: false;
     property <duration> animation-duration: 60ms;
-    property <bool> show-text: true;
+    in-out property <bool> show-text: true;
 
     // Key and lock positions (matching C code coordinates)
     property <length> key-start-x: 89px;
@@ -19,14 +21,16 @@ export component LockScreen inherits HitoWindow {
     property <length> lock-y: 90px;
     property <length> unlock-threshold: 100px; // lock-x - key-start-x - 5px
     property <int> first-frame-offset: 24; // For idle animation frame tracking
+    callback hide-text(shown: bool);
 
     property <bool> key_shown: true; // To control key visibility
 
-    // Handle brightness scale visibility changes        show-text = !shown;
-    brightness-scale-shown-changed(shown) => {
+    // back-shown: false; // No back button on lock screen
+
+    // // Handle brightness scale visibility changes        show-text = !shown;
+    hide-text(shown) => {
         show-text = !shown;
     }
-
 
     // Title text
     Text {
@@ -154,9 +158,7 @@ export component LockScreen inherits HitoWindow {
             if (lock-frame < 5) {
                 lock-frame += 1;
             } else {
-                // Animation complete - trigger unlock callback
-                Router.navigate(Screen.EnterPin);
-                root.unlocked();
+                Router.navigate(ScreenEnum.EnterPin);
             }
         }
     }
@@ -169,7 +171,4 @@ export component LockScreen inherits HitoWindow {
         key-is-pressed = false;
         lock-frame = 0; // Start animation from frame 0
     }
-
-    // Callback for when unlock animation completes
-    callback unlocked();
 }

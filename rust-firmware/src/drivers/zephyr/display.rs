@@ -55,6 +55,7 @@ impl Display for DisplayImpl {
     }
 
     fn update(&mut self) {
+        self.ili9342_lcd_draw_screen_corners();
         // No update needed for hardware LCD
     }
     
