@@ -38,23 +38,42 @@ euclid = { version = "0.22", default-features = false }
 rand = {version = "0.9.2", optional = true}
 sha2 = { version = "0.10.9", default-features = false }
 
-
 [profile.dev]
 panic = "abort"
 
 [profile.release]
+strip = true
+lto = true
+opt-level = "z"
+codegen-units = 1
 panic = "abort"
-opt-level = "z"           # Size optimization (currently missing)
-lto = true                # Link-time optimization
-codegen-units = 1         # Better optimization
 
 [build-dependencies]
 cc = "1.0"
 slint-build = "1.13"
+bindgen = "0.72.1"
 
 [features]
 default = ["minifb"]
-minifb = ["dep:minifb", "dep:egui", "dep:eframe", "dep:resvg", "dep:rand", "dep:fontdb", "dep:image", "dep:once_cell", "dep:slint", "slint/compat-1-2", "slint/renderer-software", "slint/backend-winit", "slint/std", "font8x8", "stacker", "dhat", "openssl-sys"]
+minifb = [
+    "dep:minifb", 
+    "dep:egui", 
+    "dep:eframe", 
+    "dep:resvg", 
+    "dep:rand", 
+    "dep:fontdb", 
+    "dep:image", 
+    "dep:once_cell", 
+    "dep:slint", 
+    "slint/compat-1-2", 
+    "slint/renderer-software", 
+    "slint/backend-winit", 
+    "slint/std", 
+    "font8x8", 
+    "stacker", 
+    "dhat", 
+    "openssl-sys"
+]
 zephyr = [
     "dep:cortex-m", 
     "dep:cortex-m-rt", 
