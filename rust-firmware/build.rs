@@ -4,6 +4,19 @@ fn main() {
     slint_build::compile_with_config("src/ui/main.slint", config).unwrap();
     slint_build::print_rustc_flags().unwrap();
 
+    println!("cargo:rerun-if-changed=src/vault/hito_firmware_version.h");
+
+    let bindings = bindgen::Builder::default()
+        .header("src/vault/hito_firmware_version.h")
+        // Generate bindings for macros
+        .allowlist_var("HITO_FIRMWARE_VERSION")
+        .generate()
+        .expect("Unable to generate bindings");
+
+    bindings
+        .write_to_file("src/vault/firmware_version_bindings.rs")
+        .expect("Couldn't write bindings!");
+
     // Build libcrypt0 for simulation
     #[cfg(feature = "minifb")]
     {
@@ -29,6 +42,7 @@ fn main() {
              .file("src/crypto/libcrypt0/src/crypt0_secp256k1.c")
              .file("src/crypto/libcrypt0/src/crypt0_sha.c")
              .file("src/crypto/libcrypt0/src/intc_impl.c")
+             .file("src/crypto/libcrypt0/lib/SHA3IUF/sha3.c")
              .file("src/crypto/crc16_ccitt/crc16_ccitt.c");
 
         // Add include directories
