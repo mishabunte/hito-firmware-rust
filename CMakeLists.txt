@@ -26,6 +26,7 @@ file(GLOB_RECURSE RUST_SOURCES
     "${RUST_SOURCE_DIR}/*.rs"
     "${RUST_SOURCE_DIR}/vault/*.rs"
     "${RUST_SOURCE_DIR}/vault/vault.c"
+    "${RUST_SOURCE_DIR}/vault/hito_firmware_version.h"
     "${RUST_FIRMWARE_DIR}/build.rs"
     "${RUST_FIRMWARE_DIR}/Cargo.toml"
     "${RUST_SOURCE_DIR}/ui/*.slint"
@@ -85,6 +86,7 @@ set(LIBCRYPT0_SOURCES
   ${LIBCRYPT0_DIR}/src/crypt0_ripemd160.c
   ${LIBCRYPT0_DIR}/src/crypt0_rlp.c
   ${LIBCRYPT0_DIR}/src/crypt0_rng.c
+  ${LIBCRYPT0_DIR}/lib/SHA3IUF/sha3.c
   ${LIBCRYPT0_DIR}/src/crypt0_secp256k1.c
   ${LIBCRYPT0_DIR}/src/crypt0_sha.c
   ${LIBCRYPT0_DIR}/src/intc_impl.c
