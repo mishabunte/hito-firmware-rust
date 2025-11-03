@@ -1,7 +1,5 @@
 // Global router state
 export enum ScreenEnum {
-    // Home, 
-    // Send
     Lock, 
     TestScreen,
     EnterPin, 
@@ -16,7 +14,7 @@ export enum ScreenEnum {
 
 export global Router {
     callback navigate(page: ScreenEnum);
-    in-out property <ScreenEnum> current: ScreenEnum.Receive;
+    in-out property <ScreenEnum> current: ScreenEnum.EnterPin;
     callback back();
 
     // Handle navigation

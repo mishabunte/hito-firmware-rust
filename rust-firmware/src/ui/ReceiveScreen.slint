@@ -22,7 +22,7 @@ export component ReceiveScreenView {
     VerticalLayout {
       y: 20px;
         HorizontalLayout {
-            alignment: space-evenly;
+            alignment: center;
             BlockchainNetworkButton {
                 content: "Bitcoin";
                 img-url: @image-url("../../res/img/btc_logo.png");
@@ -33,15 +33,7 @@ export component ReceiveScreenView {
             }
         }
         HorizontalLayout {
-            alignment: space-evenly;
-            BlockchainNetworkButton {
-                content: "Litecoin";
-                img-url: @image-url("icons/litecoin.png");
-            }
-            BlockchainNetworkButton {
-                content: "Ripple";
-                img-url: @image-url("icons/ripple.png");
-            }
+            alignment: center;
         }
     }
 }

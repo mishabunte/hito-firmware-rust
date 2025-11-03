@@ -47,8 +47,6 @@ impl Display for DisplayImpl {
 
     fn init(&mut self) {
         simulator_window_init();
-        self.draw_screen_corners();
-        log_info!("Minifb Display initialized");
     }
 
     fn update(&mut self) {

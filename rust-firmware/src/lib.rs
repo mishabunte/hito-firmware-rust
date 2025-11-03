@@ -15,6 +15,8 @@ extern crate panic_halt;
 mod hito_firmware;
 mod drivers;
 pub mod crypto {
+    pub mod ffi;
+    pub mod crypt0;
     pub mod libcrypt0pro {
         pub mod stellar {
             mod address;  // This will look for address.rs

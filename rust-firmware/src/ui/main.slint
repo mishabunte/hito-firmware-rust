@@ -28,22 +28,15 @@ import { BaseButton } from "BaseButton.slint";
 component HeaderBar {
     in-out property<string> header-title: "";
     in property<bool> brightness-scale-shown: false;
-    if header-title != "": Rectangle {
+    header := Text {
         y: 10px;
-        background: Palette.green;
-        width: 1.1*header.width;
-        height: 1.1*header.height;
-        visible: !parent.brightness-scale-shown;
-        header := Text {
-            y: 1px;
-            text: header-title;
-            font-size: 20px;
-            font-family: "Roboto Mono";
-            font-italic: false;
-            font-weight: 1000;
-            horizontal-alignment: center;
-            wrap: word-wrap;
-        }
+        text: header-title;
+        font-size: 20px;
+        font-family: "Roboto Mono";
+        font-italic: false;
+        font-weight: 1000;
+        horizontal-alignment: center;
+        wrap: word-wrap;
     }
 }
 
@@ -73,7 +66,7 @@ export component MainWindow inherits Window {
     }
     in-out property <string> header-title: {
         if (Router.current == Screen.EnterPin) {
-            "ENTER PASSCODE";
+            "Enter Passcode";
         } else if (Router.current == Screen.Send) {
             "SEND CRYPTO";
         } else if (Router.current == Screen.PairWithTheApp) {
