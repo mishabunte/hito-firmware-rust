@@ -14,8 +14,8 @@ export component TransparentButton {
         horizontal-alignment: center;
         vertical-alignment: center;
         TouchArea {
-            width: parent.width;
-            height: parent.height;
+            width: parent.width + 10px;
+            height: parent.height + 10px;
             pointer-event(event) => {
                 if (event.kind == PointerEventKind.down) {
                     pressed = true;
