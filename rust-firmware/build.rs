@@ -1,7 +1,7 @@
 fn main() {
     let config = slint_build::CompilerConfiguration::new()
         .embed_resources(slint_build::EmbedResourcesKind::EmbedForSoftwareRenderer);
-    slint_build::compile_with_config("src/ui/main.slint", config).unwrap();
+    slint_build::compile_with_config("src/ui/slint/main.slint", config).unwrap();
     slint_build::print_rustc_flags().unwrap();
 
     println!("cargo:rerun-if-changed=src/vault/hito_firmware_version.h");
