@@ -44,7 +44,7 @@ pub struct FirmwareState {
   unlock_req: Cell<bool>,
   is_unlocked: Cell<bool>,
   device_info_requested: Cell<bool>,
-  device_info: RefCell<DeviceInfo>,
+  qr_data_requested: Cell<bool>,
 }
 
 impl FirmwareState {
@@ -56,7 +56,7 @@ impl FirmwareState {
           unlock_req: Cell::new(false),
           is_unlocked: Cell::new(false),
           device_info_requested: Cell::new(false),
-          device_info: RefCell::new(DeviceInfo::default()),
+          qr_data_requested: Cell::new(false),
       }
   }
   pub fn set_brightness(&self, v: u8)                 { self.brightness.set(Some(v)); }
@@ -69,7 +69,6 @@ impl FirmwareState {
   pub fn mark_device_info_requested(&self)          { self.device_info_requested.set(true); }
   pub fn is_device_info_requested(&self) -> bool     { self.device_info_requested.get() }
   pub fn clear_device_info_requested(&self)          { self.device_info_requested.set(false); }
-  pub fn set_device_info(&self, info: DeviceInfo)    { *self.device_info.borrow_mut() = info; }
   pub fn remove_pin_char(&self)                       { self.pin.borrow_mut().pop(); }
   pub fn mark_unlock_requested(&self)                 { self.unlock_req.set(true); }
   pub fn is_battery_level_requested(&self) -> bool    { self.battery_req.get() }
@@ -78,6 +77,9 @@ impl FirmwareState {
       self.unlock_req.set(false);
       self.pin.borrow_mut().clear();
   }
+  pub fn is_qr_data_requested(&self) -> bool     { self.qr_data_requested.get() }
+  pub fn mark_qr_data_requested(&self)          { self.qr_data_requested.set(true); }
+  pub fn mark_qr_data_success(&self)          { self.qr_data_requested.set(false); }
   pub fn unlock_succeeded(&self)                  { self.is_unlocked.set(true); }
   pub fn is_unlock_succeeded(&self) -> bool            { self.is_unlocked.get() }
   pub fn unlock_failed(&self)                     { self.is_unlocked.set(false); }

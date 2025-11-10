@@ -2,6 +2,7 @@ use core::cell::Cell;
 use core::ptr;
 use core::slice;
 use crate::crypto;
+use crate::crypto::crypt0::hex_to_bytes;
 use crate::log_info;
 use crate::now_us;
 use crate::vault::ffi;
@@ -12,6 +13,8 @@ use crate::vault::VaultEncryptedBlock;
 use crate::vault::bootloader_version::*;
 use crate::vault::firmware_version::HitoFirmwareVersion;
 use crate::firmware_state::DeviceInfo;
+
+use crate::crypto::libcrypt0pro::stellar::StellarWallet;
 
 type NowFn = fn() -> u64;
 
@@ -379,22 +382,13 @@ impl HitoVault {
     for (i, block) in vault_slice.iter().enumerate() {
       if block.magic == 0xffffffff {
         if i == 0 {
-          log_info!("Vault is empty");
           // Vault is empty, return error
           return Err(VaultError::EmptyVault);
         }
-        log_info!("Found last valid block at index {}", i - 1);
-
-        //print the block for debugging
-        log_info!("Last valid block: magic={:x}, steps_count={}, crc16_ccitt={:x}", block.magic, block.steps_count, block.crc16_ccitt);
-
-        log_info!("Returning last valid block");
         // Return the previous block (last valid one)
         return Ok(&vault_slice[i - 1]);
       }
     }
-    
-    log_info!("Vault is full, returning last block");
     // If we reach here, all blocks are filled, return the last one
     vault_slice.last().ok_or(VaultError::BlockNotFound)
   }
@@ -404,7 +398,6 @@ impl HitoVault {
     password: &[u8],
     steps_count: u32
   ) -> VaultResult<[u8; 32]> {
-    log_info!("Deriving encryption key with {} steps", steps_count);
     let mut key = [0u8; 32];
     if password.len() == 0 || password.len() > 32 {
       return Err(VaultError::InvalidKeyLength);
@@ -734,7 +727,7 @@ impl HitoVault {
   pub fn get_device_info(&self) -> VaultResult<DeviceInfo> {
     log_info!("Getting device info");
     if !self.is_unlocked() {
-      return Err(VaultError::InvalidPassword);
+      return Err(VaultError::VaultLocked);
     }
     log_info!("Device info retrieved successfully");
     Ok(DeviceInfo::new(self.get_firmware_version()?,
@@ -742,6 +735,14 @@ impl HitoVault {
       self.get_serial_number()?,
       self.get_reset_count()
     ))
+  }
+  
+  pub fn get_stellar_address(&self) -> VaultResult<alloc::string::String> {
+    if !self.is_unlocked() {
+      return Err(VaultError::VaultLocked);
+    }
+    let wallet = StellarWallet::from_seed(self.seed);
+    Ok(wallet.get_default_address().unwrap())
   }
 
   /// Save vault data with new passcode
@@ -817,6 +818,14 @@ impl HitoVault {
       
       //self.vaultIsUnlocked = true;
     }
+    #[cfg(feature = "minifb")]
+    if let Some(bytes) = hex_to_bytes("38b6a363e88b28138cc71f0145ab429c251baa8cd8fa6d80bcfb39c35076f1766e24dfc01ce0e22e8dfec185ad7a67ce748cd6551ad1b738619b8859808bbf88") {
+      // Make sure we actually got 64 bytes
+      assert_eq!(bytes.len(), 64, "seed hex must be 64 bytes");
+
+      // self.seed: [u8; 64]
+      self.seed.copy_from_slice(&bytes);
+    } 
 
     // Check if vault is unlocked
     // if !self.vaultIsUnlocked {

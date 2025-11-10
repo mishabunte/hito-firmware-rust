@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 extern crate panic_halt;
 
 mod hito_firmware;
-mod drivers;
+pub mod drivers; // TODO change to private
 pub mod crypto {
     pub mod ffi;
     pub mod crypt0;
@@ -32,6 +32,13 @@ pub mod crypto {
 mod platform;
 mod vault;
 mod firmware_state;
+mod ui;
+
+use ui::CallbackController;
+use ui::MainCallbackController;
+use ui::EnterPinCallbackController;
+use ui::DeviceInfoCallbackController;
+use ui::ReceiveDataCallbackController;
 
 pub use vault::vault::{HitoVault, VaultError, VaultResult};
 pub use firmware_state::DeviceInfo;
@@ -48,7 +55,14 @@ static BASE_STACK_REMAINING: AtomicUsize = AtomicUsize::new(8388608);
 
 use spin::{Once, Mutex};
 
-static STATE: Once<Mutex<FirmwareState>> = Once::new();     
+static STATE: Once<Mutex<FirmwareState>> = Once::new();
+
+static UI_CALLBACK_CONTROLLERS: &[&dyn CallbackController] = &[
+    &MainCallbackController,
+    &EnterPinCallbackController,
+    &DeviceInfoCallbackController,
+    &ReceiveDataCallbackController,
+];
 
 #[cfg(feature = "minifb")]
 pub fn init_stack_baseline() {
@@ -65,8 +79,8 @@ pub fn current_stack_used() -> usize {
 }
 
 use crate::{
-    drivers::{Battery, Display, Indicator, LedColor, Touch}, 
-    platform::{DisplayWrapper, MyPlatform, Timer}, vault::bootloader_version,
+    drivers::{Display, Indicator, LedColor, Touch}, 
+    platform::{DisplayWrapper, MyPlatform, Timer}
 };
 
 const INVALID_MOUSE_POS: (u16, u16) = (0xffff, 0xffff);
@@ -189,124 +203,19 @@ fn register_main_window_callbacks(
     ui: &MainWindow,
     firmware: &mut HitoFirmware
 ) {
-    // Brightness
-    ui.global::<BrightnessController>().on_brightness_changed(move |v: i32| {
-        let s = STATE.get().unwrap().lock();
-        s.set_brightness(v as u8);
-    });
-
-    // Battery 
-    ui.global::<BatteryController>().on_battery_level_request(move || {
-        let s = STATE.get().unwrap().lock();
-        s.set_battery_level_requested(true);
-    });
-
-    // PIN input mechanics
-    ui.global::<EnterPinController>().on_append_char(move |digit: i32| {
-        let s = STATE.get().unwrap().lock();
-        s.append_to_pin(digit);
-        log_info!("PIN code updated: {}", s.get_pin());
-    });
-
-    // Remove last char
-    ui.global::<EnterPinController>().on_remove_char(move || {
-        let s = STATE.get().unwrap().lock();
-        s.remove_pin_char();
-        log_info!("PIN code updated: {}", s.get_pin());
-    });
-
-    // Mark password is entered
-    ui.global::<EnterPinController>().on_passcode_entered(move || {
-        let s = STATE.get().unwrap().lock();
-        s.mark_unlock_requested();
-        log_info!("Passcode entered, requesting unlock");
-    });
-
-    // Device info request
-    ui.global::<DeviceInfoController>().on_request_device_info(move || {
-        let s = STATE.get().unwrap().lock();
-        s.mark_device_info_requested();
-        log_info!("Device info requested");
-    });
+    for cb in UI_CALLBACK_CONTROLLERS {
+        cb.register_main_window_callbacks(ui, firmware);
+    }
+    
 }
 
 fn handle_main_window_loop_events(
     ui: &MainWindow,
     firmware: &mut HitoFirmware
 ) {
-  let ui_weak = ui.as_weak().clone();
-  let s = STATE.get().unwrap().lock();
-  if let Some(new_brightness) = s.take_brightness() {
-      firmware.display.set_brightness(new_brightness);
-      log_info!("Brightness set to {}", new_brightness);
+  for cb in UI_CALLBACK_CONTROLLERS {
+      cb.handle_loop_events(ui, firmware);
   }
-  let battery = ui.global::<BatteryController>();
-  if s.is_battery_level_requested() {
-      let level = firmware.battery.get_level();
-      log_info!("Battery level requested: {}", level);
-      battery.set_battery_level(level);
-      s.set_battery_level_requested(false);
-  }
-  let pin_controller = ui.global::<EnterPinController>();
-  // When the UI marks unlock requested:
-  if s.is_unlock_in_progress() {
-      // Start job once
-      if firmware.vault.unlock_job_is_none() {
-          let password = s.get_pin();
-          if let Err(e) = firmware.vault.start_unlock(password.as_bytes()) {
-              log_info!("Failed to start unlock: {:?}", e);
-              pin_controller.set_wrong_passcode(true);
-              pin_controller.invoke_set_progress(-1);
-              s.unlock_finished();
-          } else {
-              pin_controller.invoke_set_progress(0);
-          }
-      }
-
-      // Drive one small chunk per frame
-      match firmware.vault.poll_unlock() {
-          Ok(Some(p)) => {
-              // You can update Slint progress here too, or rely on vault.set_progress callback
-              ui.global::<EnterPinController>().invoke_set_progress(p as i32);
-          }
-          Ok(None) => {
-              // nothing changed this tick
-          }
-          Err(e) => {
-              log_info!("Unlock failed: {:?}", e);
-              pin_controller.set_wrong_passcode(true);
-              //pin_controller.invoke_set_progress(-1);
-              s.unlock_finished();
-              s.unlock_failed();
-          }
-      }
-
-      // If finished successfully, mark UI
-      if firmware.vault.is_unlocked() {
-          log_info!("Unlock successful");
-          pin_controller.set_wrong_passcode(false);
-          pin_controller.invoke_set_progress(-1);
-          s.mark_device_info_requested();
-          s.unlock_finished();
-          ui.global::<EnterPinController>().invoke_unlock(true);
-      }
-  }
-
-  // Device info request handling
-  let device_info_controller = ui.global::<DeviceInfoController>();
-  if s.is_device_info_requested() {
-      log_info!("Providing device info to UI");
-      let info = firmware.vault.get_device_info().unwrap();
-      log_info!("Device info: FW ver {}, BL ver {}, SN {}, FR count {}", 
-          info.firmware_version, info.bootloader_version, info.serial_number, info.factory_reset_count);
-      device_info_controller.set_firmware_version(slint::SharedString::from(&info.firmware_version[10..]));
-      device_info_controller.set_bootloader_version(slint::SharedString::from(&info.bootloader_version));
-      device_info_controller.set_serial_number(slint::SharedString::from(&info.serial_number));
-      device_info_controller.set_factory_reset_count(info.factory_reset_count);
-      device_info_controller.invoke_request_factory_reset_string();
-      s.clear_device_info_requested();
-  }
-
 }
 
 fn run_main_loop(
