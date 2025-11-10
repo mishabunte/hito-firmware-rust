@@ -2,6 +2,7 @@ mod display;
 mod touch;
 mod indicator;
 mod battery;
+mod hito_ble;
 pub mod simulator_window;
 pub mod led_desktop;
 

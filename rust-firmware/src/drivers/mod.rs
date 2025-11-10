@@ -16,7 +16,13 @@ pub use indicator::{Indicator, LedColor, BlinkSpeed};
 mod battery;
 pub use battery::Battery;
 
+mod hito_ble;
+pub use hito_ble::HitoBLE;
+
 pub mod logging;
+
+pub mod qr_code;
+pub use qr_code::{QrCodeWrapper, IMAGE_MAX_WIDTH};
 
 #[cfg(feature = "minifb")]
 pub use minifb::led_desktop::DesktopLedDriver;
