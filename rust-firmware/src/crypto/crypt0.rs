@@ -3,6 +3,10 @@ use core::ffi::c_char;
 extern crate alloc;
 use alloc::{string::String, vec::Vec};
 
+const ED25519_PRIVATE_KEY_SIZE: usize = 32;
+const ED25519_CHAIN_CODE_SIZE: usize = 32;
+const ED25519_DERIVE_DATA_SIZE: usize = 1 + ED25519_PRIVATE_KEY_SIZE + 4;
+
 /// Converts bytes to lowercase hex string (e.g. [0xDE, 0xAD] → "dead")
 pub fn bytes_to_hex(bytes: &[u8]) -> String {
     const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
@@ -47,5 +51,55 @@ pub fn crypt0_bech32_encode(data: &[u8], buf: &mut [u8]) -> Result<usize, ()> {
         } else {
             Err(())
         }
+    }
+}
+
+pub fn crypt0_ed25519_derive_secret_index(
+    secret: &mut [u8; ED25519_PRIVATE_KEY_SIZE + ED25519_CHAIN_CODE_SIZE],
+    index: u32,
+) -> i32 {
+    // Only hardened indices allowed
+    if index < 0x8000_0000 {
+        return -1;
+    }
+
+    // 0x00 || private_key || index_be
+    let mut data = [0u8; ED25519_DERIVE_DATA_SIZE];
+    let mut hash = [0u8; 64];
+
+    // data[0] = 0x00;
+    data[0] = 0x00;
+
+    // memcpy(data + 1, secret, ED25519_PRIVATE_KEY_SIZE);
+    data[1..1 + ED25519_PRIVATE_KEY_SIZE]
+        .copy_from_slice(&secret[..ED25519_PRIVATE_KEY_SIZE]);
+
+    // index (big-endian) at the end
+    let idx = ED25519_PRIVATE_KEY_SIZE + 1;
+    data[idx]     = (index >> 24) as u8;
+    data[idx + 1] = (index >> 16) as u8;
+    data[idx + 2] = (index >> 8)  as u8;
+    data[idx + 3] = index as u8;
+
+    let chain_code = &secret[ED25519_PRIVATE_KEY_SIZE
+        ..ED25519_PRIVATE_KEY_SIZE + ED25519_CHAIN_CODE_SIZE];
+
+    let res = unsafe {
+        ffi::crypt0_hmac_sha512(
+            chain_code.as_ptr(),
+            chain_code.len() as u16,
+            data.as_ptr(),
+            data.len() as u16,
+            hash.as_mut_ptr(),
+        )
+    };
+    if res != ffi::CRYPT0_OK {
+        res
+    } else {
+        secret.copy_from_slice(
+            &hash[..ED25519_PRIVATE_KEY_SIZE + ED25519_CHAIN_CODE_SIZE]
+        );
+
+        0
     }
 }

@@ -57,6 +57,19 @@ extern "C" {
     tag_len: usize,
     decrypted: *mut u8
   ) -> c_int;
+  pub fn crypt0_ed25519_public_key(
+    privkey: *const u8,
+    privlen: usize,
+    pubkey: *mut u8,
+    publen: usize
+  ) -> c_int;
+  pub fn crypt0_hmac_sha512(
+    key: *const u8,
+    key_len: u16,
+    msg: *const u8,
+    msg_len: u16,
+    digest: *mut u8
+  ) -> c_int;
 }
 
 pub const CRYPT0_OK: c_int = 0;
