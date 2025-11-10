@@ -1,12 +1,46 @@
-import { HitoWindow } from "HitoWindow.slint";
-import { Router, ScreenEnum } from "Router.slint";
+import { Router } from "Router.slint";
+import { ScreenEnum } from "ScreenEnum.slint";
 import { Palette } from "Palette.slint";
 import { BaseButton } from "BaseButton.slint";
 import { EnterPinController } from "EnterPinController.slint";
+import { TransparentButton } from "TransparentButton.slint";
 
-component PassChar inherits BaseButton {
-    button-width: 50px;
-    button-height: 50px;
+component PassChar {
+    in-out property <bool> pressed: false;
+    in-out property <string> content: "0";
+    in-out property <length> in-font-size: 20px;
+    in-out property <bool> border-shown: true;
+    in-out property <color> text-color-unpressed: Palette.black;
+    in-out property <color> text-color-pressed: Palette.blue;
+    mainText:= Text {
+        text: content;
+        font-size: root.in-font-size;
+        color: pressed ? text-color-pressed : text-color-unpressed;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        TouchArea {
+            width: parent.width;
+            height: parent.height;
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down) {
+                    pressed = true;
+                } else if (event.kind == PointerEventKind.up) {
+                    pressed = false;
+                    root.clicked();
+                    debug("Clicked pin", content);
+                }
+            }
+        }
+    }
+    Text {
+        text: content;
+        y: mainText.y - root.in-font-size - 10px;
+        font-size: root.in-font-size + 5px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        visible: pressed;
+    }
+    callback clicked();
 }
 
 component ProgressBar {
@@ -14,7 +48,7 @@ component ProgressBar {
     in-out property <bool> in-progress: progress > 0 && progress < 100;
 
     Rectangle {
-        width: 200px;
+        width: 150px;
         height: 10px;
         border-color: Palette.black;
         border-width: 2px;
@@ -43,8 +77,7 @@ component ProgressBar {
 component PinGrid {
     property <length> spacing: 50px;
     VerticalLayout {
-        y: 55px;
-        spacing: 40px;
+        spacing: 35px;
         alignment: center;
         HorizontalLayout {
             spacing: spacing;
@@ -108,7 +141,7 @@ component PinGrid {
 
 component EraseButton {
     property <bool> pressed: false;
-    in-out property <string> content: "X";
+    in-out property <string> content: "<";
     callback clicked();
     Text {
         text: content;
@@ -148,21 +181,19 @@ component EnteredPassword {
         x: 0px;
         y: 0px;
         
-
         // Display rectangles with proper spacing like C firmware
         if EnterPinController.decoding-progress == -1: Text {
             text: {
                 password-count == 0 ? "" :
-                password-count == 1 ? "●" :
-                password-count == 2 ? "●●" :
-                password-count == 3 ? "●●●" :
-                password-count == 4 ? "●●●●" :
-                password-count == 5 ? "●●●●●" : 
-                password-count == 6 ? "●●●●●●" : "ERROR";
+                password-count == 1 ? "*" :
+                password-count == 2 ? "**" :
+                password-count == 3 ? "***" :
+                password-count == 4 ? "****" :
+                password-count == 5 ? "*****" : 
+                password-count == 6 ? "******" : "ERROR";
             }
-            letter-spacing: 5px;
-            font-size: 30px;
-            y: - 6px;
+            letter-spacing: 10px;
+            font-size: 20px;
             color: Palette.black;
             horizontal-alignment: center;
             vertical-alignment: center;
@@ -172,18 +203,6 @@ component EnteredPassword {
         if EnterPinController.decoding-progress != -1: ProgressBar {
             progress: EnterPinController.decoding-progress;
         }
-        // if EnterPinController.wrong-passcode: Text {
-        //     text: "WRONG PASSCODE";
-        //     letter-spacing: 5px;
-        //     font-size: 20px;
-        //     y: -1px;
-        //     color: Palette.red;
-        //     horizontal-alignment: center;
-        //     vertical-alignment: center;
-        //     width: parent.width;
-        //     height: parent.height;
-        // }
-        // Show underline when empty like C firmware
         Rectangle {
             width: 100px;
             height: 3px;
@@ -198,12 +217,12 @@ component EnteredPassword {
 export component EnterPinScreenView {
     width: 320px;
     height: 240px;
-    property <length> line-y: 65px;
+    property <length> line-y: 60px;
     in-out property <int> entered-password-count: 0;
     // back-shown: false;
     // header-title: "ENTER PASSCODE";
     EraseButton {
-        x: 280px;
+        x: 250px;
         y: line-y;
         clicked() => {
             if (EnterPinController.wrong-passcode) {
@@ -214,6 +233,7 @@ export component EnterPinScreenView {
                 EnterPinController.remove-char();
             }
         }
+        visible: entered-password-count > 0;
     }
     EnteredPassword {
         x: 0px;
@@ -221,8 +241,8 @@ export component EnterPinScreenView {
         password-count: entered-password-count;
     }
     PinGrid {
-        x: 30px;
-        y: 70px;
+        x: 27px;
+        y: 127px;
         number-clicked(digit) => {
             if (EnterPinController.wrong-passcode) {
                 EnterPinController.wrong-passcode = false;

@@ -1,0 +1,169 @@
+import { BrightnessController } from "BrightnessController.slint";
+import { BatteryController } from "Battery.slint";
+import { LockScreenView } from "LockScreenView.slint";
+import { HomeScreenView } from "HomeScreenView.slint";
+import { EnterPinScreenView } from "EnterPinScreenView.slint";
+import { TestScreen } from "TestScreenView.slint";
+import { TestScreen2View } from "TestScreen2View.slint";
+import { TransparentButton } from "TransparentButton.slint";
+import { SendScreenView } from "SendScreenView.slint";
+import { SettingsScreenView } from "SettingsScreenView.slint";
+import { EnterPinController } from "EnterPinController.slint";
+import { PairWithTheAppScreenView } from "PairWithTheAppScreenView.slint";
+import { DeviceInfoScreenView } from "DeviceInfoScreenView.slint";
+import { DeviceInfoController } from "DeviceInfoController.slint";
+import { ReceiveScreenView } from "ReceiveScreenView.slint";
+import { ReceiveDataController } from "ReceiveDataController.slint";
+
+export { BrightnessController, BatteryController, EnterPinController, DeviceInfoController, ReceiveDataController } // Export controllers and router for global access
+
+import { VerticalBox, HorizontalBox } from "std-widgets.slint";
+import "../../../res/fonts/RobotoMono.ttf";
+import { BrightnessLogo, BrightnessBar } from "BrightnessController.slint";
+import { BatteryLevel, BatteryController } from "Battery.slint";
+import { Palette } from "Palette.slint";
+import { Router } from "Router.slint";
+import { ScreenEnum } from "ScreenEnum.slint";
+import { BaseButton } from "BaseButton.slint";
+
+component HeaderBar {
+    in-out property<string> header-title: "";
+    header := Text {
+        y: 10px;
+        text: header-title;
+        font-size: 20px;
+        font-family: "Roboto Mono";
+        font-italic: false;
+        font-weight: 1000;
+        horizontal-alignment: center;
+        wrap: word-wrap;
+        visible: !BrightnessController.scale-shown;
+    }
+}
+
+component BackButton inherits TransparentButton {
+    content: "<";
+    in-font-size: 30px;
+    text-color-pressed: Palette.black;
+    text-color-unpressed: Palette.blue;
+    clicked() => {
+        Router.back();
+    }
+}
+
+export component MainWindow inherits Window {
+    width: 320px;
+    height: 240px;
+    background: white;
+
+    default-font-family: "Roboto Mono";
+
+    in property <bool> is-lockscreen: {
+        if (Router.current == ScreenEnum.Lock) {
+            true;
+        } else {
+            false;
+        }
+    }
+    in-out property <string> header-title: {
+        if (Router.current == ScreenEnum.EnterPin) {
+            "Enter Passcode";
+        } else if (Router.current == ScreenEnum.Send) {
+            "SEND CRYPTO";
+        } else if (Router.current == ScreenEnum.PairWithTheApp) {
+            "PAIR WITH THE APP";
+        } else if (Router.current == ScreenEnum.DeviceInfo) {
+            "DEVICE INFO";
+        } else if (Router.current == ScreenEnum.Receive) {
+            "YOUR ADDRESS";
+        } else {
+            "";
+        }
+    }
+    in-out property <bool> back-shown: {
+        if (Router.current == ScreenEnum.Lock || Router.current == ScreenEnum.Home || Router.current == ScreenEnum.EnterPin) {
+            false;
+        } else {
+            true;
+        }
+    }
+
+    // Internal brightness control state
+    out property <bool> brightness-scale-shown: false;
+    HeaderBar {
+        y: 0px;
+        header-title: header-title;
+    }
+
+    HorizontalLayout {
+        width: parent.width;
+        alignment: start;
+        VerticalLayout {
+            alignment: start;
+            BackButton {
+                x: 10px;
+                visible: back-shown;
+            }
+        }
+    }
+
+    // Layout container for positioning elements
+    HorizontalLayout {
+        width: parent.width;
+        spacing: 7px;
+        padding-right: 9px;
+        padding-top: 5px;
+        alignment: end;
+        // Brightness control in top-right corner
+        brightness-logo := BrightnessLogo {
+          width: 20px;
+          height: 20px;
+          visible: !BrightnessController.scale-shown;
+        }
+      
+        Rectangle {
+          width: 20px;
+          height: 20px;
+          battery-indicator := BatteryLevel {
+            visible: !BrightnessController.scale-shown;
+        }
+      }
+    }
+    brightness-bar := BrightnessBar {
+        x: brightness-logo.x - 105px;
+        y: is-lockscreen ? brightness-logo.y + 175px : brightness-logo.y + 10px;
+        visible: BrightnessController.scale-shown;
+    }
+
+    // Global touch area to hide brightness scale when clicking outside - only active when scale is shown
+    if BrightnessController.scale-shown: TouchArea {
+        width: parent.width;
+        height: parent.height;
+        z: -1; // Above other elements to capture all clicks
+
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                // Check if click is outside brightness control area
+                if (self.mouse-x < brightness-bar.x - 10px ||
+                    self.mouse-x > brightness-bar.x + brightness-bar.width + 200px ||
+                    self.mouse-y < brightness-bar.y - 10px ||
+                    self.mouse-y > brightness-bar.y + brightness-bar.height + 10px) {
+                    BrightnessController.scale-shown = false;
+                }
+            }
+        }
+    }
+    callback battery-level-requested() -> int;
+    Rectangle {
+        if Router.current == ScreenEnum.Lock: LockScreenView {
+            show-text: !BrightnessController.scale-shown;
+        }
+        if Router.current == ScreenEnum.EnterPin: EnterPinScreenView {}
+        if Router.current == ScreenEnum.Home: HomeScreenView {}
+        if Router.current == ScreenEnum.Send: SendScreenView {}
+        if Router.current == ScreenEnum.Settings: SettingsScreenView {}
+        if Router.current == ScreenEnum.PairWithTheApp: PairWithTheAppScreenView {}
+        if Router.current == ScreenEnum.DeviceInfo: DeviceInfoScreenView {}
+        if Router.current == ScreenEnum.Receive: ReceiveScreenView {}
+    }
+}

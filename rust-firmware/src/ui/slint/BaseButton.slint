@@ -6,25 +6,25 @@ export component BaseButton {
     in-out property <length> button-width;
     in-out property <length> button-height;
     in-out property <length> in-font-size: 20px;
-    in-out property <bool> border-shown: true;
     in-out property <color> text-color-unpressed: Palette.black;
-    in-out property <color> text-color-pressed: Palette.green;
+    in-out property <color> text-color-pressed: Palette.blue;
     in-out property <color> background-color-unpressed: transparent;
-    in-out property <color> background-color-pressed: Palette.green;
-    in-out property <color> border-color: Palette.black;
+    in-out property <color> background-color-pressed: Palette.blue;
+    in-out property <color> border-color-pressed: Palette.blue;
+    in-out property <color> border-color-unpressed: Palette.black;
     in-out property <length> border-width: 2px;
     in-out property <length> border-radius: 0px;
     Rectangle {
         width: button-width;
         height: button-height;
-        border-color: border-shown ? border-color : transparent;
-        border-width: border-shown ? border-width : 0px;
+        border-color: pressed ? border-color-pressed : border-color-unpressed;
+        border-width: border-width;
         border-radius: border-radius;
-        background: pressed && border-shown ? background-color-pressed : background-color-unpressed;
-        text := Text {
+        background: pressed ? background-color-pressed : background-color-unpressed;
+        Text {
             text: content;
             font-size: root.in-font-size;
-            color: pressed && !border-shown ? text-color-pressed : text-color-unpressed;
+            color: pressed ? text-color-pressed : text-color-unpressed;
             horizontal-alignment: center;
             vertical-alignment: center;
         }

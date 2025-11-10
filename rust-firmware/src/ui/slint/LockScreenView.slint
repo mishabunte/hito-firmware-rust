@@ -1,5 +1,5 @@
-import { HitoWindow } from "HitoWindow.slint";
-import { Router, ScreenEnum } from "Router.slint";
+import { Router } from "Router.slint";
+import { ScreenEnum } from "ScreenEnum.slint";
 
 export component LockScreenView {
     width: 320px;
@@ -25,8 +25,6 @@ export component LockScreenView {
 
     property <bool> key_shown: true; // To control key visibility
 
-    // back-shown: false; // No back button on lock screen
-
     // // Handle brightness scale visibility changes        show-text = !shown;
     hide-text(shown) => {
         show-text = !shown;
@@ -47,7 +45,7 @@ export component LockScreenView {
 
     // Lock sprite with animation frames
     Image {
-        source: @image-url("../../res/img/lock.png");
+        source: @image-url("../../../res/img/lock.png");
         x: lock-x + first-frame-offset*1px; // Adjusted to align with key
         y: lock-y;
         width: 46px - first-frame-offset*1px;
@@ -63,7 +61,7 @@ export component LockScreenView {
 
     // Lock sprite with animation frames
     Image {
-        source: @image-url("../../res/img/lock.png");
+        source: @image-url("../../../res/img/lock.png");
         x: lock-x;
         y: lock-y;
         width: 46px;
@@ -86,7 +84,7 @@ export component LockScreenView {
         visible: key_shown;
 
         Image {
-            source: @image-url("../../res/img/lock.png");
+            source: @image-url("../../../res/img/lock.png");
             width: 27px;
             height: 34px;
             // Key is at x=322 in the sprite sheet

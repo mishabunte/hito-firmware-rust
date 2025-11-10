@@ -1,5 +1,5 @@
-import { HitoWindow} from "HitoWindow.slint";
-import { Router, Screen } from "Router.slint";
+import { Router } from "Router.slint";
+import { ScreenEnum } from "ScreenEnum.slint";
 import { Palette } from "Palette.slint";
 import { VerticalBox } from "std-widgets.slint";
 
@@ -79,10 +79,8 @@ component Spacer inherits Rectangle {
     vertical-stretch: 1;
 }
 
-export component SendStellarScreen inherits HitoWindow {
+export component SendStellarScreen {
     // Indicate this is not the lock screen
-    is-lockscreen: false;
-    show-brightness: true; // Show brightness control on home screen
     // header-title: "SEND STELLAR";
     HorizontalLayout {
       x: 0px;
@@ -148,7 +146,7 @@ export component SendStellarScreen inherits HitoWindow {
         alignment: start;
         vertical-stretch: 1;
         Image {
-            source: @image-url("../../res/img/stellar-logo.png");
+            source: @image-url("../../../res/img/stellar-logo.png");
             width: 75px;
             height: 75px;
         }

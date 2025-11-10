@@ -1,10 +1,8 @@
-import { HitoWindow } from "HitoWindow.slint";
-import { Router, ScreenEnum } from "Router.slint";
-import "../../res/fonts/RobotoMono.ttf";
+import { Router } from "Router.slint";
+import { ScreenEnum } from "ScreenEnum.slint";
 import { BaseButton } from "BaseButton.slint";
 
-export component TestScreen inherits HitoWindow {
-    header-title: "Test Screen";
+export component TestScreen inherits Window {
     Text {
         text: "This is a test screen!";
         font-size: 20px;

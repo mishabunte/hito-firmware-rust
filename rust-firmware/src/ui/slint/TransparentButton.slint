@@ -1,0 +1,31 @@
+import { Palette } from "Palette.slint";
+
+export component TransparentButton {
+    in-out property <bool> pressed: false;
+    in-out property <string> content: "0";
+    in-out property <length> in-font-size: 20px;
+    in-out property <bool> border-shown: true;
+    in-out property <color> text-color-unpressed: Palette.black;
+    in-out property <color> text-color-pressed: Palette.blue;
+    Text {
+        text: content;
+        font-size: root.in-font-size;
+        color: pressed ? text-color-pressed : text-color-unpressed;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        TouchArea {
+            width: parent.width;
+            height: parent.height;
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down) {
+                    pressed = true;
+                } else if (event.kind == PointerEventKind.up) {
+                    pressed = false;
+                    root.clicked();
+                    debug("Clicked pin", content);
+                }
+            }
+        }
+    }
+    callback clicked();
+}
