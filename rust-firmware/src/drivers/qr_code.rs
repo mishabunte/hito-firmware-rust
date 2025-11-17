@@ -33,7 +33,7 @@ impl QrCodeWrapper {
     pub fn new(data: &str) -> Self {
         unsafe {
             let qr = QrCode::encode_text(data,
-            &mut QR_CODE_TEMP_BUFFER, &mut QR_CODE_OUT_BUFFER, QrCodeEcc::Medium,
+            &mut QR_CODE_TEMP_BUFFER, &mut QR_CODE_OUT_BUFFER, QrCodeEcc::Low,
             Version::MIN, Version::MAX, None, true).unwrap();
             log_info!("Generated QR code of size {}", qr.size());
             Self { data: qr_code_to_u8_vec(&qr), width: qr.size() as usize }
