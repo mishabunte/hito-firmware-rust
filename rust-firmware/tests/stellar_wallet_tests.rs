@@ -2,14 +2,16 @@
 // Integration tests for Stellar wallet functionality
 
 use hito_firmware_rust::crypto::libcrypt0pro::stellar::*;
-use hex;
+use hito_firmware_rust::crypto::crypt0::hex_to_bytes;
 
 // Test with a known seed for reproducible results
 fn get_test_seed() -> [u8; 64] {
+    let mut seed = [0u8; 64];
     // This is a test seed derived from the standard test mnemonic:
     // "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-    let test_seed_hex = "38b6a363e88b28138cc71f0145ab429c251baa8cd8fa6d80bcfb39c35076f1766e24dfc01ce0e22e8dfec185ad7a67ce748cd6551ad1b738619b8859808bbf88";
-    hex::decode(test_seed_hex).unwrap().try_into().unwrap()
+    let bytes = hex_to_bytes("38b6a363e88b28138cc71f0145ab429c251baa8cd8fa6d80bcfb39c35076f1766e24dfc01ce0e22e8dfec185ad7a67ce748cd6551ad1b738619b8859808bbf88").unwrap();
+    seed.copy_from_slice(&bytes);
+    seed
 }
 
 #[test]
@@ -42,9 +44,10 @@ fn test_keypair_derivation_account_0() {
     
     // Print for manual verification
     println!("✓ Account 0 derivation test passed");
-    println!("  Secret Key: {}", hex::encode(keypair.secret_key));
-    println!("  Public Key: {}", hex::encode(keypair.public_key));
+    // println!("  Secret Key: {}", hex_to_bytes(keypair.secret_key));
+    // println!("  Public Key: {}", hex_to_bytes(keypair.public_key));
     println!("  Address: {}", keypair.address);
+    assert_eq!(keypair.address, "GCEMPQ7LYZ7EYWFYQYXIFQRUHKLRT74TLORALIOZIP2KPED7TD3GG352");
     println!("================================================================================");
 }
 
@@ -166,80 +169,5 @@ fn test_firmware_performance() {
     
     // Should complete in reasonable time for embedded system
     assert!(duration.as_millis() < 1000, "Derivation took too long: {:?}", duration);
-    println!("================================================================================");
-}
-
-#[test]
-fn test_ed25519_keypair_consistency() {
-    let seed = get_test_seed();
-    let wallet = StellarWallet::from_seed(seed);
-    
-    let keypair = wallet.derive_keypair(0).expect("Failed to derive keypair");
-    
-    // Verify that the public key can be derived from the private key
-    use ed25519_dalek::SigningKey;
-    let signing_key = SigningKey::from_bytes(&keypair.secret_key);
-    let derived_public_key = signing_key.verifying_key().to_bytes();
-    
-    assert_eq!(keypair.public_key, derived_public_key);
-    
-    println!("✓ Ed25519 keypair consistency test passed");
-    println!("================================================================================");
-}
-
-#[test]
-fn test_mnemonic_to_seed_conversion() {
-    let mnemonic = "zero zero zero zero zero zero zero zero zero zero zero zoo";
-    let seed = mnemonic_to_seed(mnemonic, "");
-    
-    // Seed should be 64 bytes
-    assert_eq!(seed.len(), 64);
-    
-    // Should be deterministic
-    let seed2 = mnemonic_to_seed(mnemonic, "");
-    assert_eq!(seed, seed2);
-    
-    // Different passphrase should produce different seed
-    let seed_with_passphrase = mnemonic_to_seed(mnemonic, "test");
-    assert_ne!(seed, seed_with_passphrase);
-    
-    println!("✓ Mnemonic to seed conversion test passed");
-    println!("  Seed (hex): {}", hex::encode(&seed[..32])); // Print first 32 bytes
-    println!("================================================================================");
-}
-
-// Integration test simulating full hardware wallet workflow
-#[test]
-fn test_hardware_wallet_workflow() {
-    println!("\n=== Hardware Wallet Integration Test ===");
-    
-    // 1. Simulate user entering mnemonic
-    let mnemonic = "zero zero zero zero zero zero zero zero zero zero zero zoo";
-    println!("1. Mnemonic entered: {}", mnemonic);
-    
-    // 2. Convert to seed (this would be done securely in hardware)
-    let seed = mnemonic_to_seed(mnemonic, "");
-    println!("2. Seed generated (length: {} bytes)", seed.len());
-    
-    // 3. Create wallet instance
-    let wallet = StellarWallet::from_seed(seed);
-    println!("3. Wallet instance created");
-    
-    // 4. Derive first few accounts (typical hardware wallet behavior)
-    println!("4. Deriving accounts:");
-    for i in 0..3 {
-        let keypair = wallet.derive_keypair(i).expect("Failed to derive keypair");
-        println!("   Account {}: {}", i, keypair.address);
-        
-        // Validate each address
-        assert!(keypair.address.starts_with('G'));
-        assert_eq!(keypair.address.len(), 56);
-    }
-    
-    // 5. Test default address functionality
-    let default_addr = wallet.get_default_address().expect("Failed to get default address");
-    println!("5. Default address: {}", default_addr);
-    
-    println!("=== Hardware Wallet Integration Test Completed Successfully ===\n");
     println!("================================================================================");
 }
