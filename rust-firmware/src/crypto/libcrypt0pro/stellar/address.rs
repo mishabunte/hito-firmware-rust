@@ -2,13 +2,11 @@
 
 extern crate alloc;
 
-// use ed25519_dalek::SigningKey;
-// use sha2::{Sha512};
-// use hmac::{Hmac, Mac};
 use base32::{Alphabet, encode};
 use crc::{Crc, CRC_16_XMODEM};
-use crate::crypto::ffi;
+use crate::{crypto::ffi, log_info};
 use crate::crypto::crypt0::crypt0_ed25519_derive_secret_index;
+use crate::crypto::crypt0::bytes_to_hex;
 
 // Import alloc types for no_std compatibility
 use alloc::{
@@ -67,20 +65,20 @@ impl StellarWallet {
         // BIP32 master key derivation
         let secret = self.derive_master_key()?;
 
-        crypt0_ed25519_derive_secret_index(
-            &mut secret.as_bytes().try_into().map_err(|_| StellarError::DerivationError)?,
+        let purpose_key = crypt0_ed25519_derive_secret_index(
+            &secret,
             44 | HARDENED_OFFSET,
-        );
-        crypt0_ed25519_derive_secret_index(
-            &mut secret.as_bytes().try_into().map_err(|_| StellarError::DerivationError)?,
+        ).unwrap();
+        let coin_type_key = crypt0_ed25519_derive_secret_index(
+            &purpose_key,
             STELLAR_COIN_TYPE | HARDENED_OFFSET,
-        );
-        crypt0_ed25519_derive_secret_index(
-            &mut secret.as_bytes().try_into().map_err(|_| StellarError::DerivationError)?,
+        ).unwrap();
+        let account_key = crypt0_ed25519_derive_secret_index(
+            &coin_type_key,
             account_index | HARDENED_OFFSET,
-        );
+        ).unwrap();
         // Extract the private key (first 32 bytes of the key)
-        let secret_key: [u8; 32] = secret.key[..32]
+        let secret_key: [u8; 32] = account_key[..32]
             .try_into()
             .map_err(|_| StellarError::DerivationError)?;
         
@@ -112,7 +110,7 @@ impl StellarWallet {
     }
 
     /// Derive master key from seed using HMAC-SHA512
-    fn derive_master_key(&self) -> Result<ExtendedKey, StellarError> {
+    fn derive_master_key(&self) -> Result<[u8; 64], StellarError> {
         let mut result = {
             let mut buf = [0u8; 64];
             let res = unsafe {
@@ -129,15 +127,7 @@ impl StellarWallet {
             }
             buf
         };
-
-        let key = result[..32]
-            .try_into()
-            .map_err(|_| StellarError::DerivationError)?;
-        let chain_code = result[32..]
-            .try_into()
-            .map_err(|_| StellarError::DerivationError)?;
-        
-        Ok(ExtendedKey { key, chain_code })
+        Ok(result)
     }
 
     /// Encode public key as Stellar address (starting with 'G')
@@ -167,20 +157,5 @@ impl StellarWallet {
     pub fn get_default_address(&self) -> Result<String, StellarError> {
         let keypair = self.derive_keypair(0)?;
         Ok(keypair.address)
-    }
-}
-
-#[derive(Debug)]
-struct ExtendedKey {
-    key: [u8; 32],
-    chain_code: [u8; 32],
-}
-
-impl ExtendedKey {
-    pub fn as_bytes(&self) -> [u8; 64] {
-        let mut bytes = [0u8; 64];
-        bytes[..32].copy_from_slice(&self.key);
-        bytes[32..].copy_from_slice(&self.chain_code);
-        bytes
     }
 }

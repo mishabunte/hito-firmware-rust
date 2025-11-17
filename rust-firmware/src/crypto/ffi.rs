@@ -70,6 +70,12 @@ extern "C" {
     msg_len: u16,
     digest: *mut u8
   ) -> c_int;
+  pub fn crypt0_bip39_entropy_to_mnemonic_en(
+    entropy: *const u8,
+    entropy_len: u8,
+    mnemonic: *mut u8,
+    mnemonic_len: usize
+  ) -> c_int;
 }
 
 pub const CRYPT0_OK: c_int = 0;

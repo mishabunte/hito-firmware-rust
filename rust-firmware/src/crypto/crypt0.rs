@@ -2,10 +2,31 @@ use super::ffi;
 use core::ffi::c_char;
 extern crate alloc;
 use alloc::{string::String, vec::Vec};
+use crate::log_info;
 
 const ED25519_PRIVATE_KEY_SIZE: usize = 32;
 const ED25519_CHAIN_CODE_SIZE: usize = 32;
 const ED25519_DERIVE_DATA_SIZE: usize = 1 + ED25519_PRIVATE_KEY_SIZE + 4;
+
+#[derive(Debug)]
+pub enum CryptoError {
+    InvalidSeed,
+    DerivationError,
+    AddressEncodeError,
+    CryptoError,
+}
+
+impl core::fmt::Display for CryptoError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            CryptoError::InvalidSeed => write!(f, "Invalid seed"),
+            CryptoError::DerivationError => write!(f, "Key derivation error"),
+            CryptoError::AddressEncodeError => write!(f, "Address encoding error"),
+            CryptoError::CryptoError => write!(f, "Cryptographic error"),
+        }
+    }
+}
+
 
 /// Converts bytes to lowercase hex string (e.g. [0xDE, 0xAD] → "dead")
 pub fn bytes_to_hex(bytes: &[u8]) -> String {
@@ -55,12 +76,13 @@ pub fn crypt0_bech32_encode(data: &[u8], buf: &mut [u8]) -> Result<usize, ()> {
 }
 
 pub fn crypt0_ed25519_derive_secret_index(
-    secret: &mut [u8; ED25519_PRIVATE_KEY_SIZE + ED25519_CHAIN_CODE_SIZE],
+    secret: &[u8; ED25519_PRIVATE_KEY_SIZE + ED25519_CHAIN_CODE_SIZE],
     index: u32,
-) -> i32 {
+) -> Result<[u8; ED25519_PRIVATE_KEY_SIZE + ED25519_CHAIN_CODE_SIZE], CryptoError> {
     // Only hardened indices allowed
     if index < 0x8000_0000 {
-        return -1;
+        log_info!("Invalid index: {}", index);
+        return Err(CryptoError::InvalidSeed);
     }
 
     // 0x00 || private_key || index_be
@@ -75,31 +97,26 @@ pub fn crypt0_ed25519_derive_secret_index(
         .copy_from_slice(&secret[..ED25519_PRIVATE_KEY_SIZE]);
 
     // index (big-endian) at the end
-    let idx = ED25519_PRIVATE_KEY_SIZE + 1;
-    data[idx]     = (index >> 24) as u8;
-    data[idx + 1] = (index >> 16) as u8;
-    data[idx + 2] = (index >> 8)  as u8;
-    data[idx + 3] = index as u8;
+    let idx = ED25519_PRIVATE_KEY_SIZE;
+    data[idx + 1] = ((index >> 24) & 0xFF) as u8;
+    data[idx + 2] = ((index >> 16) & 0xFF) as u8;
+    data[idx + 3] = ((index >> 8)  & 0xFF) as u8;
+    data[idx + 4] = (index & 0xFF) as u8;
 
-    let chain_code = &secret[ED25519_PRIVATE_KEY_SIZE
-        ..ED25519_PRIVATE_KEY_SIZE + ED25519_CHAIN_CODE_SIZE];
+    log_info!("Derivation data: {:x?}", bytes_to_hex(&data));
 
     let res = unsafe {
         ffi::crypt0_hmac_sha512(
-            chain_code.as_ptr(),
-            chain_code.len() as u16,
+            secret[ED25519_PRIVATE_KEY_SIZE..].as_ptr(),
+            ED25519_CHAIN_CODE_SIZE as u16,
             data.as_ptr(),
             data.len() as u16,
             hash.as_mut_ptr(),
         )
     };
     if res != ffi::CRYPT0_OK {
-        res
+        return Err(CryptoError::CryptoError);
     } else {
-        secret.copy_from_slice(
-            &hash[..ED25519_PRIVATE_KEY_SIZE + ED25519_CHAIN_CODE_SIZE]
-        );
-
-        0
+        Ok(hash)
     }
 }
