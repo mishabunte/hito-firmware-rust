@@ -14,8 +14,10 @@ import { DeviceInfoScreenView } from "DeviceInfoScreenView.slint";
 import { DeviceInfoController } from "DeviceInfoController.slint";
 import { ReceiveScreenView } from "ReceiveScreenView.slint";
 import { ReceiveDataController } from "ReceiveDataController.slint";
+import { ShowSeedScreenView } from "ShowSeedScreenView.slint";
+import { ShowSeedController } from "ShowSeedController.slint";
 
-export { BrightnessController, BatteryController, EnterPinController, DeviceInfoController, ReceiveDataController } // Export controllers and router for global access
+export { BrightnessController, BatteryController, EnterPinController, DeviceInfoController, ReceiveDataController, ShowSeedController } // Export controllers and router for global access
 
 import { VerticalBox, HorizontalBox } from "std-widgets.slint";
 import "../../../res/fonts/RobotoMono.ttf";
@@ -46,6 +48,7 @@ component BackButton inherits TransparentButton {
     in-font-size: 30px;
     text-color-pressed: Palette.black;
     text-color-unpressed: Palette.blue;
+    touch-area-ratio: 1.7;
     clicked() => {
         Router.back();
     }
@@ -74,6 +77,8 @@ export component MainWindow inherits Window {
             "PAIR WITH THE APP";
         } else if (Router.current == ScreenEnum.DeviceInfo) {
             "DEVICE INFO";
+        } else if (Router.current == ScreenEnum.ShowSeed) {
+            "YOUR SEED PHRASE";
         } else if (Router.current == ScreenEnum.Receive) {
             "YOUR ADDRESS";
         } else {
@@ -165,5 +170,6 @@ export component MainWindow inherits Window {
         if Router.current == ScreenEnum.PairWithTheApp: PairWithTheAppScreenView {}
         if Router.current == ScreenEnum.DeviceInfo: DeviceInfoScreenView {}
         if Router.current == ScreenEnum.Receive: ReceiveScreenView {}
+        if Router.current == ScreenEnum.ShowSeed: ShowSeedScreenView {}
     }
 }

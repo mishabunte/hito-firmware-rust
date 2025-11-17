@@ -19,9 +19,23 @@ export component SettingsButton {
     in-out property <string> content: "____";
     in-out property <bool> border-shown: true;
     in-out property <color> text-color-unpressed: Palette.black;
+    in-out property <float> touch-area-ratio: 1;
     in-out property <color> text-color-pressed: Palette.blue;
     in-out property <color> border-color: Palette.black;
     in-out property <length> letter-spacing: -2px;
+    TouchArea {
+        width: root.width * root.touch-area-ratio;
+        height: root.height * root.touch-area-ratio;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                pressed = true;
+            } else if (event.kind == PointerEventKind.up) {
+                pressed = false;
+                root.clicked();
+                debug("Clicked settings button");
+            }
+        }
+    }
     layout:= VerticalLayout {
       spacing: -3px;
       SettingsButtonLine {
@@ -33,19 +47,6 @@ export component SettingsButton {
       SettingsButtonLine {
         background: pressed ? Palette.blue : Palette.black;
       }
-    }
-    TouchArea {
-        width: parent.width;
-        height: parent.height;
-        pointer-event(event) => {
-            if (event.kind == PointerEventKind.down) {
-                pressed = true;
-            } else if (event.kind == PointerEventKind.up) {
-                pressed = false;
-                root.clicked();
-                debug("Clicked settings button");
-            }
-        }
     }
     callback clicked();
     clicked() => {
@@ -67,6 +68,7 @@ export component HomeScreenView {
             y: 20px;
             alignment: start;
             SettingsButton {
+                touch-area-ratio: 2.5;
                 x: 20px;
             }
         }

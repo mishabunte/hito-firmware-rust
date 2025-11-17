@@ -1,8 +1,14 @@
 use crate::drivers::{Battery, Display};
 use crate::{STATE, ui::CallbackController, hito_firmware::HitoFirmware};
 use crate::slint_generatedMainWindow::DeviceInfoController;
+use crate::slint_generatedMainWindow::ShowSeedController;
 use crate::slint_generatedMainWindow::MainWindow;
-use slint::ComponentHandle;
+extern crate alloc;
+use alloc::rc::Rc;
+use alloc::vec;
+use slint::SharedString;
+use slint::VecModel;
+use slint::{ComponentHandle, ModelRc};
 use crate::log_info;
 
 pub struct DeviceInfoCallbackController;
@@ -20,16 +26,26 @@ impl CallbackController for DeviceInfoCallbackController {
         let s = STATE.get().unwrap().lock();
         // Device info request handling
         let device_info_controller = ui.global::<DeviceInfoController>();
+        let show_seed_controller = ui.global::<ShowSeedController>();
         if s.is_device_info_requested() {
             log_info!("Providing device info to UI");
             let info = firmware.vault.get_device_info().unwrap();
-            log_info!("Device info: FW ver {}, BL ver {}, SN {}, FR count {}", 
+            let mnemonic = firmware.vault.get_mnemonic().expect("Error getting mnemonic");
+            log_info!("Mnemonic retrieved: {}\n", mnemonic);    
+            log_info!("Device info: FW ver {}, BL ver {}, SN {}, FR count {}",
                 info.firmware_version, info.bootloader_version, info.serial_number, info.factory_reset_count);
             device_info_controller.set_firmware_version(slint::SharedString::from(&info.firmware_version[10..]));
             device_info_controller.set_bootloader_version(slint::SharedString::from(&info.bootloader_version));
             device_info_controller.set_serial_number(slint::SharedString::from(&info.serial_number));
             device_info_controller.set_factory_reset_count(info.factory_reset_count);
             device_info_controller.invoke_request_factory_reset_string();
+            let the_model : Rc<VecModel<SharedString>> =
+                Rc::new(VecModel::from(mnemonic
+                    .split(' ')
+                    .map(|s| SharedString::from(s))
+                    .collect::<alloc::vec::Vec<SharedString>>()));
+            let the_model_rc = ModelRc::from(the_model.clone());
+            show_seed_controller.set_seed_phrase(the_model_rc);
             s.clear_device_info_requested();
         }
     }

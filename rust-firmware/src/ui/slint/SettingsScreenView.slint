@@ -16,10 +16,10 @@ export component SettingsScreenView {
     width: 320px;
     height: 240px;
     VerticalLayout {
-        width: 320px;
         alignment: start;
         y: 35px;
         spacing: 10px;
+        width: 240px;
         SettingsOptionButton {
             content: "Pair with the app";
             clicked => {
@@ -29,7 +29,7 @@ export component SettingsScreenView {
         SettingsOptionButton {
             content: "Show seed phrase";
             clicked => {
-                Router.navigate(ScreenEnum.Send);
+                Router.navigate(ScreenEnum.EnterPin);
             }
         }
         SettingsOptionButton {

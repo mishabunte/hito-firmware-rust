@@ -18,17 +18,17 @@ component PassChar {
         color: pressed ? text-color-pressed : text-color-unpressed;
         horizontal-alignment: center;
         vertical-alignment: center;
-        TouchArea {
-            width: parent.width;
-            height: parent.height;
-            pointer-event(event) => {
-                if (event.kind == PointerEventKind.down) {
-                    pressed = true;
-                } else if (event.kind == PointerEventKind.up) {
-                    pressed = false;
-                    root.clicked();
-                    debug("Clicked pin", content);
-                }
+    }
+    TouchArea {
+        width: parent.width * 3;
+        height: parent.height * 1.7;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                pressed = true;
+            } else if (event.kind == PointerEventKind.up) {
+                pressed = false;
+                root.clicked();
+                debug("Clicked pin", content);
             }
         }
     }

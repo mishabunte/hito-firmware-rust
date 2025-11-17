@@ -1,0 +1,74 @@
+import { Palette } from "Palette.slint";
+import { ShowSeedController } from "ShowSeedController.slint";
+import { TransparentButton } from "TransparentButton.slint";
+import { Spacer } from "Spacer.slint";
+
+component SeedWord inherits Text {
+    in-out property <int> index: 0;
+    in-out property <bool> word-visible: false;
+    in-out property <string> index-str: index + 1 < 10 ? "0" + (index + 1): (index + 1);
+    text: self.word-visible ? index-str + ". " + ShowSeedController.seed-phrase[index] : "XX. XXXXXXXX";
+    font-size: 20px;
+    color: Palette.black;
+    height: 30px;
+    TouchArea {
+        width: parent.width;
+        height: parent.height;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                ShowSeedController.all-words-hidden = false;
+                word-visible = !word-visible;
+            } else if (event.kind == PointerEventKind.up) {
+                debug("Clicked pin", root.text);
+            }
+        }
+    }
+    visible: index < ShowSeedController.seed-phrase.length;
+}
+
+export component ShowSeedScreenView {
+    width: 320px;
+    height: 240px;
+    HorizontalLayout {
+      x: 5px;
+      alignment: start;
+      VerticalLayout {
+        y: 60px;
+        alignment: start;
+        width: parent.width / 2;
+        SeedWord { index: 0 + ShowSeedController.page-number * 8;  }
+        SeedWord { index: 1 + ShowSeedController.page-number * 8;  }
+        SeedWord { index: 2 + ShowSeedController.page-number * 8;  }
+        SeedWord { index: 3 + ShowSeedController.page-number * 8;  }
+      }
+    }
+    HorizontalLayout {
+      x: 10px;
+      alignment: end;
+      VerticalLayout {
+        y: 60px;
+        alignment: start;
+        width: parent.width / 2;
+        SeedWord { index: 4 + ShowSeedController.page-number * 8;  }
+        SeedWord { index: 5 + ShowSeedController.page-number * 8;  }
+        SeedWord { index: 6 + ShowSeedController.page-number * 8;  }
+        SeedWord { index: 7 + ShowSeedController.page-number * 8;  }
+        Spacer {
+          height: 20px;
+        }
+        TransparentButton {
+          x: 10px;
+            content: "Next Page";
+            text-color-pressed: Palette.black;
+            text-color-unpressed: Palette.blue;
+            clicked => {
+                if (ShowSeedController.page-number < (ShowSeedController.seed-phrase.length) / 8 - 1) {
+                    ShowSeedController.page-number += 1;
+                } else {
+                    ShowSeedController.page-number = 0;
+                }
+            }
+        }
+      }
+    }
+}

@@ -4,10 +4,12 @@ import { StartScreen } from "StartScreen.slint";
 export global Router {
     callback navigate(page: ScreenEnum);
     in-out property <ScreenEnum> current: StartScreen.screen;
+    in-out property <ScreenEnum> previous: StartScreen.screen;
     callback back();
 
     // Handle navigation
     navigate(to) => {
+        previous = current;
         current = to;
     }
     back() => {
@@ -15,7 +17,7 @@ export global Router {
         if current == ScreenEnum.Send || current == ScreenEnum.Receive || current == ScreenEnum.Settings {
             current = ScreenEnum.Home;
         }
-        else if current == ScreenEnum.PairWithTheApp || current == ScreenEnum.DeviceInfo {
+        else if current == ScreenEnum.PairWithTheApp || current == ScreenEnum.DeviceInfo || current == ScreenEnum.ShowSeed {
             current = ScreenEnum.Settings;
         }
         else {

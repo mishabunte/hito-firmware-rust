@@ -11,10 +11,12 @@ export global EnterPinController {
   callback set-progress(progress: int);
   callback reset();
   unlock(result) => {
-      if result {
-          Router.navigate(ScreenEnum.Home);
-      } else {
+      if !result {
           wrong-passcode = true;
+      } else if Router.previous == ScreenEnum.Lock {
+          Router.navigate(ScreenEnum.Home);
+      } else if Router.previous == ScreenEnum.Settings{
+          Router.navigate(ScreenEnum.ShowSeed);
       }
       reset();
   }
