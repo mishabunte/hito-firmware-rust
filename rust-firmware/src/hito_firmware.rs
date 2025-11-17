@@ -5,6 +5,8 @@ use crate::drivers::{ Indicator, IndicatorImpl, LedColor, BlinkSpeed };
 
 //use crate::lib::crypt0;
 
+use crate::crypto::crypt0::hex_to_bytes;
+
 #[cfg(feature = "zephyr")]
 use crate::drivers::zephyr::logging;
 use crate::vault::vault::HitoVault;
@@ -39,7 +41,8 @@ impl HitoFirmware {
         self.vault.initialize();
         #[cfg(feature = "minifb")]
         {
-            self.vault.set_passcode(b"000000", None).expect("Failed to set passcode");
+            self.vault.set_entropy(hex_to_bytes("ffbff7feffdffbff7feffdffbff7feff").unwrap().as_slice(), 16);
+            self.vault.set_passcode(b"000000").expect("Failed to set passcode");
         }
 
         #[cfg(feature = "zephyr")]

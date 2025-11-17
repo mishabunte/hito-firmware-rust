@@ -2,6 +2,7 @@ use core::cell::Cell;
 use core::ptr;
 use core::slice;
 use crate::crypto;
+use crate::crypto::crypt0::bytes_to_hex;
 use crate::crypto::crypt0::hex_to_bytes;
 use crate::log_info;
 use crate::now_us;
@@ -108,6 +109,7 @@ pub enum VaultError {
     InvalidKeyLength,
     BlockNotFound,
     VaultLocked,
+    InvalidMnemonicUtf8
 }
 
 pub type VaultResult<T> = Result<T, VaultError>;
@@ -175,6 +177,8 @@ impl UnlockJob {
 
     /// Advance a small chunk. Returns Some(progress) when a visible change happened.
     fn poll(&mut self) -> Option<u8> {
+      log_info!("UnlockJob poll: phase={:?}, step_idx={}, hw_iters_left_in_this_step={}, pbkdf2_iters_left_in_this_step={}, total_steps={}",
+        self.phase, self.step_idx, self.hw_iters_left_in_this_step, self.pbkdf2_iters_left_in_this_step, self.steps_total);
     let start = (self.now)();            // monotonic tick (provide this)
     let budget_us = 40000;                  // ~40 ms per UI tick (tune)
 
@@ -225,6 +229,7 @@ impl UnlockJob {
                     self.pbkdf2_iters_left_in_this_step = 10;
 
                     if self.step_idx >= self.steps_total {
+                        log_info!("All steps done, moving to Finalize phase, steps_total={}, current_step={}", self.steps_total, self.step_idx);
                         self.phase = UnlockPhase::Finalize;
                     }
 
@@ -233,6 +238,7 @@ impl UnlockJob {
             }
 
             UnlockPhase::Finalize => {
+                log_info!("Finalizing vault unlock");
                 match HitoVault::block_decrypt_with_key(&self.block, &self.key) {
                     Ok(decrypted) => {
                         self.decrypted = Some(decrypted);
@@ -386,6 +392,7 @@ impl HitoVault {
           return Err(VaultError::EmptyVault);
         }
         // Return the previous block (last valid one)
+        log_info!("Found last valid vault block at index {}", i - 1);
         return Ok(&vault_slice[i - 1]);
       }
     }
@@ -438,6 +445,10 @@ impl HitoVault {
     self.unlock_job.is_none()
   }
 
+  pub fn reset_unlock_job(&mut self) {
+    self.unlock_job = None;
+  }
+
   pub fn block_decrypt(
     block: &VaultEncryptedBlock,
     passcode: &[u8]
@@ -488,7 +499,7 @@ impl HitoVault {
     entropy_len: entropy_len_t,
     entropy: &[u8],
     seed: &[u8],
-    pass: &[u8]
+    pass: &[u8],
   ) -> VaultResult<()> {
     // Set magic based on entropy length
     block.magic = match entropy_len {
@@ -553,11 +564,12 @@ impl HitoVault {
   }
 
   pub fn start_unlock(&mut self, password: &[u8]) -> VaultResult<()> {
-      let block = *self.last_block()?; // copies the block into RAM
+      let block = self.last_block()?; // copies the block into RAM
       if password.is_empty() || password.len() > 32 {
           return Err(VaultError::InvalidKeyLength);
       }
       self.unlock_job = Some(UnlockJob::new(&block, password));
+      log_info!("Starting unlock job with password: {:?}", bytes_to_hex(password));
       // Optional: immediately report 0% for UI
       // self.set_progress(0);
       Ok(())
@@ -570,6 +582,7 @@ impl HitoVault {
       };
 
       if let Some(p) = job.poll() {
+          log_info!("Current phase: {:?}, progress: {}%", job.phase, p);
           // If the job reached Done, take it and commit results while holding &mut self.
           if matches!(job.phase, UnlockPhase::Done) {
               let job = self.unlock_job.take().unwrap();
@@ -578,15 +591,41 @@ impl HitoVault {
                   Ok(()) => {
                       // Commit decrypted bytes into the vault state
                       let decrypted = job.decrypted.expect("decrypted present on Ok");
+                      match (job.block.magic) {
+                          HITO_VAULT_HEADER_MAGIC_12_WORDS_V1 => {
+                              self.entropy_len = entropy_len_t::ENTROPY_LEN_16;
+                          }
+                          HITO_VAULT_HEADER_MAGIC_12_WORDS_ALPHA => {
+                              self.entropy_len = entropy_len_t::ENTROPY_LEN_16;
+                          }
+                          HITO_VAULT_HEADER_MAGIC_18_WORDS_V1 => {
+                              self.entropy_len = entropy_len_t::ENTROPY_LEN_24;
+                          }
+                          HITO_VAULT_HEADER_MAGIC_18_WORDS_ALPHA => {
+                              self.entropy_len = entropy_len_t::ENTROPY_LEN_24;
+                          }
+                          HITO_VAULT_HEADER_MAGIC_24_WORDS_V1 => {
+                              self.entropy_len = entropy_len_t::ENTROPY_LEN_32;
+                          }
+                          HITO_VAULT_HEADER_MAGIC_24_WORDS_ALPHA => {
+                              self.entropy_len = entropy_len_t::ENTROPY_LEN_32;
+                          }
+                          _ => return Err(VaultError::CryptoError),
+                      }
                       let entropy_len = self.entropy_len as usize;
                       if entropy_len == 0 || entropy_len > 32 {
                           return Err(VaultError::InvalidKeyLength);
                       }
                       self.entropy[..entropy_len].copy_from_slice(&decrypted[..entropy_len]);
                       self.seed.copy_from_slice(&decrypted[32..]);
+                      self.save_vault_data()?;
                       self.vaultIsUnlocked = true;
+
                   }
-                  Err(e) => return Err(e),
+                  Err(e) => {
+                    log_info!("Unlock failed with error: {:?}", e);
+                    return Err(e)
+                  }
               }
           }
           return Ok(Some(p));
@@ -782,7 +821,7 @@ impl HitoVault {
 
     // Encrypt flash block
     self.block_encrypt(&mut block_flash, entropy_enum.clone(), entropy, seed, new_pass)?;
-    
+
     // Encrypt RAM block
     self.block_encrypt(&mut block_ram, entropy_enum, entropy, seed, new_pass)?;
 
@@ -792,11 +831,67 @@ impl HitoVault {
     Ok(())
   }
 
+  pub fn set_seed(&mut self, seed: &[u8]) {
+    self.seed[..64].copy_from_slice(&seed[..64]);
+  }
+
+  pub fn set_entropy(&mut self, entropy: &[u8], entropy_len: usize) {
+    self.entropy[..entropy_len].copy_from_slice(&entropy[..entropy_len]);
+    self.entropy_len = match entropy_len {
+      16 => entropy_len_t::ENTROPY_LEN_16,
+      24 => entropy_len_t::ENTROPY_LEN_24,
+      32 => entropy_len_t::ENTROPY_LEN_32,
+      _ => entropy_len_t::ENTROPY_LEN_32, // Default to 32 if invalid
+    };
+  }
+
+  fn save_mnemonic(&mut self) -> VaultResult<()> {
+    log_info!("Saving mnemonic");
+    let result = unsafe {
+      let mut mnemonic_buf = [0u8; 215];
+      let len = mnemonic_buf.len();
+      let rc = crypto::ffi::crypt0_bip39_entropy_to_mnemonic_en(
+        self.entropy.as_ptr(),
+        self.entropy_len as u8,
+        mnemonic_buf.as_mut_ptr(),
+        mnemonic_buf.len()
+      );  
+      log_info!("Converted entropy to mnemonic, len : {}", rc);
+      if rc < crypto::ffi::CRYPT0_OK {
+        return Err(VaultError::CryptoError);
+      }
+      self.mnemonic[..len].copy_from_slice(&mnemonic_buf[..len]);
+      log_info!("Mnemonic saved: {:?}", &self.mnemonic[..len]);
+    };
+    Ok(())
+  }
+
+  fn save_vault_data(&mut self) -> VaultResult<()> {
+    log_info!("Saving vault data");
+    self.save_mnemonic()?;
+    log_info!("Vault data saved successfully");
+    Ok(())
+  }
+
+
+  pub fn get_mnemonic(&self) -> VaultResult<alloc::string::String> {
+      log_info!("Getting mnemonic");
+      if !self.is_unlocked() {
+          log_info!("Vault is locked, cannot get mnemonic");
+          return Err(VaultError::VaultLocked);
+      }
+
+      let mnemonic_str = match core::str::from_utf8(&self.mnemonic) {
+          Ok(s) => alloc::string::String::from(s),
+          Err(_) => return Err(VaultError::InvalidMnemonicUtf8),
+      };
+      Ok(mnemonic_str)
+  }
+
   /// Set a new passcode for the vault
   pub fn set_passcode(
     &mut self,
-    new_pass: &[u8],
-    progress_handler: Option<fn(u8)>
+    new_pass: &[u8]
   ) -> VaultResult<()> {
     // If vault is empty but we have entropy, generate seed from entropy
     if self.is_empty() && self.entropy_len as usize != 0 {
@@ -818,14 +913,6 @@ impl HitoVault {
       
       //self.vaultIsUnlocked = true;
     }
-    #[cfg(feature = "minifb")]
-    if let Some(bytes) = hex_to_bytes("38b6a363e88b28138cc71f0145ab429c251baa8cd8fa6d80bcfb39c35076f1766e24dfc01ce0e22e8dfec185ad7a67ce748cd6551ad1b738619b8859808bbf88") {
-      // Make sure we actually got 64 bytes
-      assert_eq!(bytes.len(), 64, "seed hex must be 64 bytes");
-
-      // self.seed: [u8; 64]
-      self.seed.copy_from_slice(&bytes);
-    } 
 
     // Check if vault is unlocked
     // if !self.vaultIsUnlocked {
@@ -852,7 +939,6 @@ impl HitoVault {
     
     // Decrypt the block
     let decrypted = HitoVault::block_decrypt(block, password)?;
-    
     // Parse the decrypted data (entropy + seed) and store in vault
     // The first 32 bytes are entropy, next 64 bytes are seed
     let entropy_len = self.entropy_len as usize;
