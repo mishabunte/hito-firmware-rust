@@ -55,14 +55,9 @@ static BASE_STACK_REMAINING: AtomicUsize = AtomicUsize::new(8388608);
 
 use spin::{Once, Mutex};
 
-static STATE: Once<Mutex<FirmwareState>> = Once::new();
+use crate::ui::UI_CALLBACK_CONTROLLERS;
 
-static UI_CALLBACK_CONTROLLERS: &[&dyn CallbackController] = &[
-    &MainCallbackController,
-    &EnterPinCallbackController,
-    &DeviceInfoCallbackController,
-    &ReceiveDataCallbackController,
-];
+static STATE: Once<Mutex<FirmwareState>> = Once::new();
 
 #[cfg(feature = "minifb")]
 pub fn init_stack_baseline() {

@@ -1,6 +1,6 @@
 use crate::drivers::Display;
 use crate::{STATE, ui::CallbackController, hito_firmware::HitoFirmware};
-use crate::slint_generatedMainWindow::EnterPinController;
+use crate::slint_generatedMainWindow::EnterPinState;
 use crate::slint_generatedMainWindow::MainWindow;
 use slint::ComponentHandle;
 use crate::{firmware_state, log_info};
@@ -11,21 +11,21 @@ pub struct EnterPinCallbackController;
 impl CallbackController for EnterPinCallbackController {
     fn register_main_window_callbacks(&self, ui: &MainWindow, firmware: &mut HitoFirmware) {
         // PIN input mechanics
-        ui.global::<EnterPinController>().on_append_char(move |digit: i32| {
+        ui.global::<EnterPinState>().on_append_char(move |digit: i32| {
             let s = STATE.get().unwrap().lock();
             s.append_to_pin(digit);
             log_info!("PIN code updated: {}", s.get_pin());
         });
 
         // Remove last char
-        ui.global::<EnterPinController>().on_remove_char(move || {
+        ui.global::<EnterPinState>().on_remove_char(move || {
             let s = STATE.get().unwrap().lock();
             s.remove_pin_char();
             log_info!("PIN code updated: {}", s.get_pin());
         });
 
         // Mark password is entered
-        ui.global::<EnterPinController>().on_passcode_entered(move || {
+        ui.global::<EnterPinState>().on_passcode_entered(move || {
             let s = STATE.get().unwrap().lock();
             s.mark_unlock_requested();
             log_info!("Passcode entered, requesting unlock");
@@ -33,7 +33,7 @@ impl CallbackController for EnterPinCallbackController {
     }
     fn handle_loop_events(&self, ui: &MainWindow, firmware: &mut HitoFirmware) {
         let s = STATE.get().unwrap().lock();
-        let pin_controller = ui.global::<EnterPinController>();
+        let pin_controller = ui.global::<EnterPinState>();
         // When the UI marks unlock requested:
         if s.is_unlock_in_progress() {
             // Start job once
@@ -54,7 +54,7 @@ impl CallbackController for EnterPinCallbackController {
             match firmware.vault.poll_unlock() {
                 Ok(Some(p)) => {
                     // You can update Slint progress here too, or rely on vault.set_progress callback
-                    ui.global::<EnterPinController>().invoke_set_progress(p as i32);
+                    ui.global::<EnterPinState>().invoke_set_progress(p as i32);
                 }
                 Ok(None) => {
                     // nothing changed this tick
@@ -65,7 +65,7 @@ impl CallbackController for EnterPinCallbackController {
                     pin_controller.set_wrong_passcode(true);
                     pin_controller.invoke_set_progress(0);
                     s.unlock_finished();
-                    ui.global::<EnterPinController>().invoke_unlock(false);
+                    ui.global::<EnterPinState>().invoke_unlock(false);
                 }
             }
             // If finished successfully, mark UI
@@ -75,7 +75,7 @@ impl CallbackController for EnterPinCallbackController {
                 pin_controller.invoke_set_progress(-1);
                 s.mark_device_info_requested();
                 s.unlock_finished();
-                ui.global::<EnterPinController>().invoke_unlock(true);
+                ui.global::<EnterPinState>().invoke_unlock(true);
                 firmware.vault.reset_unlock_job();
             }
         }

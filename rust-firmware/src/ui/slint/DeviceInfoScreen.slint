@@ -1,6 +1,25 @@
-import { DeviceInfoController } from "DeviceInfoController.slint";
 import { Spacer } from "Spacer.slint";
 import { Palette } from "Palette.slint";
+
+export global DeviceInfoState {
+    in-out property <string> firmware-version;
+    in-out property <string> bootloader-version;
+    in-out property <string> serial-number;
+    in-out property <int> factory-reset-count: 0;
+    callback request-device-info();
+    callback request-factory-reset-string();
+    in-out property <string> factory-reset-string: {
+      if factory-reset-count < 0 {
+          "Factory reset no data";
+      } else if factory-reset-count == 0 {
+          "Factory setup";
+      } else if factory-reset-count > 30 {
+          "Factory reset 30+ times";
+      } else {
+          "Factory reset " + (factory-reset-count - 1) + " times";
+      }
+    }
+}
 
 export component DeviceInfoScreenView {
     // Indicate this is not the lock screen
@@ -18,7 +37,7 @@ export component DeviceInfoScreenView {
         padding-top: 60px; 
 
         Text {
-            text: "Firmware: " + DeviceInfoController.firmware-version;
+            text: "Firmware: " + DeviceInfoState.firmware-version;
             font-size: 20px;
             font-weight: 600;
             vertical-alignment: center;
@@ -26,7 +45,7 @@ export component DeviceInfoScreenView {
             color: #000000;
         }
         Text {
-            text: "Bootloader: " + DeviceInfoController.bootloader-version;
+            text: "Bootloader: " + DeviceInfoState.bootloader-version;
             font-size: 20px;
             font-weight: 600;
             vertical-alignment: center;
@@ -43,7 +62,7 @@ export component DeviceInfoScreenView {
             horizontal-alignment: center;
         }
         Text {
-            text: DeviceInfoController.serial-number;
+            text: DeviceInfoState.serial-number;
             font-size: 20px;
             font-weight: 600;
             color: Palette.blue;
@@ -52,7 +71,7 @@ export component DeviceInfoScreenView {
         }
         Spacer { height: 5px; }
         Text {
-            text: DeviceInfoController.factory-reset-string;
+            text: DeviceInfoState.factory-reset-string;
             font-size: 20px;
             font-weight: 600;
             color: #000000;

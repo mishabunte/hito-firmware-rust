@@ -371,7 +371,7 @@ impl HitoVault {
        }
   }
 
-  pub fn initialize(&mut self) {
+  pub fn init(&mut self) {
     if !self.initialized {
       Self::rust_hw_unique_key_is_written_impl();
       self.initialized = true;

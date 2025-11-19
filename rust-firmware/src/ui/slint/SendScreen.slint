@@ -5,6 +5,22 @@ import { VerticalBox } from "std-widgets.slint";
 import { BaseButton } from "BaseButton.slint";
 import { Spacer } from "Spacer.slint";
 
+export enum Protocol {
+    Bluetooth,
+    NFC
+}
+
+export global SendScreenState {
+  in-out property <Protocol> current-protocol: Protocol.NFC;
+  in-out property <string> error-message;
+  in-out property <bool> error-occurred;
+  callback protocol-changed();
+  callback send-requested();
+  send-requested => {
+    Router.navigate(ScreenEnum.SendStellar);
+  }
+}
+
 component TextWithBackground inherits Text {
     in-out property<string> header-title: self.text;
     property <length> text-width: self.width;
@@ -15,9 +31,6 @@ component TextWithBackground inherits Text {
         background: Palette.white;
         width: 1.1 * parent.text-width;
         height: 1.5 * parent.text-height;
-        // border-color: Palette.green;
-        // border-width: 2px;
-        // border-radius: 10px;
         textProp := Text {
             text: header-title;
             font-size: root.font-size;
@@ -29,11 +42,6 @@ component TextWithBackground inherits Text {
             vertical-alignment: center;
         }
     }
-}
-
-enum Protocol {
-    Bluetooth,
-    NFC
 }
 
 export component SwitchButton {
@@ -70,12 +78,11 @@ export component SwitchButton {
 export component SendScreenView {
     width: 320px;
     height: 240px;
-    in-out property <Protocol> current-protocol: Protocol.NFC;
     // show-brightness: true; // Show brightness control on home screen
     // header-title: "SEND CRYPTO";
-    in property <image> image-src: current-protocol == Protocol.NFC ? @image-url("../../../res/img/nfc.png") : @image-url("../../../res/img/bt_logo.png");
-    in-out property <string> current-protocol-name: current-protocol == Protocol.NFC ? "NFC" : "Bluetooth";
-    in-out property <string> next-protocol-name: current-protocol == Protocol.NFC ? "Bluetooth" : "NFC";
+    in property <image> image-src: SendScreenState.current-protocol == Protocol.NFC ? @image-url("../../../res/img/nfc.png") : @image-url("../../../res/img/bt_logo.png");
+    in-out property <string> current-protocol-name: SendScreenState.current-protocol == Protocol.NFC ? "NFC" : "Bluetooth";
+    in-out property <string> next-protocol-name: SendScreenState.current-protocol == Protocol.NFC ? "Bluetooth" : "NFC";
     HorizontalLayout {
       alignment: center;
       y: 35px;
@@ -94,35 +101,38 @@ export component SendScreenView {
           height: 30px;
         }
       }
+      visible: !SendScreenState.error-occurred;
+    }
+    Text {
+      width: root.width;
+      height: root.height;
+      text: SendScreenState.error-message;
+      font-size: 20px;
+      font-weight: 500;
+      horizontal-alignment: center;
+      wrap: word-wrap;
+      vertical-alignment: center;
+      visible: SendScreenState.error-occurred;
     }
     Image {
       source: image-src;
       horizontal-alignment: center;
       vertical-alignment: center;
+      visible: !SendScreenState.error-occurred;
     }
     HorizontalLayout {}
     SwitchButton {
         content: "Switch to " + next-protocol-name;
         y: 190px;
         clicked => {
-          if (current-protocol == Protocol.NFC) {
-              current-protocol = Protocol.Bluetooth;
+          debug("Switch button clicked");
+          SendScreenState.protocol-changed();
+          if (SendScreenState.current-protocol == Protocol.NFC) {
+              SendScreenState.current-protocol = Protocol.Bluetooth;
           } else {
-              current-protocol = Protocol.NFC;
+              SendScreenState.current-protocol = Protocol.NFC;
           }
         }
+        visible: !SendScreenState.error-occurred;
     }
-    // SwitchButton {
-    //   content: "Switch to " + next-protocol-name;
-    //   button-height: 40px;
-    //   button-width: 270px;
-    //   y: 190px;
-    //   clicked => {
-    //     if (current-protocol == Protocol.NFC) {
-    //         current-protocol = Protocol.Bluetooth;
-    //     } else {
-    //         current-protocol = Protocol.NFC;
-    //     }
-    //   }
-    // }
 }

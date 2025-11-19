@@ -100,7 +100,7 @@ impl StellarWallet {
         };
         
         // Generate Stellar address
-        let address = self.encode_stellar_address(&public_key)?;
+        let address = StellarWallet::encode_stellar_address(&public_key)?;
         
         Ok(StellarKeypair {
             secret_key,
@@ -131,7 +131,7 @@ impl StellarWallet {
     }
 
     /// Encode public key as Stellar address (starting with 'G')
-    fn encode_stellar_address(&self, public_key: &[u8; 32]) -> Result<String, StellarError> {
+    pub fn encode_stellar_address(public_key: &[u8; 32]) -> Result<String, StellarError> {
         // Stellar uses account ID version byte (6 << 3 = 48)
         let version_byte = 6u8 << 3; // 48 in decimal
         

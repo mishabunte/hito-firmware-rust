@@ -3,7 +3,7 @@ import { BaseButton } from "BaseButton.slint";
 import { TransparentButton } from "TransparentButton.slint";
 import { Router } from "Router.slint";
 import { ScreenEnum } from "ScreenEnum.slint";
-import { ReceiveDataController } from "ReceiveDataController.slint";
+import { ReceiveDataState } from "ReceiveScreen.slint";
 import { Spacer } from "Spacer.slint";
 
 
@@ -98,7 +98,7 @@ export component HomeScreenView {
           border-color-pressed: Palette.blue;
           border-color-unpressed: Palette.black;
           clicked => {
-            ReceiveDataController.request-receive-data();
+            ReceiveDataState.request-receive-data();
             Router.navigate(ScreenEnum.Receive);
           }
         }

@@ -1,13 +1,18 @@
 import { Palette } from "Palette.slint";
-import { ShowSeedController } from "ShowSeedController.slint";
 import { TransparentButton } from "TransparentButton.slint";
 import { Spacer } from "Spacer.slint";
+
+export global ShowSeedState {
+  in-out property <[string]> seed-phrase: ["word1", "word2", "word3", "word4", "word5", "word6", "word7", "word8", "word9", "word10", "word11", "word12"];
+  in-out property <int> page-number: 0;
+  in-out property <bool> all-words-hidden: true;
+}
 
 component SeedWord inherits Text {
     in-out property <int> index: 0;
     in-out property <bool> word-visible: false;
     in-out property <string> index-str: index + 1 < 10 ? "0" + (index + 1): (index + 1);
-    text: self.word-visible ? index-str + ". " + ShowSeedController.seed-phrase[index] : "XX. XXXXXXXX";
+    text: self.word-visible ? index-str + ". " + ShowSeedState.seed-phrase[index] : "xx. xxxxxxxx";
     font-size: 20px;
     color: Palette.black;
     height: 30px;
@@ -16,14 +21,14 @@ component SeedWord inherits Text {
         height: parent.height;
         pointer-event(event) => {
             if (event.kind == PointerEventKind.down) {
-                ShowSeedController.all-words-hidden = false;
+                ShowSeedState.all-words-hidden = false;
                 word-visible = !word-visible;
             } else if (event.kind == PointerEventKind.up) {
                 debug("Clicked pin", root.text);
             }
         }
     }
-    visible: index < ShowSeedController.seed-phrase.length;
+    visible: index < ShowSeedState.seed-phrase.length;
 }
 
 export component ShowSeedScreenView {
@@ -36,10 +41,10 @@ export component ShowSeedScreenView {
         y: 60px;
         alignment: start;
         width: parent.width / 2;
-        SeedWord { index: 0 + ShowSeedController.page-number * 8;  }
-        SeedWord { index: 1 + ShowSeedController.page-number * 8;  }
-        SeedWord { index: 2 + ShowSeedController.page-number * 8;  }
-        SeedWord { index: 3 + ShowSeedController.page-number * 8;  }
+        SeedWord { index: 0 + ShowSeedState.page-number * 8;  }
+        SeedWord { index: 1 + ShowSeedState.page-number * 8;  }
+        SeedWord { index: 2 + ShowSeedState.page-number * 8;  }
+        SeedWord { index: 3 + ShowSeedState.page-number * 8;  }
       }
     }
     HorizontalLayout {
@@ -49,10 +54,10 @@ export component ShowSeedScreenView {
         y: 60px;
         alignment: start;
         width: parent.width / 2;
-        SeedWord { index: 4 + ShowSeedController.page-number * 8;  }
-        SeedWord { index: 5 + ShowSeedController.page-number * 8;  }
-        SeedWord { index: 6 + ShowSeedController.page-number * 8;  }
-        SeedWord { index: 7 + ShowSeedController.page-number * 8;  }
+        SeedWord { index: 4 + ShowSeedState.page-number * 8;  }
+        SeedWord { index: 5 + ShowSeedState.page-number * 8;  }
+        SeedWord { index: 6 + ShowSeedState.page-number * 8;  }
+        SeedWord { index: 7 + ShowSeedState.page-number * 8;  }
         Spacer {
           height: 20px;
         }
@@ -62,10 +67,10 @@ export component ShowSeedScreenView {
             text-color-pressed: Palette.black;
             text-color-unpressed: Palette.blue;
             clicked => {
-                if (ShowSeedController.page-number < (ShowSeedController.seed-phrase.length) / 8 - 1) {
-                    ShowSeedController.page-number += 1;
+                if (ShowSeedState.page-number < (ShowSeedState.seed-phrase.length) / 8 - 1) {
+                    ShowSeedState.page-number += 1;
                 } else {
-                    ShowSeedController.page-number = 0;
+                    ShowSeedState.page-number = 0;
                 }
             }
         }

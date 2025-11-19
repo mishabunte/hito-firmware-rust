@@ -16,8 +16,6 @@ pub use indicator::{Indicator, LedColor, BlinkSpeed};
 mod battery;
 pub use battery::Battery;
 
-mod hito_ble;
-pub use hito_ble::HitoBLE;
 
 pub mod logging;
 

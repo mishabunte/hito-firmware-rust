@@ -1,6 +1,11 @@
-import {TestScreen2View} from "TestScreen2View.slint";
+import {TestScreen2View} from "TestScreen2.slint";
 import { BaseButton } from "BaseButton.slint";
-import { ReceiveDataController } from "ReceiveDataController.slint";
+
+export global ReceiveDataState {
+    in-out property <string> address-short;
+    callback request-receive-data();
+    in-out property <bool> qr-data-requested: false;
+}
 
 export component ReceiveScreenView {
     width: 320px;
@@ -9,7 +14,7 @@ export component ReceiveScreenView {
       alignment: end;
       y: -10px;
       Text {
-          text: ReceiveDataController.address-short;
+          text: ReceiveDataState.address-short;
           font-size: 20px;
           horizontal-alignment: center;
           vertical-alignment: center;

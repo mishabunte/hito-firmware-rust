@@ -1,5 +1,5 @@
 import { ScreenEnum } from "ScreenEnum.slint";
-import { StartScreen } from "StartScreen.slint";
+import { StartScreen } from "SetStartScreen.slint";
 
 export global Router {
     callback navigate(page: ScreenEnum);
@@ -19,6 +19,12 @@ export global Router {
         }
         else if current == ScreenEnum.PairWithTheApp || current == ScreenEnum.DeviceInfo || current == ScreenEnum.ShowSeed {
             current = ScreenEnum.Settings;
+        }
+        else if current == ScreenEnum.SendStellar {
+            current = ScreenEnum.Home;
+        }
+        else if current == ScreenEnum.ErrorSending {
+            current = ScreenEnum.Home;
         }
         else {
             current = ScreenEnum.Lock;

@@ -45,6 +45,7 @@ pub struct FirmwareState {
   is_unlocked: Cell<bool>,
   device_info_requested: Cell<bool>,
   qr_data_requested: Cell<bool>,
+  protocol_requested: Cell<bool>, // 0 - NFC, 1 - Bluetooth
 }
 
 impl FirmwareState {
@@ -57,6 +58,7 @@ impl FirmwareState {
           is_unlocked: Cell::new(false),
           device_info_requested: Cell::new(false),
           qr_data_requested: Cell::new(false),
+          protocol_requested: Cell::new(false),
       }
   }
   pub fn set_brightness(&self, v: u8)                 { self.brightness.set(Some(v)); }
@@ -76,6 +78,15 @@ impl FirmwareState {
   pub fn unlock_finished(&self) {
       self.unlock_req.set(false);
       self.pin.borrow_mut().clear();
+  }
+  pub fn mark_protocol_requested(&self) {
+      self.protocol_requested.set(true);
+  }
+  pub fn is_protocol_change_requested(&self) -> bool {
+      self.protocol_requested.get()
+  }
+  pub fn clear_protocol_change_requested(&self) {
+      self.protocol_requested.set(false);
   }
   pub fn is_qr_data_requested(&self) -> bool     { self.qr_data_requested.get() }
   pub fn mark_qr_data_requested(&self)          { self.qr_data_requested.set(true); }
