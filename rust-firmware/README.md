@@ -15,6 +15,7 @@ Cross-platform rust firmware for hito hardware wallet, designed for both desktop
   - `libcrypt0_pro/` – High-level crypto operations for various blockchains (BTC, Ethereum, Solana, NEAR, TON)
 - `src/` – Core firmware written in Rust, including UI components and hardware abstractions
 - `resources/` – Assets (fonts, images, and configuration files)
+- `tests/` - Desktop functionality tests and helping scripts
 
 ---
 
@@ -25,12 +26,14 @@ Cross-platform rust firmware for hito hardware wallet, designed for both desktop
 - Rust toolchain (https://rustup.rs)
 - Cargo (included with Rust)
 - Zephyr RTOS SDK (optional for hardware integration)
+- Optional: pyqt6 Python library for Hito Communication Emulator
+ 
 
 ### Setup
 
 ```bash
-git clone https://github.com/yourusername/hito-firmware.git
-cd hito-firmware
+git clone https://github.com/yourusername/hito-firmware-rust.git
+cd hito-firmware-rust
 cargo build
 ```
 
@@ -53,15 +56,29 @@ Hardware driver abstractions allow seamless switching between simulated and actu
 ### Cryptography
 `libcrypt0` and `libcrypt0_pro` provide essential cryptographic functionalities, designed for performance and security.
 
+## Hito Communication Emulator
+- Under `tests/` folder there is a `communication_emulator.py` script that launches __"Hito Communication Emulator"__ desktop app
+### Prerequisites:
+- Python 3.9 (or higher)
+- PyQt6 Python library
+### Setup
+- After cloning the repo:
+```bash
+cd rust-firmware/tests/
+pip install PyQt6
+python communication_emulator.py
+```
+
+
 ---
 
 ## Roadmap
 
 - [x] Initial simulator for macOS
-- [ ] Integration with Zephyr RTOS 
-- [ ] - Display driver support
-- [ ] - Touch driver support
-- [ ] Linux simulator support
+- [x] Integration with Zephyr RTOS 
+- [x] - Display driver support
+- [x] - Touch driver support
+- [x] Linux simulator support
 - [ ] Expanded blockchain support
 - [ ] Enhanced UI and UX
 

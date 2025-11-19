@@ -151,7 +151,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("Hito Socket Client (PyQt6)")
+        self.setWindowTitle("Hito Communication Emulator")
 
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
