@@ -60,6 +60,8 @@ set(DRIVER_SOURCES
   ${ZEPHYR_DRIVERS_DIR}/hito_pin_config.c
   ${ZEPHYR_DRIVERS_DIR}/timer.c
   ${ZEPHYR_DRIVERS_DIR}/hito_battery.c
+  ${ZEPHYR_DRIVERS_DIR}/hito_nfc.c
+  ${ZEPHYR_DRIVERS_DIR}/hito_ble.c
 )
 
 # Main application sources
@@ -110,3 +112,6 @@ target_include_directories(app PRIVATE
 
 target_sources(app PRIVATE ${SOURCE_FILES} ${LIBCRYPT0_SOURCES})
 target_link_libraries(app PUBLIC hito_firmware_rust)
+
+target_compile_options(app PRIVATE -Os -ffunction-sections -fdata-sections)
+target_link_options(app PRIVATE -Wl,--gc-sections)
