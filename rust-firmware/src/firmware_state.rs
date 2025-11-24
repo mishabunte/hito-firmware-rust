@@ -45,7 +45,8 @@ pub struct FirmwareState {
   is_unlocked: Cell<bool>,
   device_info_requested: Cell<bool>,
   qr_data_requested: Cell<bool>,
-  protocol_requested: Cell<bool>, // 0 - NFC, 1 - Bluetooth
+  scale_shown_changed: Cell<bool>,
+  protocol_requested: Cell<bool>,
 }
 
 impl FirmwareState {
@@ -58,6 +59,7 @@ impl FirmwareState {
           is_unlocked: Cell::new(false),
           device_info_requested: Cell::new(false),
           qr_data_requested: Cell::new(false),
+          scale_shown_changed: Cell::new(false),
           protocol_requested: Cell::new(false),
       }
   }
@@ -88,6 +90,9 @@ impl FirmwareState {
   pub fn clear_protocol_change_requested(&self) {
       self.protocol_requested.set(false);
   }
+    pub fn mark_scale_shown_changed(&self)          { self.scale_shown_changed.set(true); }
+    pub fn is_scale_shown_changed(&self) -> bool     { self.scale_shown_changed.get() }
+    pub fn clear_scale_shown_changed(&self)          { self.scale_shown_changed.set(false); }
   pub fn is_qr_data_requested(&self) -> bool     { self.qr_data_requested.get() }
   pub fn mark_qr_data_requested(&self)          { self.qr_data_requested.set(true); }
   pub fn mark_qr_data_success(&self)          { self.qr_data_requested.set(false); }
