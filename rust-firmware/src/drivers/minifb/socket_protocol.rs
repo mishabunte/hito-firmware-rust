@@ -15,8 +15,6 @@ const BUFFER_SIZE: usize = 4096;
 pub struct SocketProtocol {
     listener: Arc<Mutex<Option<UnixListener>>>,
     client: Arc<Mutex<Option<UnixStream>>>,
-    rx_buffer: Arc<Mutex<Vec<u8>>>,
-    tx_buffer: Arc<Mutex<Vec<u8>>>,
     connected: Arc<Mutex<bool>>,
 }
 
@@ -30,8 +28,6 @@ impl SocketProtocol {
         Self {
             listener: Arc::new(Mutex::new(None)),
             client: Arc::new(Mutex::new(None)),
-            rx_buffer: Arc::new(Mutex::new(Vec::new())),
-            tx_buffer: Arc::new(Mutex::new(Vec::new())),
             connected: Arc::new(Mutex::new(false)),
         }
     }
