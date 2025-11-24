@@ -1,9 +1,11 @@
-use crate::drivers::{Battery, Display};
+use crate::drivers::{Display};
 use crate::{STATE, ui::CallbackController, hito_firmware::HitoFirmware};
 use crate::slint_generatedMainWindow::ReceiveDataState;
 use crate::slint_generatedMainWindow::BrightnessController;
 use crate::slint_generatedMainWindow::MainWindow;
 use slint::{ComponentHandle, ToSharedString};
+use crate::slint_generatedMainWindow::Router;
+use crate::slint_generatedMainWindow::ScreenEnum;
 use crate::log_info;
 
 fn shorten_address(address: &str) -> alloc::string::String {
@@ -27,18 +29,25 @@ impl CallbackController for ReceiveDataCallbackController {
       ui.global::<ReceiveDataState>().on_request_receive_data(move || {
           let s = STATE.get().unwrap().lock();
           s.mark_qr_data_requested();
-          log_info!("Receive data requested");
+          // log_info!("Receive data requested");
+      });
+      ui.global::<BrightnessController>().on_scale_shown_changed(move || {
+          let s = STATE.get().unwrap().lock();
+          s.mark_scale_shown_changed();
       });
     }
     fn handle_loop_events(&self, ui: &MainWindow, firmware: &mut HitoFirmware) {
       let s = STATE.get().unwrap().lock();
       let receive_data_state = ui.global::<ReceiveDataState>();
-      let brightness_state = ui.global::<BrightnessController>();
-      if s.is_qr_data_requested() {
+
+      if s.is_qr_data_requested() || s.is_scale_shown_changed() {
+        if ui.global::<Router>().get_current() == ScreenEnum::Receive {
           let address = firmware.vault.get_stellar_address().unwrap();
           receive_data_state.set_address_short(slint::SharedString::from(shorten_address(&address)));
           firmware.display.draw_qr(25, 50, &address);
           s.mark_qr_data_success();
+          s.clear_scale_shown_changed();
+        }
       }
     }
 }

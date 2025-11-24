@@ -26,12 +26,12 @@ impl CallbackController for MainCallbackController {
       let s = STATE.get().unwrap().lock();
       if let Some(new_brightness) = s.take_brightness() {
           firmware.display.set_brightness(new_brightness);
-          log_info!("Brightness set to {}", new_brightness);
+          // log_info!("Brightness set to {}", new_brightness);
       }
       let battery = ui.global::<BatteryController>();
       if s.is_battery_level_requested() {
           let level = firmware.battery.get_level();
-          log_info!("Battery level requested: {}", level);
+          // log_info!("Battery level requested: {}", level);
           battery.set_battery_level(level);
           s.set_battery_level_requested(false);
       }

@@ -1,10 +1,8 @@
-use crate::drivers::Display;
 use crate::{STATE, ui::CallbackController, hito_firmware::HitoFirmware};
 use crate::slint_generatedMainWindow::EnterPinState;
 use crate::slint_generatedMainWindow::MainWindow;
 use slint::ComponentHandle;
-use crate::{firmware_state, log_info};
-use alloc::rc::Rc;
+use crate::{log_info};
 
 pub struct EnterPinCallbackController;
 
@@ -14,21 +12,21 @@ impl CallbackController for EnterPinCallbackController {
         ui.global::<EnterPinState>().on_append_char(move |digit: i32| {
             let s = STATE.get().unwrap().lock();
             s.append_to_pin(digit);
-            log_info!("PIN code updated: {}", s.get_pin());
+            // log_info!("PIN code updated: {}", s.get_pin());
         });
 
         // Remove last char
         ui.global::<EnterPinState>().on_remove_char(move || {
             let s = STATE.get().unwrap().lock();
             s.remove_pin_char();
-            log_info!("PIN code updated: {}", s.get_pin());
+            // log_info!("PIN code updated: {}", s.get_pin());
         });
 
         // Mark password is entered
         ui.global::<EnterPinState>().on_passcode_entered(move || {
             let s = STATE.get().unwrap().lock();
             s.mark_unlock_requested();
-            log_info!("Passcode entered, requesting unlock");
+            // log_info!("Passcode entered, requesting unlock");
         });
     }
     fn handle_loop_events(&self, ui: &MainWindow, firmware: &mut HitoFirmware) {
@@ -37,12 +35,12 @@ impl CallbackController for EnterPinCallbackController {
         // When the UI marks unlock requested:
         if s.is_unlock_in_progress() {
             // Start job once
-            log_info!("Starting unlock job");
+            // log_info!("Starting unlock job");
             if firmware.vault.unlock_job_is_none() {
-                log_info!("Job is none, starting unlock");
+                // log_info!("Job is none, starting unlock");
                 let password = s.get_pin();
                 if let Err(e) = firmware.vault.start_unlock(password.as_bytes()) {
-                    log_info!("Failed to start unlock: {:?}", e);
+                    // log_info!("Failed to start unlock: {:?}", e);
                     pin_controller.set_wrong_passcode(true);
                     pin_controller.invoke_set_progress(-1);
                     s.unlock_finished();
@@ -60,7 +58,7 @@ impl CallbackController for EnterPinCallbackController {
                     // nothing changed this tick
                 }
                 Err(e) => {
-                    log_info!("Vault unlock failed: {:?}", e);
+                    // log_info!("Vault unlock failed: {:?}", e);
                     // Mark wrong passcode in UI
                     pin_controller.set_wrong_passcode(true);
                     pin_controller.invoke_set_progress(0);
@@ -70,7 +68,7 @@ impl CallbackController for EnterPinCallbackController {
             }
             // If finished successfully, mark UI
             if firmware.vault.is_unlocked() {
-                log_info!("Unlock successful");
+                // log_info!("Unlock successful");
                 pin_controller.set_wrong_passcode(false);
                 pin_controller.invoke_set_progress(-1);
                 s.mark_device_info_requested();
