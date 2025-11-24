@@ -9,14 +9,13 @@ from PyQt6 import QtCore, QtWidgets
 
 SOCKET_PATH = "/tmp/hito_Linux.sock"
 BUFFER_SIZE = 4096
-
+STELLAR_PREFIX = "stellar.sign:"
 
 def create_test_message() -> bytes:
-    prefix = b"stellar.sign:"
+    prefix = STELLAR_PREFIX.encode("utf-8")
     # test payload: send 13 XLM to GCEMPQ7LYZ7EYWFYQYXIFQRUHKLRT74TLORALIOZIP2KPED7TD3GG352 with fee 5 XLM
     test_payload = b"AAAAAgAAAACdr++ECgMp7XJRAM8An6JDIwr7HfywJyQCDQd2Cn6CLwL68IAACsu/AAAAAgAAAAEAAAAAAAAAAAAAAABpG2bVAAAAAAAAAAEAAAAAAAAAAQAAAACIx8Prxn5MWLiGLoLCNDqXGf+TW6IFodlD9KeQf5j2YwAAAAAAAAAAB7+kgAAAAAAAAAAA"
     return prefix + test_payload
-
 
 class SocketThread(QtCore.QThread):
     log = QtCore.pyqtSignal(str)
@@ -171,8 +170,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Buttons for sending
         btn_layout = QtWidgets.QHBoxLayout()
-        self.append_prefix_btn = QtWidgets.QPushButton("Append stellar.sign prefix")
-        self.send_stellar_btn = QtWidgets.QPushButton("Create stellar.sign test message")
+        self.append_prefix_btn = QtWidgets.QPushButton(f"Append {STELLAR_PREFIX} prefix")
+        self.send_stellar_btn = QtWidgets.QPushButton(f"Create {STELLAR_PREFIX} test message")
         btn_layout.addWidget(self.append_prefix_btn)
         btn_layout.addWidget(self.send_stellar_btn)
         layout.addLayout(btn_layout)
@@ -228,7 +227,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.pyqtSlot()
     def on_append_prefix(self):
-        self.msg_edit.setText("stellar.sign:" + self.msg_edit.text())
+        self.msg_edit.setText(STELLAR_PREFIX + self.msg_edit.text())
 
     @QtCore.pyqtSlot(str)
     def append_log(self, text: str):
