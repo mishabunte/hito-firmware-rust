@@ -2,8 +2,8 @@ import { Router } from "Router.slint";
 import { ScreenEnum } from "ScreenEnum.slint";
 import { Palette } from "Palette.slint";
 import { VerticalBox } from "std-widgets.slint";
-import { BaseButton } from "BaseButton.slint";
 import { Spacer } from "Spacer.slint";
+import { TransparentButton } from "TransparentButton.slint";
 
 export enum Protocol {
     Bluetooth,
@@ -19,60 +19,6 @@ export global SendScreenState {
   send-requested => {
     Router.navigate(ScreenEnum.SendStellar);
   }
-}
-
-component TextWithBackground inherits Text {
-    in-out property<string> header-title: self.text;
-    property <length> text-width: self.width;
-    property <length> text-height: self.height;
-    in-out property <bool> pressed;
-    in-out property <brush> font-color: Palette.blue;
-    if header-title != "": Rectangle {
-        background: Palette.white;
-        width: 1.1 * parent.text-width;
-        height: 1.5 * parent.text-height;
-        textProp := Text {
-            text: header-title;
-            font-size: root.font-size;
-            font-family: root.font-family;
-            font-italic: root.font-italic;
-            font-weight: root.font-weight;
-            color: pressed ? Palette.black :root.font-color;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
-    }
-}
-
-export component SwitchButton {
-  property <bool> pressed: false;
-  in-out property <string> content: "0";
-  in-out property <length> button-width;
-  in-out property <length> button-height;
-  in-out property <length> in-font-size: 20px;
-  in-out property <color> text-color: pressed ? Palette.black : Palette.blue;
-  TextWithBackground {
-      text: root.content;
-      pressed: root.pressed;
-      font-size: root.in-font-size;
-      color: root.text-color;
-      horizontal-alignment: center;
-      vertical-alignment: center;
-      TouchArea {
-      width: parent.width;
-      height: parent.height;
-      pointer-event(event) => {
-          if (event.kind == PointerEventKind.down) {
-                  pressed = true;
-              } else if (event.kind == PointerEventKind.up) {
-                  pressed = false;
-                  root.clicked();
-                  debug("Clicked pin", content);
-              }
-          }
-      }
-    }
-    callback clicked();
 }
 
 export component SendScreenView {
@@ -91,9 +37,8 @@ export component SendScreenView {
         Text {
           text: current-protocol-name + " is active";
           font-size: 12px;
-          font-family: "Roboto Mono";
-          font-italic: false;
-          font-weight: 500;
+          //font-italic: false;
+          //font-weight: 500;
           horizontal-alignment: center;
           wrap: word-wrap;
           color: Palette.black;
@@ -108,7 +53,7 @@ export component SendScreenView {
       height: root.height;
       text: SendScreenState.error-message;
       font-size: 20px;
-      font-weight: 500;
+      //font-weight: 500;
       horizontal-alignment: center;
       wrap: word-wrap;
       vertical-alignment: center;
@@ -121,8 +66,10 @@ export component SendScreenView {
       visible: !SendScreenState.error-occurred;
     }
     HorizontalLayout {}
-    SwitchButton {
+    TransparentButton {
         content: "Switch to " + next-protocol-name;
+        text-color-pressed: Palette.black;
+        text-color-unpressed: Palette.blue;
         y: 190px;
         clicked => {
           debug("Switch button clicked");

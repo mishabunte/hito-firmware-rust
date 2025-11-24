@@ -6,15 +6,18 @@ export global ShowSeedState {
   in-out property <[string]> seed-phrase: ["word1", "word2", "word3", "word4", "word5", "word6", "word7", "word8", "word9", "word10", "word11", "word12"];
   in-out property <int> page-number: 0;
   in-out property <bool> all-words-hidden: true;
+  in-out property <int> total-pages: 2;
 }
 
 component SeedWord inherits Text {
     in-out property <int> index: 0;
     in-out property <bool> word-visible: false;
     in-out property <string> index-str: index + 1 < 10 ? "0" + (index + 1): (index + 1);
-    text: self.word-visible ? index-str + ". " + ShowSeedState.seed-phrase[index] : "xx. xxxxxxxx";
+    text: self.word-visible ? index-str + "." + ShowSeedState.seed-phrase[index] : "xx.xxxxxxxx";
     font-size: 20px;
     color: Palette.black;
+    letter-spacing: -0.5px;
+    //font-weight: 200;
     height: 30px;
     TouchArea {
         width: parent.width;
@@ -35,7 +38,7 @@ export component ShowSeedScreenView {
     width: 320px;
     height: 240px;
     HorizontalLayout {
-      x: 5px;
+      x: 20px;
       alignment: start;
       VerticalLayout {
         y: 60px;
@@ -62,7 +65,7 @@ export component ShowSeedScreenView {
           height: 20px;
         }
         TransparentButton {
-          x: 10px;
+          x: -5px;
             content: "Next Page";
             text-color-pressed: Palette.black;
             text-color-unpressed: Palette.blue;

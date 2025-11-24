@@ -3,8 +3,8 @@ import { BatteryController } from "Battery.slint";
 import { LockScreenView } from "LockScreen.slint";
 import { HomeScreenView } from "HomeScreen.slint";
 import { EnterPinScreenView } from "EnterPinScreen.slint";
-import { TestScreen } from "TestScreen.slint";
-import { TestScreen2View } from "TestScreen2.slint";
+// import { TestScreenView } from "TestScreen.slint";
+// import { TestScreen2View } from "TestScreen2.slint";
 import { TransparentButton } from "TransparentButton.slint";
 import { SendScreenView } from "SendScreen.slint";
 import { SettingsScreenView } from "SettingsScreen.slint";
@@ -21,16 +21,15 @@ import { Protocol } from "SendScreen.slint";
 import { SendStellarScreenView } from "SendStellarScreen.slint";
 import { SendStellarState } from "SendStellarScreen.slint";
 
-export { BrightnessController, BatteryController, EnterPinState, DeviceInfoState, ReceiveDataState, ShowSeedState, SendScreenState, SendStellarState } // Export controllers for global access
-export { Router, ScreenEnum } // Export Router for global access
-import { VerticalBox, HorizontalBox } from "std-widgets.slint";
-import "../../../res/fonts/RobotoMono.ttf";
-import { BrightnessLogo, BrightnessBar } from "Brightness.slint";
-import { BatteryLevel, BatteryController } from "Battery.slint";
-import { Palette } from "Palette.slint";
 import { Router } from "Router.slint";
 import { ScreenEnum } from "ScreenEnum.slint";
-import { BaseButton } from "BaseButton.slint";
+export { Router, ScreenEnum } // Export Router for global access
+
+export { BrightnessController, BatteryController, EnterPinState, DeviceInfoState, ReceiveDataState, SendScreenState, SendStellarState, ShowSeedState } // Export controllers for global access
+import "../../../res/fonts/RobotoMono-Regular.ttf";
+import { BrightnessLogo, BrightnessBar } from "Brightness.slint";
+import { BatteryLevel } from "Battery.slint";
+import { Palette } from "Palette.slint";
 
 component HeaderBar {
     in-out property<string> header-title: "";
@@ -39,8 +38,7 @@ component HeaderBar {
         text: header-title;
         font-size: 20px;
         font-family: "Roboto Mono";
-        font-italic: false;
-        font-weight: 1000;
+        //font-italic: false;
         horizontal-alignment: center;
         wrap: word-wrap;
         visible: !BrightnessController.scale-shown;
@@ -48,11 +46,10 @@ component HeaderBar {
 }
 
 component BackButton inherits TransparentButton {
-    content: "<";
-    in-font-size: 30px;
+    content: "X";
+    in-font-size: 20px;
     text-color-pressed: Palette.black;
     text-color-unpressed: Palette.blue;
-    touch-area-ratio: 1.7;
     clicked() => {
         Router.back();
     }
@@ -82,7 +79,7 @@ export component MainWindow inherits Window {
         } else if (Router.current == ScreenEnum.DeviceInfo) {
             "DEVICE INFO";
         } else if (Router.current == ScreenEnum.ShowSeed) {
-            "YOUR SEED PHRASE";
+            "SEED, page " + (1) + "/" + (2);
         } else if (Router.current == ScreenEnum.SendStellar) {
             "SEND STELLAR";
         } else if (Router.current == ScreenEnum.Receive) {
@@ -109,10 +106,11 @@ export component MainWindow inherits Window {
     HorizontalLayout {
         width: parent.width;
         alignment: start;
+        y: 10px;
         VerticalLayout {
             alignment: start;
             BackButton {
-                x: 10px;
+                x: 20px;
                 visible: back-shown;
             }
         }
@@ -160,6 +158,7 @@ export component MainWindow inherits Window {
                     self.mouse-y < brightness-bar.y - 10px ||
                     self.mouse-y > brightness-bar.y + brightness-bar.height + 10px) {
                     BrightnessController.scale-shown = false;
+                    BrightnessController.scale-shown-changed();
                 }
             }
         }
@@ -176,7 +175,7 @@ export component MainWindow inherits Window {
         if Router.current == ScreenEnum.PairWithTheApp: PairWithTheAppScreenView {}
         if Router.current == ScreenEnum.DeviceInfo: DeviceInfoScreenView {}
         if Router.current == ScreenEnum.Receive: ReceiveScreenView {}
-        if Router.current == ScreenEnum.ShowSeed: ShowSeedScreenView {}
+        // if Router.current == ScreenEnum.ShowSeed: ShowSeedScreenView {}
         if Router.current == ScreenEnum.SendStellar: SendStellarScreenView {}
     }
 }

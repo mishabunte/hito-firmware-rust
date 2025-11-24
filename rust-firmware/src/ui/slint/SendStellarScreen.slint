@@ -1,73 +1,10 @@
 import { Router } from "Router.slint";
 import { Palette } from "Palette.slint";
+import { TransparentButton } from "TransparentButton.slint";
 
 export global SendStellarState {
   in-out property <float> amount: 0.0;
   in-out property <string> destination-short: "";
-}
-
-component TextWithBackground inherits Text {
-    in-out property<string> header-title: self.text;
-    property <length> text-width: self.width;
-    property <length> text-height: self.height;
-    in-out property <brush> font-color: Palette.black;
-    if header-title != "": Rectangle {
-        background: Palette.green;
-        width: 1.1 * parent.text-width;
-        height: 1.1 * parent.text-height;
-        textProp := Text {
-            text: header-title;
-            font-size: root.font-size;
-            font-family: root.font-family;
-            font-italic: root.font-italic;
-            font-weight: root.font-weight;
-            color: root.font-color;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
-    }
-}
-
-component SignButton {
-    property <bool> pressed: false;
-    in-out property <string> content: "SIGN";
-    in property <length> button-width;
-    in property <length> button-height;
-    Rectangle {
-        width: button-width > 1.5 * text.width ? button-width : 1.5 * text.width;
-        height: button-height > 1.5 * text.height ? button-height : 1.5 * text.height;
-        border-color: Palette.black;
-        border-width: 4px;
-        border-radius: self.width/300;
-        background: pressed ? Palette.green : transparent;
-        text := Text {
-            text: content;
-            font-size: 20px;
-            color: Palette.black;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
-        Rectangle {
-            width: button-width - 4px;
-            height: button-height - 4px;
-            border-color: Palette.green;
-            border-width: 1px;
-        }
-        TouchArea {
-            width: root.width;
-            height: root.height;
-            pointer-event(event) => {
-                if (event.kind == PointerEventKind.down) {
-                    pressed = true;
-                    root.clicked();
-                    debug("Clicked pin", content);
-                } else if (event.kind == PointerEventKind.up) {
-                    pressed = false;
-                }
-            }
-        }
-    }
-    callback clicked();
 }
 
 component Spacer inherits Rectangle {
@@ -104,8 +41,8 @@ export component SendStellarScreenView {
         Spacer {
           height: 5px;
         }
-        TextWithBackground {
-            header-title: SendStellarState.amount;
+        Text {
+            text: SendStellarState.amount;
             vertical-alignment: center;
             horizontal-alignment: center;
             font-size: 20px;
@@ -119,16 +56,16 @@ export component SendStellarScreenView {
             vertical-alignment: center;
             horizontal-alignment: center;
             font-size: 20px;
-            font-weight: 1000;
+            //font-weight: 1000;
             color: black;
         }
         Spacer {
-          height: 30px;
+          height: 50px;
         }
-        SignButton {
-            x: 0px;
-            button-width: 100px;
-            button-height: 75px;
+        TransparentButton {
+            content: "SIGN";
+            text-color-pressed: Palette.black;
+            text-color-unpressed: Palette.blue;
         }
       }
     }
@@ -163,7 +100,7 @@ export component SendStellarScreenView {
             text: SendStellarState.destination-short;
             font-size: 20px;
             color: black;
-            font-weight: 1000;
+            //font-weight: 1000;
             wrap: word-wrap;
             width: 130px;
         }

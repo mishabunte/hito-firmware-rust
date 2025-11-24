@@ -1,7 +1,6 @@
 import { Router } from "Router.slint";
 import { ScreenEnum } from "ScreenEnum.slint";
 import { Palette } from "Palette.slint";
-import { BaseButton } from "BaseButton.slint";
 import { TransparentButton } from "TransparentButton.slint";
 
 export global EnterPinState {
@@ -64,7 +63,7 @@ component PassChar {
     Text {
         text: content;
         y: mainText.y - root.in-font-size - 10px;
-        font-size: root.in-font-size + 5px;
+        font-size: root.in-font-size;
         horizontal-alignment: center;
         vertical-alignment: center;
         visible: pressed;
