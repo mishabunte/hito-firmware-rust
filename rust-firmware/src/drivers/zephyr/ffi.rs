@@ -69,6 +69,34 @@ extern "C" {
     pub fn hito_debug_led_off();
     pub fn hito_debug_led_blink(n: u8);
 
+    // NFC functions
+    pub fn hito_nfc_start(message: *const u8) -> bool;
+    pub fn hito_nfc_stop();
+    pub fn hito_nfc_set_message(msg: *const u8) -> bool;
+    pub fn hito_nfc_has_data() -> bool;
+    pub fn hito_nfc_data_len() -> u32;
+    pub fn hito_nfc_data() -> *const u8;
+    pub fn hito_nfc_data_clear();
+
+    // BLE functions
+    pub fn hito_ble_init() -> bool;
+    pub fn hito_ble_start();
+    pub fn hito_ble_stop();
+    pub fn hito_ble_has_data() -> bool;
+    pub fn hito_ble_has_error() -> bool;
+    pub fn hito_ble_error_clear();
+    pub fn hito_ble_has_data_package() -> bool;
+    pub fn hito_ble_is_connected() -> bool;
+    pub fn hito_ble_data() -> *const core::ffi::c_void;
+    pub fn hito_ble_datalen() -> u16;
+    pub fn hito_ble_data_clear();
+    pub fn hito_ble_data_package_clear();
+    pub fn hito_ble_data_package() -> *const core::ffi::c_void;
+    pub fn hito_ble_data_package_len() -> u16;
+    pub fn hito_ble_send(data: *const core::ffi::c_void, len: u32) -> bool;
+
+
+
     // Battery functions
     pub fn hito_battery_level() -> i32;
 
