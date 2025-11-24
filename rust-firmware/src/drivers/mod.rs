@@ -29,13 +29,13 @@ pub use minifb::led_desktop::DesktopLedDriver;
 pub mod minifb;
 
 #[cfg(feature = "minifb")]
-pub use minifb::{DisplayImpl, TouchImpl, IndicatorImpl, BatteryImpl};
+pub use minifb::{DisplayImpl, TouchImpl, IndicatorImpl, BatteryImpl, SocketProtocol};
 
 #[cfg(feature = "zephyr")]
 pub mod zephyr;
 
 #[cfg(feature = "zephyr")]
-pub use zephyr::{DisplayImpl, TouchImpl, IndicatorImpl, BatteryImpl};
+pub use zephyr::{DisplayImpl, TouchImpl, IndicatorImpl, BatteryImpl, NFCProtocol, BLEProtocol};
 
 /*
 pub struct Bitmap565<'a> {

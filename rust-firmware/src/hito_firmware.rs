@@ -10,6 +10,7 @@ use crate::crypto::crypt0::hex_to_bytes;
 #[cfg(feature = "zephyr")]
 use crate::drivers::zephyr::logging;
 use crate::vault::vault::HitoVault;
+#[cfg(feature = "minifb")]
 use crate::drivers::minifb::SocketProtocol;
 
 pub struct HitoFirmware {
@@ -18,7 +19,6 @@ pub struct HitoFirmware {
     pub indicator: IndicatorImpl,
     pub battery:   BatteryImpl,
     pub vault:     HitoVault,
-    pub protocol:  Option<SocketProtocol>,
 }
 
 
@@ -30,7 +30,6 @@ impl HitoFirmware {
             touch:     TouchImpl::new(),
             battery:   BatteryImpl::new(),
             vault:     HitoVault::new(),
-            protocol:  None,
         }
     }
 

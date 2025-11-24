@@ -3,20 +3,15 @@
 extern crate alloc;
 use alloc::{string::String, vec::Vec, format};
 
-use stellar_xdr::curr::{
-    TransactionEnvelope, TransactionV1Envelope, FeeBumpTransactionEnvelope,
-    TransactionV0Envelope, Uint256,
-    AssetCode,
-    LiquidityPoolParameters,
-    PublicKey, FeeBumpTransactionInnerTx,
-    Operation, OperationBody, Asset, ChangeTrustAsset, AccountId, MuxedAccount,
-    DecoratedSignature, TimeBounds, LedgerBounds, Preconditions, PreconditionsV2,
-    Memo, Int64, Uint32, Uint64, ReadXdr, WriteXdr, SequenceNumber,
-};
+use substrate_stellar_sdk::{
+    Asset, AssetCode, Memo, MuxedAccount, Operation, TimeBounds, TransactionEnvelope, XdrCodec,
+    AccountId, PublicKey};
+use substrate_stellar_sdk::types::{DecoratedSignature, OperationBody, Preconditions, LedgerBounds, 
+    TransactionV0Envelope, TransactionV1Envelope, FeeBumpTransactionEnvelope, FeeBumpTransactionInnerTx, 
+    Uint256, ChangeTrustAsset, LiquidityPoolParameters};
 
 use crate::crypto::crypt0::bytes_to_hex;
 
-use crate::printk;
 
 //use base64ct::{Base64, Encoding};
 
@@ -233,22 +228,22 @@ impl StellarTransactionParser {
         let xdr_bytes = base64_data.as_bytes();
         
         // Parse XDR envelope
-        let envelope = TransactionEnvelope::from_xdr_base64(&xdr_bytes, stellar_xdr::curr::Limits::none());
+        let envelope = TransactionEnvelope::from_base64_xdr(&xdr_bytes);
 
         if envelope.is_err() {
-            printk!("XDR parsing error: {:?}\n", envelope.err());
             return Err(TransactionParseError::XdrError);
         }
         
         match envelope.unwrap() {
-            TransactionEnvelope::TxV0(env) => StellarTransactionParser::parse_v0_transaction(env),
-            TransactionEnvelope::Tx(env) => StellarTransactionParser::parse_v1_transaction(env),
-            TransactionEnvelope::TxFeeBump(env) => StellarTransactionParser::parse_fee_bump_transaction(env),
+            TransactionEnvelope::EnvelopeTypeTxV0(env) => StellarTransactionParser::parse_v0_transaction(env),
+            TransactionEnvelope::EnvelopeTypeTx(env) => StellarTransactionParser::parse_v1_transaction(env),
+            TransactionEnvelope::EnvelopeTypeTxFeeBump(env) => StellarTransactionParser::parse_fee_bump_transaction(env),
+            _ => Err(TransactionParseError::InvalidEnvelopeType),
         }
     }
 
     fn uint256_to_bounded_hex( v: &Uint256) -> Result<String, TransactionParseError> {
-        let hex = bytes_to_hex(&v.0);
+        let hex = bytes_to_hex(v);
         if hex.len() > MAX_STRING_LEN {
             return Err(TransactionParseError::StringTooLong);
         }
@@ -257,18 +252,19 @@ impl StellarTransactionParser {
 
     fn asset_code_to_string( code: &AssetCode) -> Result<String, TransactionParseError> {
         match code {
-            AssetCode::CreditAlphanum4(c) => {
-                let code_bytes = &c.0;
-                let code_str = core::str::from_utf8(code_bytes).unwrap_or("invalid");
+            AssetCode::AssetTypeCreditAlphanum4(c) => {
+                let code_str = core::str::from_utf8(c).unwrap_or("invalid");
                 let trimmed_code = code_str.trim_end_matches('\0');
                 String::try_from(trimmed_code).map_err(|_| TransactionParseError::StringTooLong)
             },
-            AssetCode::CreditAlphanum12(c) => {
-                let code_bytes = &c.0;
-                let code_str = core::str::from_utf8(code_bytes).unwrap_or("invalid");
+            AssetCode::AssetTypeCreditAlphanum12(c) => {
+                let code_str = core::str::from_utf8(c).unwrap_or("invalid");
                 let trimmed_code = code_str.trim_end_matches('\0');
                 String::try_from(trimmed_code).map_err(|_| TransactionParseError::StringTooLong)
             },
+            AssetCode::Default(c) => {
+                String::try_from("invalid").map_err(|_| TransactionParseError::StringTooLong)
+            }
         }
     }
 
@@ -283,44 +279,42 @@ impl StellarTransactionParser {
         
         Ok(ParsedTransaction {
             source_account: { Self::uint256_to_bounded_hex(&tx.source_account_ed25519)? },
-            sequence_number: tx.seq_num.0,
+            sequence_number: tx.seq_num,
             fee: tx.fee as i64,
             memo: Some(Self::parse_memo(&tx.memo)?),
             time_bounds,
             ledger_bounds,
-            operations: Self::parse_operations(&tx.operations)?,
-            signatures: Self::parse_signatures(&envelope.signatures)?,
+            operations: Self::parse_operations(&tx.operations.get_vec())?,
+            signatures: Self::parse_signatures(&envelope.signatures.get_vec())?,
             envelope_type: TransactionEnvelopeType::TxV0,
         })
     }
 
     fn parse_v1_transaction( envelope: TransactionV1Envelope) -> Result<ParsedTransaction, TransactionParseError> {
-        printk!("Parsing V1 transaction envelope...\n");
         let tx = envelope.tx;
-        printk!("Parsing V1 transaction...\n");
 
         let (time_bounds, ledger_bounds) = Self::parse_preconditions(&tx.cond)?;
         
         Ok(ParsedTransaction {
             source_account: Self::muxed_account_to_string(&tx.source_account)?,
-            sequence_number: tx.seq_num.0,
+            sequence_number: tx.seq_num,
             fee: tx.fee as i64,
             memo: Some(Self::parse_memo(&tx.memo)?),
             time_bounds,
             ledger_bounds,
-            operations: Self::parse_operations(&tx.operations)?,
-            signatures: Self::parse_signatures(&envelope.signatures)?,
+            operations: Self::parse_operations(&tx.operations.get_vec())?,
+            signatures: Self::parse_signatures(&envelope.signatures.get_vec())?,
             envelope_type: TransactionEnvelopeType::Tx,
         })
     }
 
     fn parse_fee_bump_transaction( envelope: FeeBumpTransactionEnvelope) -> Result<ParsedTransaction, TransactionParseError> {
         let fee_bump = envelope.tx;
-        printk!("Parsing Fee Bump transaction...\n");
 
         // Extract the inner transaction
         let inner_envelope = match fee_bump.inner_tx {
-            FeeBumpTransactionInnerTx::Tx(env) => env,
+            FeeBumpTransactionInnerTx::EnvelopeTypeTx(env) => env,
+            _ => return Err(TransactionParseError::InvalidEnvelopeType),
         };
 
         let mut parsed = Self::parse_v1_transaction(inner_envelope)?;
@@ -328,49 +322,46 @@ impl StellarTransactionParser {
         // Override with fee bump details
         parsed.source_account = Self::muxed_account_to_string(&fee_bump.fee_source)?;
         parsed.fee = fee_bump.fee;
-        parsed.signatures = Self::parse_signatures(&envelope.signatures)?;
+        parsed.signatures = Self::parse_signatures(&envelope.signatures.get_vec())?;
         parsed.envelope_type = TransactionEnvelopeType::TxFeeBump;
         
         Ok(parsed)
     }
 
     fn parse_memo( memo: &Memo) -> Result<ParsedMemo, TransactionParseError> {
-        printk!("Parsing memo: {:?}\n", memo);
         let parsed_memo = match memo {
-            Memo::None => ParsedMemo {
+            Memo::MemoNone => ParsedMemo {
                 memo_type: String::try_from("none").map_err(|_| TransactionParseError::StringTooLong)?,
                 value: None,
             },
-            Memo::Text(text) => {
-                let text_str = core::str::from_utf8(&text).unwrap_or("invalid_utf8");
+            Memo::MemoText(text) => {
                 ParsedMemo {
                     memo_type: String::try_from("text").map_err(|_| TransactionParseError::StringTooLong)?,
-                    value: Some(String::try_from(text_str).map_err(|_| TransactionParseError::StringTooLong)?),
+                    value: Some(String::try_from("babababa").map_err(|_| TransactionParseError::StringTooLong)?),
                 }
             },
-            Memo::Id(id) => ParsedMemo {
+            Memo::MemoId(id) => ParsedMemo {
                 memo_type: String::try_from("id").map_err(|_| TransactionParseError::StringTooLong)?,
                 value: Some(Self::u64_to_string(id.clone())?),
             },
-            Memo::Hash(hash) => ParsedMemo {
+            Memo::MemoHash(hash) => ParsedMemo {
                 memo_type: String::try_from("hash").map_err(|_| TransactionParseError::StringTooLong)?,
-                value: Some(bytes_to_hex(&hash.0)),
+                value: Some(bytes_to_hex(hash)),
             },
-            Memo::Return(ret) => ParsedMemo {
+            Memo::MemoReturn(ret) => ParsedMemo {
                 memo_type: String::try_from("return").map_err(|_| TransactionParseError::StringTooLong)?,
-                value: Some(bytes_to_hex(&ret.0)),
+                value: Some(bytes_to_hex(ret)),
             },
         };
-        printk!("Parsed memo: {:?}\n", parsed_memo);
         
         Ok(parsed_memo)
     }
 
     fn parse_preconditions( preconditions: &Preconditions) -> Result<(Option<ParsedTimeBounds>, Option<ParsedLedgerBounds>), TransactionParseError> {
         match preconditions {
-            Preconditions::None => Ok((None, None)),
-            Preconditions::Time(time_bounds) => Ok((Some(Self::parse_time_bounds(time_bounds)?), None)),
-            Preconditions::V2(preconditions_v2) => {
+            Preconditions::PrecondNone => Ok((None, None)),
+            Preconditions::PrecondTime(time_bounds) => Ok((Some(Self::parse_time_bounds(time_bounds)?), None)),
+            Preconditions::PrecondV2(preconditions_v2) => {
                 let time_bounds = preconditions_v2.time_bounds
                     .as_ref()
                     .map(|tb| Self::parse_time_bounds(tb))
@@ -386,8 +377,8 @@ impl StellarTransactionParser {
     
     fn parse_time_bounds(time_bounds: &TimeBounds) -> Result<ParsedTimeBounds, TransactionParseError> {
         Ok(ParsedTimeBounds {
-            min_time: Some(time_bounds.min_time.0),
-            max_time: Some(time_bounds.max_time.0),
+            min_time: Some(time_bounds.min_time),
+            max_time: Some(time_bounds.max_time),
         })
     }
 
@@ -439,7 +430,7 @@ impl StellarTransactionParser {
                     destination: Self::parse_muxed_account(&ppss.destination)?,
                     dest_asset: Self::parse_asset(&ppss.dest_asset)?,
                     dest_min: ppss.dest_min,
-                    path: Self::parse_assets_path(&ppss.path)?,
+                    path: Self::parse_assets_path(&ppss.path.get_vec())?,
                 }
             ),
             OperationBody::PathPaymentStrictReceive(ppss) => (
@@ -450,7 +441,7 @@ impl StellarTransactionParser {
                     destination: Self::parse_muxed_account(&ppss.destination)?,
                     dest_asset: Self::parse_asset(&ppss.dest_asset)?,
                     dest_amount: ppss.dest_amount,
-                    path: Self::parse_assets_path(&ppss.path)?,
+                    path: Self::parse_assets_path(&ppss.path.get_vec())?,
                 }
             ),
             OperationBody::ChangeTrust(change_trust) => (
@@ -512,25 +503,26 @@ impl StellarTransactionParser {
 
     fn parse_muxed_account( muxed_account: &MuxedAccount) -> Result<ParsedMuxedAccount, TransactionParseError> {
         match muxed_account {
-            MuxedAccount::Ed25519(account_id) => Ok(ParsedMuxedAccount::Ed25519 {
-                account_id: bytes_to_hex(&account_id.0),
+            MuxedAccount::KeyTypeEd25519(account_id) => Ok(ParsedMuxedAccount::Ed25519 {
+                account_id: bytes_to_hex(account_id),
             }),
-            MuxedAccount::MuxedEd25519(muxed) => Ok(ParsedMuxedAccount::MuxedEd25519 {
+            MuxedAccount::KeyTypeMuxedEd25519(muxed) => Ok(ParsedMuxedAccount::MuxedEd25519 {
                 id: muxed.id,
-                account_id: bytes_to_hex(&muxed.ed25519.0),
+                account_id: bytes_to_hex(&muxed.ed25519),
             }),
+            MuxedAccount::Default(d) => Err(TransactionParseError::MuxedAccountError),
         }
     }
 
     fn parse_asset( asset: &Asset) -> Result<ParsedAsset, TransactionParseError> {
         let parsed_asset = match asset {
-            Asset::Native => ParsedAsset::Native {
+            Asset::AssetTypeNative => ParsedAsset::Native {
                 // asset_type: String::try_from("native").map_err(|_| TransactionParseError::StringTooLong)?,
                 // asset_code: None,
                 // issuer: None,
             },
-            Asset::CreditAlphanum4(alpha4) => {
-                let code_bytes = &alpha4.asset_code.0;
+            Asset::AssetTypeCreditAlphanum4(alpha4) => {
+                let code_bytes = &alpha4.asset_code;
                 let code_str = core::str::from_utf8(code_bytes).unwrap_or("invalid");
                 let trimmed_code = code_str.trim_end_matches('\0');
                 
@@ -539,8 +531,8 @@ impl StellarTransactionParser {
                     issuer: Self::account_id_to_string(&alpha4.issuer)?,
                 }
             },
-            Asset::CreditAlphanum12(alpha12) => {
-                let code_bytes = &alpha12.asset_code.0;
+            Asset::AssetTypeCreditAlphanum12(alpha12) => {
+                let code_bytes = &alpha12.asset_code;
                 let code_str = core::str::from_utf8(code_bytes).unwrap_or("invalid");
                 let trimmed_code = code_str.trim_end_matches('\0');
 
@@ -549,6 +541,7 @@ impl StellarTransactionParser {
                     issuer: Self::account_id_to_string(&alpha12.issuer)?,
                 }
             },
+            Asset::Default(d) => return Err(TransactionParseError::UnsupportedOperation),
         };
         
         Ok(parsed_asset)
@@ -556,9 +549,9 @@ impl StellarTransactionParser {
 
     fn parse_change_trust_asset( asset: &ChangeTrustAsset) -> Result<ParsedChangeTrustAsset, TransactionParseError> {
         let parsed_asset = match asset {
-            ChangeTrustAsset::Native => ParsedChangeTrustAsset::Native,
-            ChangeTrustAsset::CreditAlphanum4(alpha4) => {
-                let code_bytes = &alpha4.asset_code.0;
+            ChangeTrustAsset::AssetTypeNative => ParsedChangeTrustAsset::Native,
+            ChangeTrustAsset::AssetTypeCreditAlphanum4(alpha4) => {
+                let code_bytes = &alpha4.asset_code;
                 let code_str = core::str::from_utf8(code_bytes).unwrap_or("invalid");
                 let trimmed_code = code_str.trim_end_matches('\0');
                 
@@ -567,8 +560,8 @@ impl StellarTransactionParser {
                     issuer: Self::account_id_to_string(&alpha4.issuer)?,
                 }
             },
-            ChangeTrustAsset::CreditAlphanum12(alpha12) => {
-                let code_bytes = &alpha12.asset_code.0;
+            ChangeTrustAsset::AssetTypeCreditAlphanum12(alpha12) => {
+                let code_bytes = &alpha12.asset_code;
                 let code_str = core::str::from_utf8(code_bytes).unwrap_or("invalid");
                 let trimmed_code = code_str.trim_end_matches('\0');
 
@@ -577,7 +570,7 @@ impl StellarTransactionParser {
                     issuer: Self::account_id_to_string(&alpha12.issuer)?,
                 }
             },
-            ChangeTrustAsset::PoolShare(lp) => {
+            ChangeTrustAsset::AssetTypePoolShare(lp) => {
                 match lp {
                     LiquidityPoolParameters::LiquidityPoolConstantProduct(cp) => {
                         let asset_a = Self::parse_asset(&cp.asset_a)?;
@@ -603,12 +596,12 @@ impl StellarTransactionParser {
             let mut signature = [0u8; 64];
             
             // Copy hint (always 4 bytes)
-            for (i, &byte) in sig.hint.0.iter().enumerate() {
+            for (i, &byte) in sig.hint.iter().enumerate() {
                 hint[i] = byte;
             }
             
             // Copy signature (up to 64 bytes for Ed25519)
-            for (i, &byte) in sig.signature.0.iter().enumerate() {
+            for (i, &byte) in sig.signature.get_vec().iter().enumerate() {
                 signature[i] = byte;
             }
             
@@ -620,23 +613,22 @@ impl StellarTransactionParser {
     }
 
     fn account_id_to_string(
-        
         account_id: &AccountId,
     ) -> Result<String, TransactionParseError> {
-        match &account_id.0 {
-            PublicKey::PublicKeyTypeEd25519(ed) => Ok(bytes_to_hex(&ed.0)),
+        match &account_id {
+            PublicKey::PublicKeyTypeEd25519(ed) => Ok(bytes_to_hex(ed)),
         }
     }
 
     fn muxed_account_to_string(muxed_account: &MuxedAccount) -> Result<String, TransactionParseError> {
-        printk!("Parsing muxed account: {:?}\n", muxed_account);
         match muxed_account {
-            MuxedAccount::Ed25519(account_id) => Ok(bytes_to_hex(&account_id.0)),
-            MuxedAccount::MuxedEd25519(muxed) => {
+            MuxedAccount::KeyTypeEd25519(account_id) => Ok(bytes_to_hex(account_id)),
+            MuxedAccount::KeyTypeMuxedEd25519(muxed) => {
                 // For muxed accounts, we'd normally encode both the account and ID
                 // For simplicity, just return the account part as hex
-                Ok(bytes_to_hex(&muxed.ed25519.0))
-            }
+                Ok(bytes_to_hex(&muxed.ed25519))
+            },
+            MuxedAccount::Default(d) => Err(TransactionParseError::MuxedAccountError),
         }
     }
 

@@ -2,7 +2,6 @@ use qrcodegen_no_heap::QrCode;
 use qrcodegen_no_heap::QrCodeEcc;
 use qrcodegen_no_heap::Version;
 extern crate alloc;
-use alloc::vec;
 use alloc::vec::Vec;
 use crate::log_info;
 
