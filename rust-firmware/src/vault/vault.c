@@ -23,7 +23,7 @@ bool hitoVaultWriteFlash(const void *offset, const void *data, size_t len)
       return true;
     } else 
     {
-      printk("Flash write error");
+      //printk("Flash write error");
       return false;
     }
   #else

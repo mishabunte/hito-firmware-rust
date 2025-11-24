@@ -177,8 +177,8 @@ impl UnlockJob {
 
     /// Advance a small chunk. Returns Some(progress) when a visible change happened.
     fn poll(&mut self) -> Option<u8> {
-      log_info!("UnlockJob poll: phase={:?}, step_idx={}, hw_iters_left_in_this_step={}, pbkdf2_iters_left_in_this_step={}, total_steps={}",
-        self.phase, self.step_idx, self.hw_iters_left_in_this_step, self.pbkdf2_iters_left_in_this_step, self.steps_total);
+      // log_info!("UnlockJob poll: phase={:?}, step_idx={}, hw_iters_left_in_this_step={}, pbkdf2_iters_left_in_this_step={}, total_steps={}",
+        //self.phase, self.step_idx, self.hw_iters_left_in_this_step, self.pbkdf2_iters_left_in_this_step, self.steps_total);
     let start = (self.now)();            // monotonic tick (provide this)
     let budget_us = 40000;                  // ~40 ms per UI tick (tune)
 
@@ -229,7 +229,7 @@ impl UnlockJob {
                     self.pbkdf2_iters_left_in_this_step = 10;
 
                     if self.step_idx >= self.steps_total {
-                        log_info!("All steps done, moving to Finalize phase, steps_total={}, current_step={}", self.steps_total, self.step_idx);
+                        // log_info!("All steps done, moving to Finalize phase, steps_total={}, current_step={}", self.steps_total, self.step_idx);
                         self.phase = UnlockPhase::Finalize;
                     }
 
@@ -238,7 +238,7 @@ impl UnlockJob {
             }
 
             UnlockPhase::Finalize => {
-                log_info!("Finalizing vault unlock");
+                // log_info!("Finalizing vault unlock");
                 match HitoVault::block_decrypt_with_key(&self.block, &self.key) {
                     Ok(decrypted) => {
                         self.decrypted = Some(decrypted);
@@ -322,10 +322,10 @@ fn derive_hardware_key(salt: &[u8]) -> VaultResult<[u8; 32]> {
         derived.as_mut_ptr(),
         derived.len() as i32
       )) != 0 {
-        log_info!("Failed to derive hardware key");
+        // log_info!("Failed to derive hardware key");
         return Err(VaultError::HardwareKeyError);
       }
-      //log_info!("Derived hardware key: {:?}", derived);
+      //// log_info!("Derived hardware key: {:?}", derived);
       derived
     };
     Ok(derived)
@@ -392,7 +392,7 @@ impl HitoVault {
           return Err(VaultError::EmptyVault);
         }
         // Return the previous block (last valid one)
-        log_info!("Found last valid vault block at index {}", i - 1);
+        // log_info!("Found last valid vault block at index {}", i - 1);
         return Ok(&vault_slice[i - 1]);
       }
     }
@@ -569,7 +569,7 @@ impl HitoVault {
           return Err(VaultError::InvalidKeyLength);
       }
       self.unlock_job = Some(UnlockJob::new(&block, password));
-      log_info!("Starting unlock job with password: {:?}", bytes_to_hex(password));
+      // log_info!("Starting unlock job with password: {:?}", bytes_to_hex(password));
       // Optional: immediately report 0% for UI
       // self.set_progress(0);
       Ok(())
@@ -577,12 +577,12 @@ impl HitoVault {
 
   pub fn poll_unlock(&mut self) -> Result<Option<u8>, VaultError> {
       let Some(job) = self.unlock_job.as_mut() else {
-          log_info!("No unlock job in progress");
+          // log_info!("No unlock job in progress");
           return Ok(None);
       };
 
       if let Some(p) = job.poll() {
-          log_info!("Current phase: {:?}, progress: {}%", job.phase, p);
+          // log_info!("Current phase: {:?}, progress: {}%", job.phase, p);
           // If the job reached Done, take it and commit results while holding &mut self.
           if matches!(job.phase, UnlockPhase::Done) {
               let job = self.unlock_job.take().unwrap();
@@ -623,7 +623,7 @@ impl HitoVault {
 
                   }
                   Err(e) => {
-                    log_info!("Unlock failed with error: {:?}", e);
+                    // log_info!("Unlock failed with error: {:?}", e);
                     return Err(e)
                   }
               }
@@ -729,25 +729,25 @@ impl HitoVault {
     if seal.is_none() {
       return Err(VaultError::CryptoError);
     }
-    log_info!("Deriving hardware key");
+    // log_info!("Deriving hardware key");
     let hardware_key_result = derive_hardware_key(&seal.as_ref().unwrap().serial_number_salt);
     if hardware_key_result.is_err() {
       return Err(VaultError::HardwareKeyError);
     }
     let hardware_key = hardware_key_result.unwrap();
 
-    log_info!("Generating public key from hardware key");
+    // log_info!("Generating public key from hardware key");
     let mut public_key = [0u8; 65];
     let decrypt_result = unsafe {
       crypto::ffi::crypt0_secp256k1_public_key(hardware_key.as_ptr(), hardware_key.len(), public_key.as_mut_ptr(), public_key.len())
     };
-    log_info!("Public key generated: {:?}", public_key);
+    // log_info!("Public key generated: {:?}", public_key);
     
     if decrypt_result != crypto::ffi::CRYPT0_OK {
       return Err(VaultError::CryptoError);
     }
 
-    log_info!("Calculating SHA3-256 of public key");
+    // log_info!("Calculating SHA3-256 of public key");
     let sha3 = unsafe {
       let mut sha3 = [0u8; 32];
       crypto::ffi::crypt0_sha3_keccak(
@@ -758,17 +758,17 @@ impl HitoVault {
       );
       sha3
     };
-    log_info!("SHA3-256 calculated: {:?}", sha3);
+    // log_info!("SHA3-256 calculated: {:?}", sha3);
     let hex_str = crypto::crypt0::bytes_to_hex(&sha3[..10]);
     Ok(hex_str)
   }
 
   pub fn get_device_info(&self) -> VaultResult<DeviceInfo> {
-    log_info!("Getting device info");
+    // log_info!("Getting device info");
     if !self.is_unlocked() {
       return Err(VaultError::VaultLocked);
     }
-    log_info!("Device info retrieved successfully");
+    // log_info!("Device info retrieved successfully");
     Ok(DeviceInfo::new(self.get_firmware_version()?,
       self.get_bootloader_version()?,
       self.get_serial_number()?,
@@ -846,7 +846,7 @@ impl HitoVault {
   }
 
   fn save_mnemonic(&mut self) -> VaultResult<()> {
-    log_info!("Saving mnemonic");
+    // log_info!("Saving mnemonic");
     let result = unsafe {
       let mut mnemonic_buf = [0u8; 215];
       let len = mnemonic_buf.len();
@@ -856,28 +856,28 @@ impl HitoVault {
         mnemonic_buf.as_mut_ptr(),
         mnemonic_buf.len()
       );  
-      log_info!("Converted entropy to mnemonic, len : {}", rc);
+      // log_info!("Converted entropy to mnemonic, len : {}", rc);
       if rc < crypto::ffi::CRYPT0_OK {
         return Err(VaultError::CryptoError);
       }
       self.mnemonic[..len].copy_from_slice(&mnemonic_buf[..len]);
-      log_info!("Mnemonic saved: {:?}", &self.mnemonic[..len]);
+      // log_info!("Mnemonic saved: {:?}", &self.mnemonic[..len]);
     };
     Ok(())
   }
 
   fn save_vault_data(&mut self) -> VaultResult<()> {
-    log_info!("Saving vault data");
+    // log_info!("Saving vault data");
     self.save_mnemonic()?;
-    log_info!("Vault data saved successfully");
+    // log_info!("Vault data saved successfully");
     Ok(())
   }
 
 
   pub fn get_mnemonic(&self) -> VaultResult<alloc::string::String> {
-      log_info!("Getting mnemonic");
+      // log_info!("Getting mnemonic");
       if !self.is_unlocked() {
-          log_info!("Vault is locked, cannot get mnemonic");
+          // log_info!("Vault is locked, cannot get mnemonic");
           return Err(VaultError::VaultLocked);
       }
 
@@ -895,7 +895,7 @@ impl HitoVault {
   ) -> VaultResult<()> {
     // If vault is empty but we have entropy, generate seed from entropy
     if self.is_empty() && self.entropy_len as usize != 0 {
-      log_info!("Generating seed from entropy");
+      // log_info!("Generating seed from entropy");
       let result = unsafe {
         crypto::ffi::crypt0_bip39_entropy_to_seed_en(
           self.entropy.as_ptr(),
@@ -905,7 +905,7 @@ impl HitoVault {
         )
       };
 
-      log_info!("Generated seed from entropy");
+      // log_info!("Generated seed from entropy");
       
       if result != crypto::ffi::CRYPT0_OK {
         return Err(VaultError::CryptoError);
@@ -927,7 +927,7 @@ impl HitoVault {
       new_pass
     )?;
 
-    log_info!("Vault saved with new passcode");
+    // log_info!("Vault saved with new passcode");
 
     Ok(())
   }

@@ -75,7 +75,7 @@ impl HitoSealBlock {
         use crate::log_info;
 
         let seal_block = &*seal_block_ptr;
-        log_info!("Read seal block from address {:x?}: {:?}", HITO_BOOTLOADER_SEAL_ADDRESS, seal_block);
+        // log_info!("Read seal block from address {:x?}: {:?}", HITO_BOOTLOADER_SEAL_ADDRESS, seal_block);
         if seal_block.magic != HITO_BOOTLOADER_MAGIC {
           return None;
         }

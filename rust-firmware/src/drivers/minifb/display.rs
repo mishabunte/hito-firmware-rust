@@ -1,10 +1,8 @@
 use super::super::Display;
 
 use crate::drivers::minifb::simulator_window::*;
-use crate::log_info;
 extern crate alloc;
 use crate::drivers::qr_code::QrCodeWrapper;
-use alloc::vec::Vec;
 
 use crate::drivers::qr_code::IMAGE_MAX_WIDTH;
 

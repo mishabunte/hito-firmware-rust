@@ -81,7 +81,6 @@ pub fn crypt0_ed25519_derive_secret_index(
 ) -> Result<[u8; ED25519_PRIVATE_KEY_SIZE + ED25519_CHAIN_CODE_SIZE], CryptoError> {
     // Only hardened indices allowed
     if index < 0x8000_0000 {
-        log_info!("Invalid index: {}", index);
         return Err(CryptoError::InvalidSeed);
     }
 
@@ -102,8 +101,6 @@ pub fn crypt0_ed25519_derive_secret_index(
     data[idx + 2] = ((index >> 16) & 0xFF) as u8;
     data[idx + 3] = ((index >> 8)  & 0xFF) as u8;
     data[idx + 4] = (index & 0xFF) as u8;
-
-    log_info!("Derivation data: {:x?}", bytes_to_hex(&data));
 
     let res = unsafe {
         ffi::crypt0_hmac_sha512(

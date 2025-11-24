@@ -62,7 +62,7 @@ static STATE: Once<Mutex<FirmwareState>> = Once::new();
 #[cfg(feature = "minifb")]
 pub fn init_stack_baseline() {
     // let rem = stacker::remaining_stack();
-    // log_info!("Initial stack remaining: {:?}", rem);
+    // // // log_info!("Initial stack remaining: {:?}", rem);
     // BASE_STACK_REMAINING.store(rem.unwrap_or(0), Ordering::Relaxed);
 }
 
@@ -194,59 +194,6 @@ fn handle_touch_events(
     }
 }
 
-fn register_main_window_callbacks(
-    ui: &MainWindow,
-    firmware: &mut HitoFirmware
-) {
-    for cb in UI_CALLBACK_CONTROLLERS {
-        cb.register_main_window_callbacks(ui, firmware);
-    }
-    
-}
-
-fn handle_main_window_loop_events(
-    ui: &MainWindow,
-    firmware: &mut HitoFirmware
-) {
-  for cb in UI_CALLBACK_CONTROLLERS {
-      cb.handle_loop_events(ui, firmware);
-  }
-}
-
-fn run_main_loop(
-    mut firmware: HitoFirmware,
-    window: Rc<MinimalSoftwareWindow>,
-) -> ! {
-    let ui = MainWindow::new().unwrap();
-
-    register_main_window_callbacks(&ui, &mut firmware);
-
-    loop {
-        slint::platform::update_timers_and_animations();
-
-        handle_main_window_loop_events(&ui, &mut firmware);
-
-        handle_touch_events(&mut firmware, &*window);
-
-        window.draw_if_needed(|renderer| {
-            unsafe {
-                #[cfg(feature = "minifb")]
-                {
-                    let heap_bytes = get_heap_usage();
-                    let stack_bytes = current_stack_used();
-                    drivers::minifb::simulator_window_set_memory_stats(heap_bytes, stack_bytes);
-                }
-                renderer.render_by_line(DisplayWrapper {
-                    display: &mut firmware.display,
-                    line_buffer: &mut LINE_BUFFER,
-                });
-            }
-        });
-
-        firmware.display.update();
-    }
-}
-
 // Common initialization function
 fn initialize_platform(window: Rc<MinimalSoftwareWindow>) {
     unsafe {
@@ -282,7 +229,7 @@ pub extern "C" fn rust_main() -> ! {
 
     window.set_size(slint::PhysicalSize::new(320, 240));
 
-    log_info!("Initializing platform");
+    // // log_info!("Initializing platform");
 
     // Initialize platform (common code)
     initialize_platform(window.clone());
@@ -290,15 +237,46 @@ pub extern "C" fn rust_main() -> ! {
     #[cfg(feature = "minifb")]
     let _profiler = dhat::Profiler::builder().build();
 
-    log_info!("Platform initialized");
+    // // log_info!("Platform initialized");
 
     STATE.call_once(|| Mutex::new(FirmwareState::new()));
     // let state = FirmwareState::new();
     firmware.indicator.turn_on(LedColor::Blue);
-    log_info!("Starting embedded event loop");
+    // // log_info!("Starting embedded event loop");
     
     // Run platform-specific main loop
-    run_main_loop(firmware, window);
+    let ui = MainWindow::new().unwrap();
+
+    for cb in UI_CALLBACK_CONTROLLERS {
+        cb.register_main_window_callbacks(&ui, &mut firmware);
+    }
+
+    loop {
+        slint::platform::update_timers_and_animations();
+
+        for cb in UI_CALLBACK_CONTROLLERS {
+            cb.handle_loop_events(&ui, &mut firmware);
+        }
+
+        handle_touch_events(&mut firmware, &*window);
+
+        window.draw_if_needed(|renderer| {
+            unsafe {
+                #[cfg(feature = "minifb")]
+                {
+                    let heap_bytes = get_heap_usage();
+                    let stack_bytes = current_stack_used();
+                    drivers::minifb::simulator_window_set_memory_stats(heap_bytes, stack_bytes);
+                }
+                renderer.render_by_line(DisplayWrapper {
+                    display: &mut firmware.display,
+                    line_buffer: &mut LINE_BUFFER,
+                });
+            }
+        });
+
+        firmware.display.update();
+    }
 }
 // ARM EABI unwinding stub for embedded targets only
 #[cfg(feature = "zephyr")]
