@@ -36,6 +36,11 @@ crc = { version = "3.3.0", default-features = false }
 qrcodegen-no-heap = { version = "1.8.1",  default-features = true}
 base64ct = {version = "1.8.0", default-features = false }
 
+# Dependencies for ML DSA encryption support
+qp-rusty-crystals-hdwallet = "1.0.0"
+qp-rusty-crystals-dilithium = "2.0.0"
+zeroize = { version = "1.8", features = ["derive"] }
+
 # Embedded dependencies (for zephyr feature)
 #cortex-m = { version = "0.7", optional = true }
 #cortex-m-rt = { version = "0.7", optional = true }
