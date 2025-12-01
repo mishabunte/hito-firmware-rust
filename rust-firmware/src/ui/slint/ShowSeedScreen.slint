@@ -3,21 +3,23 @@ import { TransparentButton } from "TransparentButton.slint";
 import { Spacer } from "Spacer.slint";
 
 export global ShowSeedState {
-  in-out property <[string]> seed-phrase: ["word1", "word2", "word3", "word4", "word5", "word6", "word7", "word8", "word9", "word10", "word11", "word12"];
+  in-out property <string> seed-phrase-fragment;
+  in-out property <int> seed-len;
   in-out property <int> page-number: 0;
   in-out property <bool> all-words-hidden: true;
   in-out property <int> total-pages: 2;
+  pure callback get-word(index: int) -> string;
+  callback page-changed(page-number: int);
 }
 
 component SeedWord inherits Text {
     in-out property <int> index: 0;
     in-out property <bool> word-visible: false;
     in-out property <string> index-str: index + 1 < 10 ? "0" + (index + 1): (index + 1);
-    text: self.word-visible ? index-str + "." + ShowSeedState.seed-phrase[index] : "xx.xxxxxxxx";
+    text: self.word-visible ? index-str + "." + ShowSeedState.get-word(index) : "xx.xxxxxxxx";
     font-size: 20px;
     color: Palette.black;
     letter-spacing: -0.5px;
-    //font-weight: 200;
     height: 30px;
     TouchArea {
         width: parent.width;
@@ -27,11 +29,11 @@ component SeedWord inherits Text {
                 ShowSeedState.all-words-hidden = false;
                 word-visible = !word-visible;
             } else if (event.kind == PointerEventKind.up) {
-                debug("Clicked pin", root.text);
+                //debug("Clicked pin", root.text);
             }
         }
     }
-    visible: index < ShowSeedState.seed-phrase.length;
+    visible: index < ShowSeedState.seed-len;
 }
 
 export component ShowSeedScreenView {
@@ -70,11 +72,12 @@ export component ShowSeedScreenView {
             text-color-pressed: Palette.black;
             text-color-unpressed: Palette.blue;
             clicked => {
-                if (ShowSeedState.page-number < (ShowSeedState.seed-phrase.length) / 8 - 1) {
+                if (ShowSeedState.page-number < ShowSeedState.total-pages - 1) {
                     ShowSeedState.page-number += 1;
                 } else {
                     ShowSeedState.page-number = 0;
                 }
+                ShowSeedState.page-changed(ShowSeedState.page-number);
             }
         }
       }
