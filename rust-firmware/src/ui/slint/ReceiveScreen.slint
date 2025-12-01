@@ -20,16 +20,7 @@ export component ReceiveScreenView {
           //font-weight: 1000;
       }
     }
-    VerticalLayout {
-      alignment: center;
-      HorizontalLayout {
-        alignment: end;
-        x: -45px;
-        Image {
-          source: @image-url("../../../res/img/stellar_logo.png");
-          width: 80px;
-          height: 80px;
-        }
-      }
+    init => {
+        ReceiveDataState.request-receive-data();
     }
 }
