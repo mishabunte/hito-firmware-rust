@@ -7,6 +7,7 @@ use slint::{ComponentHandle, ToSharedString};
 use crate::slint_generatedMainWindow::Router;
 use crate::slint_generatedMainWindow::ScreenEnum;
 use crate::log_info;
+use alloc::format;
 
 fn shorten_address(address: &str) -> alloc::string::String {
     if address.len() <= 17 {
@@ -39,12 +40,14 @@ impl CallbackController for ReceiveDataCallbackController {
     fn handle_loop_events(&self, ui: &MainWindow, firmware: &mut HitoFirmware) {
       let s = STATE.get().unwrap().lock();
       let receive_data_state = ui.global::<ReceiveDataState>();
+      let router = ui.global::<Router>();
 
       if s.is_qr_data_requested() || s.is_scale_shown_changed() {
-        if ui.global::<Router>().get_current() == ScreenEnum::Receive {
+        if router.get_current() == ScreenEnum::Receive {
           let address = firmware.vault.get_stellar_address().unwrap();
-          receive_data_state.set_address_short(slint::SharedString::from(shorten_address(&address)));
-          firmware.display.draw_qr(25, 50, &address);
+          receive_data_state.set_address_short(slint::SharedString::from(&shorten_address(&address)));
+          let qr_data = format!("stellar:{}", address);
+          firmware.display.draw_qr(75, 35, &qr_data);
           s.mark_qr_data_success();
           s.clear_scale_shown_changed();
         }
