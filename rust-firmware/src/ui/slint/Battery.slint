@@ -21,7 +21,6 @@ export component BatteryLevel inherits Rectangle {
         running: true;
         triggered => {
             BatteryController.battery-level-request();
-            debug("Battery level requested via timer" + battery-level);
         }
     }
     
