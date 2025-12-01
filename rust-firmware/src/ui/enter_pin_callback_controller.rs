@@ -2,17 +2,37 @@ use crate::{STATE, ui::CallbackController, hito_firmware::HitoFirmware};
 use crate::slint_generatedMainWindow::EnterPinState;
 use crate::slint_generatedMainWindow::MainWindow;
 use slint::ComponentHandle;
-use crate::{log_info};
+use crate::{log_info, ui};
 
 pub struct EnterPinCallbackController;
 
 impl CallbackController for EnterPinCallbackController {
     fn register_main_window_callbacks(&self, ui: &MainWindow, firmware: &mut HitoFirmware) {
         // PIN input mechanics
-        ui.global::<EnterPinState>().on_append_char(move |digit: i32| {
+        ui.global::<EnterPinState>().on_append_char(move |digit| {
+            log_info!("Append char to PIN: {}", digit);
             let s = STATE.get().unwrap().lock();
-            s.append_to_pin(digit);
+            let int_digit = digit.as_bytes()[0] - b'0';
+            s.append_to_pin(int_digit);
             // log_info!("PIN code updated: {}", s.get_pin());
+        });
+
+        ui.global::<EnterPinState>().set_password_sequence(slint::SharedString::from("7890123456"));
+
+        let ui_weak = ui.as_weak();
+
+        ui.global::<EnterPinState>().on_get_char(move |index| {
+            let ui = ui_weak.upgrade();
+            if let Some(ui) = ui {
+                let enter_pin = ui.global::<EnterPinState>();
+                let password_sequence = enter_pin.get_password_sequence();
+                let word = password_sequence[index as usize..(index as usize + 1)].to_ascii_lowercase();
+                //log_info!("Get char at index {}: {}", index, word);
+                slint::SharedString::from(word)
+            } else {
+                // UI was destroyed
+                slint::SharedString::new()
+            }
         });
 
         // Remove last char

@@ -6,13 +6,15 @@ import { TransparentButton } from "TransparentButton.slint";
 export global EnterPinState {
   in-out property <int> decoding-progress: -1; // -1 means no progress
   in-out property <bool> wrong-passcode;
-  callback append-char(digit: int);
+  in-out property <string> password-sequence;
+  callback append-char(digit: string);
   callback remove-char();
   callback passcode-entered();
   callback unlock(result: bool);
   callback progress-request();
   callback set-progress(progress: int);
   callback reset();
+  pure callback get-char(index: int) -> string;
   unlock(result) => {
       if !result {
           wrong-passcode = true;
@@ -24,7 +26,6 @@ export global EnterPinState {
       reset();
   }
   set-progress(progress) => {
-      debug("Setting decoding progress to", progress);
       decoding-progress = progress;
   }
   reset() => {
@@ -49,14 +50,13 @@ component PassChar {
     }
     TouchArea {
         width: parent.width * 3;
-        height: parent.height * 1.7;
+        height: parent.height * 3;
         pointer-event(event) => {
             if (event.kind == PointerEventKind.down) {
                 pressed = true;
             } else if (event.kind == PointerEventKind.up) {
                 pressed = false;
                 root.clicked();
-                debug("Clicked pin", content);
             }
         }
     }
@@ -79,16 +79,16 @@ component ProgressBar {
         width: 150px;
         height: 10px;
         border-color: Palette.black;
-        border-width: 2px;
+        border-width: 1px;
         border-radius: 10px;
         background: Palette.grey;
         Rectangle {
             width: (parent.width - parent.border-width) * progress / 100;
-            height: parent.height - 4px;
-            x: 2px;
-            y: 2px;
+            height: parent.height - 2px;
+            x: 0px;
+            y: 1px;
             background: EnterPinState.wrong-passcode ? Palette.red : Palette.black;
-            border-radius: 8px;
+            border-radius: 4px;
         }
         visible: progress != -1;
     }
@@ -109,90 +109,71 @@ component PinGrid {
         alignment: center;
         HorizontalLayout {
             spacing: spacing;
-            PassChar {content: "1";
+            PassChar {content: EnterPinState.get-char(0);
                 clicked() => {
-                    number-clicked(1);
+                    number-clicked(EnterPinState.get-char(0));
                 }
             }
-            PassChar {content: "2";
+            PassChar {content: EnterPinState.get-char(1);
                 clicked() => {
-                    number-clicked(2);
+                    number-clicked(EnterPinState.get-char(1));
                 }
             }
-            PassChar {content: "3";
+            PassChar {content: EnterPinState.get-char(2);
                 clicked() => {
-                    number-clicked(3);
+                    number-clicked(EnterPinState.get-char(2));
                 }
             }
-            PassChar {content: "4";
+            PassChar {content: EnterPinState.get-char(3);
                 clicked() => {
-                    number-clicked(4);
+                    number-clicked(EnterPinState.get-char(3));
                 }
             }
-            PassChar {content: "5";
+            PassChar {content: EnterPinState.get-char(4);
                 clicked() => {
-                    number-clicked(5);
+                    number-clicked(EnterPinState.get-char(4));
                 }
             }     
         }
         HorizontalLayout {
             spacing: spacing;
-            PassChar {content: "6";
+            PassChar {content: EnterPinState.get-char(5);
                 clicked() => {
-                    number-clicked(6);
+                    number-clicked(EnterPinState.get-char(5));
                 }
             }
-            PassChar {content: "7";
+            PassChar {content: EnterPinState.get-char(6);
                 clicked() => {
-                    number-clicked(7);
+                    number-clicked(EnterPinState.get-char(6));
                 }
             }
-            PassChar {content: "8";
+            PassChar {content: EnterPinState.get-char(7);
                 clicked() => {
-                    number-clicked(8);
+                    number-clicked(EnterPinState.get-char(7));
                 }
             }
-            PassChar {content: "9";
+            PassChar {content: EnterPinState.get-char(8);
                 clicked() => {
-                    number-clicked(9);
+                    number-clicked(EnterPinState.get-char(8));
                 }
             }
-            PassChar {content: "0";
+            PassChar {content: EnterPinState.get-char(9);
                 clicked() => {
-                    number-clicked(0);
+                    number-clicked(EnterPinState.get-char(9));
                 }
             }
         }
     }
-    callback number-clicked(int);
+    callback number-clicked(string);
 }
 
-component EraseButton {
-    property <bool> pressed: false;
-    in-out property <string> content: "<";
-    callback clicked();
-    Text {
-        text: content;
-        width: 30px;
-        height: 30px;
-        font-size: 20px;
-        color: pressed ? #d3d3d3 : red;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-        TouchArea {
-        width: parent.width;
-        height: parent.height;
-        pointer-event(event) => {
-                if (event.kind == PointerEventKind.down) {
-                    pressed = true;
-                } else if (event.kind == PointerEventKind.up) {
-                    pressed = false;
-                    root.clicked();
-                    debug("Clicked erase", content);
-                }
-            }
-        }
-    }
+component EraseButton inherits TransparentButton {
+    content: "<";
+    width: 30px;
+    height: 30px;
+    in-font-size: 20px;
+    text-color-pressed: Palette.black;
+    text-color-unpressed: Palette.blue;
 }
 
 component EnteredPassword {
