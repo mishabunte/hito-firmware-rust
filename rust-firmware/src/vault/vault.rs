@@ -17,6 +17,9 @@ use crate::vault::firmware_version::HitoFirmwareVersion;
 use crate::firmware_state::DeviceInfo;
 
 use crate::crypto::libcrypt0pro::stellar::StellarWallet;
+use qp_rusty_crystals_dilithium::PH;
+use qp_rusty_crystals_dilithium::ml_dsa_87::Keypair;
+use base32::*;
 
 type NowFn = fn() -> u64;
 
@@ -785,6 +788,50 @@ impl HitoVault {
       return Err(VaultError::VaultLocked);
     }
     Ok(StellarWallet::encode_stellar_address(&self.stellar_public).unwrap())
+  } 
+  
+  #[cfg(feature = "minifb")]
+  pub fn get_hdlattice_pub(&self) -> VaultResult<alloc::string::String> {
+
+    if !self.is_unlocked() {
+      return Err(VaultError::VaultLocked);
+    }
+    let pub_bytes = Keypair::generate(&self.entropy).public.bytes;
+    let pub_encoded = encode(Alphabet::Rfc4648 { padding: false }, &pub_bytes);
+    Ok(pub_encoded)
+  }
+  
+  #[cfg(feature = "minifb")]
+  pub fn sign_lattice_ph(&self, msg: &[u8]) -> VaultResult<alloc::string::String> {
+
+    if !self.is_unlocked() {
+      return Err(VaultError::VaultLocked);
+    }
+    let keypair = Keypair::generate(&self.entropy);
+    let signature = keypair.prehash_sign(msg, None, None, PH::SHA256);
+    if signature.is_none() {
+      return Err(VaultError::CryptoError);
+    }
+    let signature_encoded = encode(Alphabet::Rfc4648 { padding: false }, &signature.unwrap());
+    Ok(signature_encoded)
+  }
+  
+  #[cfg(feature = "minifb")]
+  pub fn verify_lattice_ph(&self, msg: &[u8], sig: &str) -> VaultResult<bool> {
+    use image::EncodableLayout;
+
+    if !self.is_unlocked() {
+      return Err(VaultError::VaultLocked);
+    }
+    let sig = decode(Alphabet::Rfc4648 { padding: false }, sig);
+    if sig.is_none() {
+      return Err(VaultError::CryptoError);
+    }
+    let binding = sig.unwrap();
+    let sig_bytes = binding.as_bytes();
+    let keypair = Keypair::generate(&self.entropy);
+    let verified = keypair.prehash_verify(msg, sig_bytes, None, PH::SHA256);
+    Ok(verified)
   }
 
   /// Save vault data with new passcode
