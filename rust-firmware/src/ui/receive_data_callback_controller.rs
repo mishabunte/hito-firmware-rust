@@ -1,6 +1,7 @@
 use crate::drivers::{Display};
 use crate::{STATE, ui::CallbackController, hito_firmware::HitoFirmware};
 use crate::slint_generatedMainWindow::ReceiveDataState;
+use crate::slint_generatedMainWindow::TestLatticeDataState;
 use crate::slint_generatedMainWindow::BrightnessController;
 use crate::slint_generatedMainWindow::MainWindow;
 use slint::{ComponentHandle, ToSharedString};
@@ -32,6 +33,11 @@ impl CallbackController for ReceiveDataCallbackController {
           s.mark_qr_data_requested();
           // log_info!("Receive data requested");
       });
+      ui.global::<TestLatticeDataState>().on_request_receive_data(move || {
+          let s = STATE.get().unwrap().lock();
+          s.mark_qr_data_requested();
+          // log_info!("Receive data requested");
+      });
       ui.global::<BrightnessController>().on_scale_shown_changed(move || {
           let s = STATE.get().unwrap().lock();
           s.mark_scale_shown_changed();
@@ -41,7 +47,7 @@ impl CallbackController for ReceiveDataCallbackController {
       let s = STATE.get().unwrap().lock();
       let receive_data_state = ui.global::<ReceiveDataState>();
       let router = ui.global::<Router>();
-
+      
       if s.is_qr_data_requested() || s.is_scale_shown_changed() {
         if router.get_current() == ScreenEnum::Receive {
           let address = firmware.vault.get_stellar_address().unwrap();
@@ -50,6 +56,17 @@ impl CallbackController for ReceiveDataCallbackController {
           firmware.display.draw_qr(75, 35, &qr_data);
           s.mark_qr_data_success();
           s.clear_scale_shown_changed();
+        }
+        #[cfg(feature = "minifb")]
+        if router.get_current() == ScreenEnum::TestLatticeScreen {
+          let test_data_state = ui.global::<TestLatticeDataState>();
+          let msg = "test sign msg";
+          let signature = firmware.vault.sign_lattice_ph(msg.as_bytes()).unwrap();
+          test_data_state.set_signature_short(slint::SharedString::from(&shorten_address(&signature)));
+          test_data_state.set_msg(slint::SharedString::from(msg));
+          let verified = firmware.vault.verify_lattice_ph(msg.as_bytes(), &signature);
+          test_data_state.set_verified(verified.unwrap().to_shared_string());
+          s.mark_qr_data_success();
         }
       }
     }

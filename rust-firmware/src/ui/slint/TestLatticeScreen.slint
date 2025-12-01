@@ -1,0 +1,40 @@
+export global TestLatticeDataState {
+    in-out property <string> msg;
+    in-out property <string> signature-short;
+    in-out property <string> verified;
+    callback request-receive-data();
+    in-out property <bool> qr-data-requested: false;
+}
+
+export component TestLatticeScreenView {
+    width: 320px;
+    height: 240px;
+    VerticalLayout {
+      alignment: center;
+      y: -10px;
+      Text {
+          text: TestLatticeDataState.msg;
+          font-size: 20px;
+          horizontal-alignment: center;
+          vertical-alignment: top;
+          //font-weight: 1000;
+      }
+      Text {
+          text: TestLatticeDataState.signature-short;
+          font-size: 20px;
+          horizontal-alignment: center;
+          vertical-alignment: center;
+          //font-weight: 1000;
+      }
+      Text {
+          text: "verified: " + TestLatticeDataState.verified;
+          font-size: 20px;
+          horizontal-alignment: center;
+          vertical-alignment: center;
+          //font-weight: 1000;
+      }
+    }
+    init => {
+       TestLatticeDataState.request-receive-data();
+    }
+}

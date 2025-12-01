@@ -14,6 +14,8 @@ import { DeviceInfoScreenView } from "DeviceInfoScreen.slint";
 import { DeviceInfoState } from "DeviceInfoScreen.slint";
 import { ReceiveScreenView } from "ReceiveScreen.slint";
 import { ReceiveDataState } from "ReceiveScreen.slint";
+import { TestLatticeScreenView } from "TestLatticeScreen.slint";
+import { TestLatticeDataState } from "TestLatticeScreen.slint";
 import { ShowSeedScreenView } from "ShowSeedScreen.slint";
 import { ShowSeedState } from "ShowSeedScreen.slint";
 import { SendScreenState } from "SendScreen.slint";
@@ -27,7 +29,7 @@ export { Router, ScreenEnum } // Export Router for global access
 
 export { StartScreen } from "SetStartScreen.slint";
 
-export { BrightnessController, BatteryController, EnterPinState, DeviceInfoState, ReceiveDataState, SendScreenState, SendStellarState, ShowSeedState, SignedState } // Export controllers for global access
+export { BrightnessController, BatteryController, EnterPinState, DeviceInfoState, ReceiveDataState, SendScreenState, SendStellarState, ShowSeedState, SignedState, TestLatticeDataState } // Export controllers for global access
 import "../../../res/fonts/RobotoMono-Regular.otf";
 import { BrightnessLogo, BrightnessBar } from "Brightness.slint";
 import { BatteryLevel } from "Battery.slint";
@@ -180,5 +182,6 @@ export component MainWindow inherits Window {
         if Router.current == ScreenEnum.ShowSeed: ShowSeedScreenView {}
         if Router.current == ScreenEnum.SendStellar: SendStellarScreenView {}
         if Router.current == ScreenEnum.Signed: SignedScreenView {}
+        if Router.current == ScreenEnum.TestLatticeScreen: TestLatticeScreenView {}
     }
 }
