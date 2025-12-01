@@ -1,10 +1,26 @@
 import { Router } from "Router.slint";
+import { ScreenEnum } from "ScreenEnum.slint";
 import { Palette } from "Palette.slint";
+import { SignedState } from "SignedScreen.slint";
 import { TransparentButton } from "TransparentButton.slint";
 
 export global SendStellarState {
-  in-out property <float> amount: 0.0;
-  in-out property <string> destination-short: "";
+    callback error-occurred();
+    in-out property <string> amount;               // "12.345"
+    in-out property <string> asset-code;           // "XLM"
+    in-out property <string> destination-short;    // "GABCD…WXYZ"
+    in-out property <string> memo-summary;         // 'text "Invoice #42"' or "None"
+
+    // Details properties (bind from Rust)
+    in-out property <string> source-short;         // "GA123…WXYZ"
+    in-out property <string> sequence;             // "1234567890123"
+    in-out property <string> fee;                  // "0.0000001 XLM"
+    in-out property <int>    op-count;             // 1, 2, 3…
+    in-out property <string> asset-issuer-short;   // "GBRPY…IR3J" or "Native"
+    in-out property <int> page-index: 0;
+    error-occurred => {
+      Router.navigate(ScreenEnum.Send);
+    }
 }
 
 component Spacer inherits Rectangle {
@@ -15,95 +31,152 @@ component Spacer inherits Rectangle {
     vertical-stretch: 1;
 }
 
+component SendStellarPage1 {
+  HorizontalLayout {
+    alignment: center;
+    VerticalLayout {
+      width: parent.width;
+      height: parent.height;
+      alignment: center;
+      Text {
+          text: "You send:\n" + SendStellarState.amount + " " + SendStellarState.asset-code;
+          font-size: 20px;
+          horizontal-alignment: center;
+      }
+      Spacer {height: 15px;}
+      Text {
+          text: "To:\n" + SendStellarState.destination-short;
+          font-size: 20px;
+          horizontal-alignment: center;
+      }
+    }
+  }
+}
+
+component SendStellarPage2 {
+  HorizontalLayout {
+    alignment: center;
+    x: -80px;
+    VerticalLayout {
+      y: -10px;
+      width: 125px;
+      height: parent.height;
+      alignment: center;
+      Text { text: "Source account:\n" + SendStellarState.source-short; font-size: 15px; }
+      Spacer {height: 5px;}
+      Text { text: "Sequence:\n" + SendStellarState.sequence; font-size: 15px; }
+      Spacer {height: 5px;}
+      Text { text: "Fee:\n" + SendStellarState.fee + " XLM"; font-size: 15px; }
+    }
+  }
+  HorizontalLayout {
+    alignment: end;
+    VerticalLayout {
+      y: 0px;
+      width: 125px;
+      height: parent.height;
+      alignment: center;
+      Text { 
+        text: "Operations:\n" + SendStellarState.op-count + " op(s)"; 
+        font-size: 15px; 
+      }
+      Spacer {height: 5px;}
+      Text { 
+        text: "Asset issuer:\n" + SendStellarState.asset-issuer-short; 
+        font-size: 15px; 
+      }
+      Spacer {height:15px;}
+      TransparentButton {
+        x: 25px;
+        width: 50px;
+        height: 50px;
+        text-color-pressed: Palette.black;
+        text-color-unpressed: Palette.blue;
+        content: "Memo\n";
+        in-font-size: 18px;
+        clicked => {
+          SendStellarState.page-index = 2;
+        }
+      }
+    }
+  }
+}
+
+component SendStellarPage3 {
+  HorizontalLayout {
+    alignment: center;
+    VerticalLayout {
+      y: 50px;
+      width: parent.width - 40px;
+      height: parent.height;
+      alignment: start;
+      Text { text: "Memo:\n" + SendStellarState.memo-summary; font-size: 20px; wrap: word-wrap; }
+    }
+  }
+}
+
 export component SendStellarScreenView {
     width: 320px;
     height: 240px;
-    HorizontalLayout {
-      x: 0px;
-      y: 0px;
+
+    // Page index: 0 = summary, 1 = details, 2 = memo
+
+    // Callbacks
+    callback reject-clicked;
+    callback confirm-clicked;
+    callback page-changed(page: int);
+    // SUMMARY PAGE (SendStellarState.page-index == 0)
+    SendStellarPage1 {
+        width: root.width;
+        height: root.height;
+        visible: SendStellarState.page-index == 0;
+    }
+    SendStellarPage2 {
+        width: root.width;
+        height: root.height;
+        visible: SendStellarState.page-index == 1;
+    }
+    SendStellarPage3 {
+        width: root.width;
+        height: root.height;
+        visible: SendStellarState.page-index == 2;
+    }
+
+    // Buttons row (bottom)
+    VerticalLayout {
       alignment: end;
-      padding-left: 30px;
-      padding-right: 24px;
-      padding-top: 45px;
-      width: parent.width;
-      height: parent.height - 100px;
-      VerticalLayout {
-        width: 100px;
-        height: 100px;
-        alignment: start;
-        Text {
-            text: "Amount:";
-            vertical-alignment: center;
-            horizontal-alignment: center;
-            font-size: 20px;
-            color: black;
-        }
-        Spacer {
-          height: 5px;
-        }
-        Text {
-            text: SendStellarState.amount;
-            vertical-alignment: center;
-            horizontal-alignment: center;
-            font-size: 20px;
-            color: black;
-        }
-        Spacer {
-          height: 5px;
-        }
-        Text {
-            text: "XLM";
-            vertical-alignment: center;
-            horizontal-alignment: center;
-            font-size: 20px;
-            //font-weight: 1000;
-            color: black;
-        }
-        Spacer {
-          height: 50px;
-        }
-        TransparentButton {
-            content: "SIGN";
-            text-color-pressed: Palette.black;
-            text-color-unpressed: Palette.blue;
-        }
+      y: -10px;
+      HorizontalLayout {
+
+          // Left button: REJECT on page 0, BACK on page 1
+          TransparentButton {
+              text-color-pressed: Palette.black;
+              text-color-unpressed: Palette.blue;
+              content: SendStellarState.page-index == 0 ? "DETAILS" : "BACK";
+              clicked => {
+                  if SendStellarState.page-index == 0 {
+                      SendStellarState.page-index = 1;
+                      root.page-changed(SendStellarState.page-index);
+                  } else {
+                      SendStellarState.page-index = 0;
+                      root.page-changed(SendStellarState.page-index);
+                  }
+                  
+              }
+          }
+
+          // Right button: CONFIRM (both pages)
+          TransparentButton {
+              text-color-pressed: Palette.black;
+              text-color-unpressed: Palette.blue;
+              content: "SIGN";
+              clicked => {
+                  SignedState.request-data();
+                  Router.navigate(ScreenEnum.Signed);
+              }
+          }
       }
     }
-    HorizontalLayout {
-      x: 0px;
-      y: 0px;
-      padding-left: 30px;
-      padding-right: 24px;
-      padding-top: 53px;
-      alignment: start;
-      width: parent.width;
-      height: parent.height;
-      VerticalLayout {
-        alignment: start;
-        vertical-stretch: 1;
-        Image {
-            source: @image-url("../../../res/img/stellar_logo.png");
-            width: 75px;
-            height: 75px;
-        }
-        Spacer {
-          height: 10px;
-        }
-        Text {
-            text: "To:";
-            font-size: 20px;
-            color: black;
-            wrap: word-wrap;
-            width: 130px;
-        }
-        Text {
-            text: SendStellarState.destination-short;
-            font-size: 20px;
-            color: black;
-            //font-weight: 1000;
-            wrap: word-wrap;
-            width: 130px;
-        }
-      }
-    }
+
+    // DETAILS PAGE (SendStellarState.page-index == 1)
 }

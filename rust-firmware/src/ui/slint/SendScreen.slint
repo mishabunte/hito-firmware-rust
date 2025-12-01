@@ -24,6 +24,11 @@ export global SendScreenState {
 export component SendScreenView {
     width: 320px;
     height: 240px;
+    init => {
+      SendScreenState.protocol-changed();
+      SendScreenState.error-occurred = false;
+      SendScreenState.error-message = "";
+    }
     // show-brightness: true; // Show brightness control on home screen
     // header-title: "SEND CRYPTO";
     in property <image> image-src: SendScreenState.current-protocol == Protocol.NFC ? @image-url("../../../res/img/nfc.png") : @image-url("../../../res/img/bt_logo.png");
@@ -72,7 +77,7 @@ export component SendScreenView {
         text-color-unpressed: Palette.blue;
         y: 190px;
         clicked => {
-          debug("Switch button clicked");
+          //debug("Switch button clicked");
           SendScreenState.protocol-changed();
           if (SendScreenState.current-protocol == Protocol.NFC) {
               SendScreenState.current-protocol = Protocol.Bluetooth;

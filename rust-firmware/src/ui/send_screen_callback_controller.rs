@@ -1,3 +1,4 @@
+use crate::firmware_state::FirmwareState;
 use crate::{STATE, ui::CallbackController, hito_firmware::HitoFirmware};
 use crate::slint_generatedMainWindow::SendScreenState;
 use crate::slint_generatedMainWindow::SendStellarState;
@@ -11,6 +12,7 @@ use crate::crypto::libcrypt0pro::stellar::StellarTransactionParser;
 use crate::crypto::libcrypt0pro::stellar::StellarWallet;
 extern crate alloc;
 use alloc::format;
+use slint::ToSharedString;
 
 
 #[cfg(feature = "minifb")]
@@ -39,6 +41,17 @@ enum CallType {
     Unknown
 }
 
+fn shorten_address(address: &str) -> alloc::string::String {
+    if address.len() <= 17 {
+        return alloc::string::String::from(address);
+    }
+    let first_quarter = &address[0..4];
+
+    let last_quarter = &address[address.len()-4..];
+    let last = last_quarter.to_shared_string();
+    alloc::format!("{}..{}", first_quarter, last)
+}
+
 fn str_to_call_type(s: &str) -> CallType {
     if s.starts_with("stellar.sign:") {
         CallType::Stellar
@@ -47,13 +60,70 @@ fn str_to_call_type(s: &str) -> CallType {
     }
 }
 
-fn handle_stellar_transaction(tx_data: &str, ui: &MainWindow) {
+fn handle_stellar_transaction(tx_data: &str, ui: &MainWindow, state: &FirmwareState) {
     let send_screen_state = ui.global::<SendScreenState>();
     match StellarTransactionParser::parse_transaction(tx_data) {
         Ok(parsed_tx) => {
             use crate::crypto::crypt0::hex_to_bytes;
 
-            // log_info!("Parsed Stellar transaction: {:#?}", parsed_tx);
+            //log_info!("Parsed Stellar transaction: {:#?}", parsed_tx);
+
+            let send_stellar_state = ui.global::<SendStellarState>();
+            let pk_vec = hex_to_bytes(&parsed_tx.source_account).expect("invalid hex for source_account");
+            let pk: [u8; 32] = pk_vec
+                                    .as_slice()
+                                    .try_into()
+                                    .expect("pubkey length != 32");
+            let address = StellarWallet::encode_stellar_address(&pk).expect("failed to encode stellar address");
+            if address != state.get_stellar_address().unwrap() {
+                //log_info!("Source address mismatch: expected {}, got {}", send_stellar_state.get_source_short().to_string(), address);
+                send_stellar_state.invoke_error_occurred();
+                send_screen_state.set_error_occurred(true);
+                send_screen_state.set_error_message(slint::SharedString::from("Wallet is not paired"));
+                return;
+            }
+            send_stellar_state.set_source_short(slint::SharedString::from(&shorten_address(&address)));
+            send_stellar_state.set_sequence(slint::SharedString::from(format!("{}", parsed_tx.sequence_number)));
+
+            let memo = parsed_tx.memo.clone().unwrap().value.unwrap_or(String::from("None"));
+            send_stellar_state.set_memo_summary(slint::SharedString::from(&memo));
+
+            send_stellar_state.set_fee(slint::SharedString::from(StellarTransactionParser::stroops_to_xlm_string(parsed_tx.fee)));
+
+            let asset_code = if parsed_tx.operations.len() > 0 {
+                match &parsed_tx.operations[0].details {
+                    crate::crypto::libcrypt0pro::stellar::OperationDetails::Payment { asset, .. } => {
+                        match asset {
+                            crate::crypto::libcrypt0pro::stellar::ParsedAsset::Native => "XLM".to_shared_string(),
+                            crate::crypto::libcrypt0pro::stellar::ParsedAsset::CreditAlphanum4 { code, .. } => code.clone().to_shared_string(),
+                            crate::crypto::libcrypt0pro::stellar::ParsedAsset::CreditAlphanum12 { code, .. } => code.clone().to_shared_string(),
+                        }
+                    }
+                    crate::crypto::libcrypt0pro::stellar::OperationDetails::CreateAccount { .. } => "XLM".to_shared_string(),
+                    _ => "XLM".to_shared_string()
+                }
+            } else {
+                "XLM".to_shared_string()
+            };  
+            send_stellar_state.set_asset_code(asset_code);
+            send_stellar_state.set_op_count(parsed_tx.operations.len() as i32);
+            let asset_issuer = if parsed_tx.operations.len() > 0 {
+                match &parsed_tx.operations[0].details {
+                    crate::crypto::libcrypt0pro::stellar::OperationDetails::Payment { asset, .. } => {
+                        match asset {
+                            crate::crypto::libcrypt0pro::stellar::ParsedAsset::Native => "Native".to_shared_string(),
+                            crate::crypto::libcrypt0pro::stellar::ParsedAsset::CreditAlphanum4 { issuer, .. } => issuer.clone().to_shared_string(),
+                            crate::crypto::libcrypt0pro::stellar::ParsedAsset::CreditAlphanum12 { issuer, .. } => issuer.clone().to_shared_string(),
+                        }
+                    }
+                    crate::crypto::libcrypt0pro::stellar::OperationDetails::CreateAccount { .. } => "Native".to_shared_string(),
+                    _ => "".to_shared_string()
+                }
+            } else {
+                "".to_shared_string()
+            };  
+            send_stellar_state.set_asset_issuer_short(asset_issuer);
+
 
             // Extract amount from the first payment or create_account operation
             let amount = parsed_tx.operations.iter().find_map(|op| {
@@ -69,7 +139,7 @@ fn handle_stellar_transaction(tx_data: &str, ui: &MainWindow) {
             });
 
             if amount.is_none() {
-                // log_info!("No payment or create_account operation found in transaction");
+                //log_info!("No payment or create_account operation found in transaction");
                 send_screen_state.set_error_occurred(true);
                 send_screen_state.set_error_message(slint::SharedString::from("No payment or create_account operation found"));
                 return;
@@ -96,7 +166,7 @@ fn handle_stellar_transaction(tx_data: &str, ui: &MainWindow) {
             };
 
             if dest_hex.is_none() {
-                // log_info!("No destination address found in transaction");
+                // //log_info!("No destination address found in transaction");
                 send_screen_state.set_error_occurred(true);
                 send_screen_state.set_error_message(slint::SharedString::from("No destination address found"));
                 return;
@@ -107,18 +177,19 @@ fn handle_stellar_transaction(tx_data: &str, ui: &MainWindow) {
             dest_bytes.copy_from_slice(&hex_to_bytes(&dest_hex).unwrap());
             let destination = StellarWallet::encode_stellar_address(&dest_bytes);
             if destination.is_err() {
-                // log_info!("Failed to encode destination address: {:?}", destination.err());
+                // //log_info!("Failed to encode destination address: {:?}", destination.err());
                 send_screen_state.set_error_occurred(true);
                 send_screen_state.set_error_message(slint::SharedString::from("Failed to encode destination address"));
                 return;
             }
-            let destination_short = format!("{}...\n{}", &destination.as_ref().unwrap()[0..ADDRESS_SHORT_LENGTH/2], &destination.as_ref().unwrap()[destination.as_ref().unwrap().len()-ADDRESS_SHORT_LENGTH/2..]);
+            let destination_short = shorten_address(&destination.as_ref().unwrap());
 
             // Update UI with transaction details
-            let send_stellar_state = ui.global::<SendStellarState>();
-            send_stellar_state.set_amount(amount.parse::<f32>().unwrap_or(0.0));
-            send_stellar_state.set_destination_short(slint::SharedString::from(destination_short));
+            send_stellar_state.set_amount(slint::SharedString::from(&amount));
+            send_stellar_state.set_destination_short(slint::SharedString::from(&destination_short));
             send_screen_state.invoke_send_requested();
+            //log_info!("Stellar transaction parsed successfully: amount={}, destination={}", amount, destination.as_ref().unwrap());
+            state.set_parsed_tx(parsed_tx);
         }
         Err(e) => {
             send_screen_state.set_error_occurred(true);
@@ -127,7 +198,7 @@ fn handle_stellar_transaction(tx_data: &str, ui: &MainWindow) {
     }
 }
 
-fn parse_data(data: &[u8], send_screen_state: &SendScreenState, ui: &MainWindow) {
+fn parse_data(data: &[u8], send_screen_state: &SendScreenState, ui: &MainWindow, state: &FirmwareState) {
     let mut start_from = 0;
     #[cfg(feature = "zephyr")]
     {
@@ -135,12 +206,12 @@ fn parse_data(data: &[u8], send_screen_state: &SendScreenState, ui: &MainWindow)
         start_from = 3;
       }
     }
-    log_info!("Data received: {:?}", String::from_utf8_lossy(&data[start_from..]));
     let utf8_data = String::from_utf8_lossy(&data[start_from..]);
 
     match str_to_call_type(&utf8_data) {
         CallType::Stellar => {
-            handle_stellar_transaction(&utf8_data["stellar.sign:".len()..], ui);
+            //log_info!("Call type identified as Stellar transaction");
+            handle_stellar_transaction(&utf8_data["stellar.sign:".len()..], ui, state);
         },
         CallType::Unknown => {
             send_screen_state.set_error_occurred(true);
@@ -154,7 +225,7 @@ impl CallbackController for SendScreenCallbackController {
         ui.global::<SendScreenState>().on_protocol_changed(move || {
           let s = STATE.get().unwrap().lock();
           s.mark_protocol_requested();
-          // log_info!("Protocol change requested from UI");
+          // //log_info!("Protocol change requested from UI");
         });
     }
     fn handle_loop_events(&self, ui: &MainWindow, firmware: &mut HitoFirmware) {
@@ -163,18 +234,19 @@ impl CallbackController for SendScreenCallbackController {
         let send_screen_state = ui.global::<SendScreenState>();
         let router = ui.global::<Router>();
         if s.is_protocol_change_requested() {
+            s.set_stellar_address(firmware.vault.get_stellar_address().unwrap());
             #[cfg(feature = "zephyr")]
             {
               let protocol = send_screen_state.get_current_protocol();
               match protocol {
                   Protocol::NFC => {
                     NFC_HARDWARE_HANDLER.init("Thou shall not use std!");
-                    // log_info!("Protocol set to NFC - NFC handler initialized");
+                    // //log_info!("Protocol set to NFC - NFC handler initialized");
                     BLE_HARDWARE_HANDLER.stop();
                   },
                   Protocol::Bluetooth => {
                     BLE_HARDWARE_HANDLER.init();
-                    // log_info!("Protocol set to Bluetooth - BLE handler initialized");
+                    // //log_info!("Protocol set to Bluetooth - BLE handler initialized");
                     NFC_HARDWARE_HANDLER.stop();
                   },
               }
@@ -191,10 +263,10 @@ impl CallbackController for SendScreenCallbackController {
                             unsafe {
                                 SOCKET_PROTOCOL_HANDLER = Some(socket);
                             }
-                            // log_info!("Socket protocol initialized for Send screen");
+                            // //log_info!("Socket protocol initialized for Send screen");
                         },
                         Err(e) => {
-                            // log_info!("Failed to initialize socket protocol: {:?}", e);
+                            // //log_info!("Failed to initialize socket protocol: {:?}", e);
                             send_screen_state.set_error_occurred(true);
                             send_screen_state.set_error_message(slint::SharedString::from("Failed to initialize socket protocol"));
                         }
@@ -210,7 +282,7 @@ impl CallbackController for SendScreenCallbackController {
                             unsafe {
                               DATA = Some(data);
                               if let Some(ref data) = DATA {
-                                parse_data(&data, &send_screen_state, ui);
+                                parse_data(&data, &send_screen_state, ui, &s);
                               }
                             }
                           },
@@ -218,7 +290,7 @@ impl CallbackController for SendScreenCallbackController {
                               // No data available
                           },
                           Err(e) => {
-                              // log_info!("Linux Socket: Receive error: {:?}", e);
+                              // //log_info!("Linux Socket: Receive error: {:?}", e);
                       }
                     }
                   }
@@ -242,7 +314,7 @@ impl CallbackController for SendScreenCallbackController {
               }
               unsafe {
                 if let Some(ref data) = DATA {
-                  parse_data(&data, &send_screen_state, ui);
+                  parse_data(&data, &send_screen_state, ui, &s);
                 }
               }
             }
@@ -255,9 +327,14 @@ impl CallbackController for SendScreenCallbackController {
                     socket.close();
                     send_screen_state.set_error_occurred(false);
                     send_screen_state.set_error_message(slint::SharedString::from(""));
-                    // log_info!("Not on Send screen - Socket closed");
+                    // //log_info!("Not on Send screen - Socket closed");
                 }
               }
+            }
+            #[cfg(feature = "zephyr")]
+            {
+              NFC_HARDWARE_HANDLER.stop();
+              BLE_HARDWARE_HANDLER.stop();
             }
         }
     }
