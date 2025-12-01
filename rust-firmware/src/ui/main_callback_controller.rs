@@ -3,6 +3,10 @@ use crate::{STATE, ui::CallbackController, hito_firmware::HitoFirmware};
 use crate::slint_generatedMainWindow::BrightnessController;
 use crate::slint_generatedMainWindow::MainWindow;
 use crate::slint_generatedMainWindow::BatteryController;
+
+#[cfg(feature = "zephyr")]
+use crate::slint_generatedMainWindow::{StartScreen, ScreenEnum};
+
 use slint::ComponentHandle;
 use crate::log_info;
 
@@ -15,6 +19,9 @@ impl CallbackController for MainCallbackController {
           let s = STATE.get().unwrap().lock();
           s.set_brightness(v as u8);
       });
+
+      #[cfg(feature = "zephyr")]
+      ui.global::<StartScreen>().set_screen(ScreenEnum::Lock);
 
       // Battery 
       ui.global::<BatteryController>().on_battery_level_request(move || {

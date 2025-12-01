@@ -1,31 +1,33 @@
-// #![no_std]
+#![no_std]
 
-// extern crate alloc;
-// use alloc::{vec::Vec, string::String};
-// use base64ct::{Base64, Encoding};
+extern crate alloc;
+use alloc::{vec::Vec, string::String};
+use base64ct::{Base64, Encoding};
 
-// use crate::crypto::libcrypt0pro::stellar::{
-//     ParsedTransaction, ParsedMemo, ParsedTimeBounds, ParsedLedgerBounds,
-//     ParsedOperation, ParsedMuxedAccount, OperationDetails, ParsedAsset,
-//     ParsedChangeTrustAsset, ParsedSignature, TransactionEnvelopeType,
-//     TransactionParseError, BoundedString, MAX_XDR_LEN
-// };
+use crate::crypto::crypt0::hex_to_bytes;
 
-// pub enum TransactionSerializeError {
-//     Base64Error,
-//     XdrError,
-//     InvalidEnvelopeType,
-//     UnsupportedOperation,
-//     StringTooLong,
-//     TooManyOperations,
-//     TooManySignatures,
-//     DataTooLarge,
-//     AccountIdError,
-//     MuxedAccountError,
-// }
+use crate::crypto::libcrypt0pro::stellar::{
+    ParsedTransaction, ParsedMemo, ParsedTimeBounds, ParsedLedgerBounds,
+    ParsedOperation, ParsedMuxedAccount, OperationDetails, ParsedAsset,
+    ParsedChangeTrustAsset, ParsedSignature, TransactionEnvelopeType,
+    TransactionParseError, MAX_XDR_LEN
+};
+
+pub enum TransactionSerializeError {
+    Base64Error,
+    XdrError,
+    InvalidEnvelopeType,
+    UnsupportedOperation,
+    StringTooLong,
+    TooManyOperations,
+    TooManySignatures,
+    DataTooLarge,
+    AccountIdError,
+    MuxedAccountError,
+}
 
 // impl core::fmt::Display for TransactionSerializeError {
-//     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+//     fn fmt(f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 //         match self {
 //             TransactionSerializeError::Base64Error => write!(f, "Base64 decode error"),
 //             TransactionSerializeError::XdrError => write!(f, "XDR parsing error"),
@@ -41,574 +43,710 @@
 //     }
 // }
 
-// use crate::printk;
+use crate::printk;
 
-// #[derive(Debug)]
-// pub struct StellarTransactionSerializer {
-//     buffer: Vec<u8>,
-// }
+#[derive(Debug)]
+pub struct StellarTransactionSerializer;
 
-// impl StellarTransactionSerializer {
-//     pub fn new() -> Self {
-//         Self {
-//             buffer: Vec::with_capacity(MAX_XDR_LEN),
-//         }
-//     }
+impl StellarTransactionSerializer {
+    pub fn new() -> Self {
+        Self {
+        }
+    }
 
-//     /// Serialize ParsedTransaction directly to XDR bytes
-//     pub fn serialize_to_xdr_bytes(&mut self, parsed_tx: &ParsedTransaction) -> Result<Vec<u8>, TransactionParseError> {
-//         self.buffer.clear();
+    /// Serialize ParsedTransaction directly to XDR bytes
+    pub fn serialize_to_xdr_bytes(parsed_tx: &ParsedTransaction, buffer: &mut Vec<u8>) -> Result<Vec<u8>, TransactionParseError> {
+        match parsed_tx.envelope_type {
+            TransactionEnvelopeType::TxV0 => {
+                Self::write_u32(0, buffer)?; // ENVELOPE_TYPE_TX_V0
+                Self::serialize_v0_transaction(parsed_tx, buffer)?;
+            },
+            TransactionEnvelopeType::Tx => {
+                Self::write_u32(2, buffer)?; // ENVELOPE_TYPE_TX
+                Self::serialize_v1_transaction(parsed_tx, buffer)?;
+            },
+            TransactionEnvelopeType::TxFeeBump => {
+                Self::write_u32(5, buffer)?; // ENVELOPE_TYPE_TX_FEE_BUMP
+                Self::serialize_fee_bump_transaction(parsed_tx, buffer)?;
+            }
+        }
         
-//         match parsed_tx.envelope_type {
-//             TransactionEnvelopeType::TxV0 => {
-//                 self.write_u32(0)?; // ENVELOPE_TYPE_TX_V0
-//                 self.serialize_v0_transaction(parsed_tx)?;
-//             },
-//             TransactionEnvelopeType::Tx => {
-//                 self.write_u32(2)?; // ENVELOPE_TYPE_TX
-//                 self.serialize_v1_transaction(parsed_tx)?;
-//             },
-//             TransactionEnvelopeType::TxFeeBump => {
-//                 self.write_u32(5)?; // ENVELOPE_TYPE_TX_FEE_BUMP
-//                 self.serialize_fee_bump_transaction(parsed_tx)?;
-//             }
-//         }
-        
-//         Ok(self.buffer.clone())
-//     }
+        Ok(buffer.clone())
+    }
 
-//     /// Serialize to base64-encoded XDR string
-//     pub fn serialize_to_base64(&mut self, parsed_tx: &ParsedTransaction) -> Result<String, TransactionParseError> {
-//         let xdr_bytes = self.serialize_to_xdr_bytes(parsed_tx)?;
-//         self.encode_base64(&xdr_bytes)
-//     }
+    /// Serialize to base64-encoded XDR string
+    pub fn serialize_to_base64(parsed_tx: &ParsedTransaction) -> Result<String, TransactionParseError> {
+        let mut buffer = Vec::with_capacity(MAX_XDR_LEN);
+        let xdr_bytes = Self::serialize_to_xdr_bytes(parsed_tx, &mut buffer)?;
+        Self::encode_base64(&xdr_bytes)
+    }
 
-//     fn serialize_v0_transaction(&mut self, parsed_tx: &ParsedTransaction) -> Result<(), TransactionParseError> {
-//         printk!("Serializing V0 transaction\n");
-        
-//         // Source account (32 bytes)
-//         self.write_account_id(&parsed_tx.source_account)?;
-        
-//         // Fee (4 bytes)
-//         self.write_u32(parsed_tx.fee as u32)?;
-        
-//         // Sequence number (8 bytes)
-//         self.write_u64(parsed_tx.sequence_number as u64)?;
-        
-//         // Time bounds (optional)
-//         if let Some(ref time_bounds) = parsed_tx.time_bounds {
-//             self.write_u32(1)?; // Present
-//             self.serialize_time_bounds(time_bounds)?;
-//         } else {
-//             self.write_u32(0)?; // Not present
-//         }
-        
-//         // Memo
-//         self.serialize_memo(parsed_tx.memo.as_ref())?;
-        
-//         // Operations
-//         self.serialize_operations(&parsed_tx.operations)?;
-        
-//         // Extension (V0 = 0)
-//         self.write_u32(0)?;
-        
-//         // Signatures
-//         self.serialize_signatures(&parsed_tx.signatures)?;
-        
-//         Ok(())
-//     }
+    pub fn build_signature_base(
+        parsed_tx: &ParsedTransaction,
+        network_id: &str,
+    ) -> Result<Vec<u8>, TransactionParseError> {
+        let mut buffer = Vec::with_capacity(MAX_XDR_LEN);
 
-//     fn serialize_v1_transaction(&mut self, parsed_tx: &ParsedTransaction) -> Result<(), TransactionParseError> {
-//         printk!("Serializing V1 transaction\n");
-        
-//         // Source account (muxed)
-//         self.write_muxed_account(&ParsedMuxedAccount::Ed25519 {
-//             account_id: parsed_tx.source_account.clone()
-//         })?;
-        
-//         // Fee (4 bytes)
-//         self.write_u32(parsed_tx.fee as u32)?;
-        
-//         // Sequence number (8 bytes)
-//         self.write_u64(parsed_tx.sequence_number as u64)?;
-        
-//         // Preconditions
-//         self.serialize_preconditions(&parsed_tx.time_bounds, &parsed_tx.ledger_bounds)?;
-        
-//         // Memo
-//         self.serialize_memo(parsed_tx.memo.as_ref())?;
-        
-//         // Operations
-//         self.serialize_operations(&parsed_tx.operations)?;
-        
-//         // Extension (V0 = 0)
-//         self.write_u32(0)?;
-        
-//         // Signatures
-//         self.serialize_signatures(&parsed_tx.signatures)?;
-        
-//         Ok(())
-//     }
+        let network_id_hash = unsafe {
+            let mut hash = [0u8; 32];
+            let res = crate::crypto::ffi::crypt0_sha256(
+                network_id.as_ptr(),
+                network_id.len(),
+                hash.as_mut_ptr(),
+                hash.len(),
+            );
+            if !res {
+                return Err(TransactionParseError::XdrError);
+            }
+            hash
+        };
 
-//     fn serialize_fee_bump_transaction(&mut self, parsed_tx: &ParsedTransaction) -> Result<(), TransactionParseError> {
-//         printk!("Serializing Fee Bump transaction\n");
-        
-//         // Fee source (muxed account)
-//         self.write_muxed_account(&ParsedMuxedAccount::Ed25519 {
-//             account_id: parsed_tx.source_account.clone()
-//         })?;
-        
-//         // Fee
-//         self.write_u64(parsed_tx.fee as u64)?;
-        
-//         // Inner transaction type (always TX = 2)
-//         self.write_u32(2)?;
-        
-//         // Inner transaction (serialize as V1)
-//         self.serialize_v1_transaction(parsed_tx)?;
-        
-//         // Extension (V0 = 0)
-//         self.write_u32(0)?;
-        
-//         // Fee bump signatures (replace V1 signatures)
-//         self.serialize_signatures(&parsed_tx.signatures)?;
-        
-//         Ok(())
-//     }
+        // 1. networkId (already SHA256(passphrase) done outside)
+        buffer.extend_from_slice(network_id_hash.as_slice());
 
-//     fn serialize_memo(&mut self, memo: Option<&ParsedMemo>) -> Result<(), TransactionParseError> {
-//         match memo {
-//             None => {
-//                 self.write_u32(0)?; // MEMO_NONE
-//             },
-//             Some(memo) => {
-//                 match memo.memo_type.as_str() {
-//                     "none" => {
-//                         self.write_u32(0)?; // MEMO_NONE
-//                     },
-//                     "text" => {
-//                         self.write_u32(1)?; // MEMO_TEXT
-//                         if let Some(ref text) = memo.value {
-//                             self.write_string(text)?;
-//                         } else {
-//                             self.write_u32(0)?; // Empty string
-//                         }
-//                     },
-//                     "id" => {
-//                         self.write_u32(2)?; // MEMO_ID
-//                         if let Some(ref id_str) = memo.value {
-//                             let id = self.parse_u64_from_string(id_str)?;
-//                             self.write_u64(id)?;
-//                         } else {
-//                             self.write_u64(0)?;
-//                         }
-//                     },
-//                     "hash" => {
-//                         self.write_u32(3)?; // MEMO_HASH
-//                         if let Some(ref hash_str) = memo.value {
-//                             let hash_bytes = self.hex_string_to_bytes(hash_str)?;
-//                             self.write_fixed_bytes(&hash_bytes, 32)?;
-//                         } else {
-//                             self.write_fixed_bytes(&[0u8; 32], 32)?;
-//                         }
-//                     },
-//                     "return" => {
-//                         self.write_u32(4)?; // MEMO_RETURN
-//                         if let Some(ref return_str) = memo.value {
-//                             let return_bytes = self.hex_string_to_bytes(return_str)?;
-//                             self.write_fixed_bytes(&return_bytes, 32)?;
-//                         } else {
-//                             self.write_fixed_bytes(&[0u8; 32], 32)?;
-//                         }
-//                     },
-//                     _ => return Err(TransactionParseError::XdrError),
-//                 }
-//             }
-//         }
-//         Ok(())
-//     }
+        match parsed_tx.envelope_type {
+            TransactionEnvelopeType::TxV0 | TransactionEnvelopeType::Tx => {
+                // IMPORTANT:
+                // Backwards compatibility rule:
+                // We ALWAYS use ENVELOPE_TYPE_TX (2) for signing both TxV0 and Tx.
+                Self::write_u32(2, &mut buffer)?; // ENVELOPE_TYPE_TX
 
-//     fn serialize_preconditions(
-//         &mut self,
-//         time_bounds: &Option<ParsedTimeBounds>,
-//         ledger_bounds: &Option<ParsedLedgerBounds>
-//     ) -> Result<(), TransactionParseError> {
-//         match (time_bounds, ledger_bounds) {
-//             (None, None) => {
-//                 self.write_u32(0)?; // PRECOND_NONE
-//             },
-//             (Some(tb), None) => {
-//                 self.write_u32(1)?; // PRECOND_TIME
-//                 self.serialize_time_bounds(tb)?;
-//             },
-//             (time_bounds, ledger_bounds) => {
-//                 self.write_u32(2)?; // PRECOND_V2
+                // Then XDR for Transaction (no signatures!)
+                Self::serialize_tx_core_for_signature(parsed_tx, &mut buffer)?;
+            }
+            TransactionEnvelopeType::TxFeeBump => {
+                // Fee bump case uses ENVELOPE_TYPE_TX_FEE_BUMP (5)
+                Self::write_u32(5, &mut buffer)?; // ENVELOPE_TYPE_TX_FEE_BUMP
+
+                // Then XDR for FeeBumpTransaction (no outer signatures!)
+                Self::serialize_fee_bump_core_for_signature(parsed_tx, &mut buffer)?;
+            }
+        }
+
+        Ok(buffer)
+    }
+
+    fn serialize_tx_core_for_signature(
+        parsed_tx: &ParsedTransaction,
+        buffer: &mut Vec<u8>,
+    ) -> Result<(), TransactionParseError> {
+        match parsed_tx.envelope_type {
+            TransactionEnvelopeType::TxV0 => {
+                // Equivalent to Transaction with AccountID source, old-school timebounds.
+                Self::write_account_id(&parsed_tx.source_account, buffer)?;
+                Self::write_u32(parsed_tx.fee as u32, buffer)?;
+                Self::write_u64(parsed_tx.sequence_number as u64, buffer)?;
+
+                if let Some(ref time_bounds) = parsed_tx.time_bounds {
+                    Self::write_u32(1, buffer)?; // Present
+                    Self::serialize_time_bounds(time_bounds, buffer)?;
+                } else {
+                    Self::write_u32(0, buffer)?; // Not present
+                }
+
+                Self::serialize_memo(parsed_tx.memo.as_ref(), buffer)?;
+                Self::serialize_operations(&parsed_tx.operations, buffer)?;
+                Self::write_u32(0, buffer)?; // ext = 0
+            }
+            TransactionEnvelopeType::Tx => {
+                // V1-style transaction (muxed account + preconditions)
+                Self::write_muxed_account(
+                    &ParsedMuxedAccount::Ed25519 {
+                        account_id: parsed_tx.source_account.clone(),
+                    },
+                    buffer,
+                )?;
+
+                Self::write_u32(parsed_tx.fee as u32, buffer)?;
+                Self::write_u64(parsed_tx.sequence_number as u64, buffer)?;
+
+                Self::serialize_preconditions(
+                    &parsed_tx.time_bounds,
+                    &parsed_tx.ledger_bounds,
+                    buffer,
+                )?;
+
+                Self::serialize_memo(parsed_tx.memo.as_ref(), buffer)?;
+                Self::serialize_operations(&parsed_tx.operations, buffer)?;
+                Self::write_u32(0, buffer)?; // ext = 0
+            }
+            TransactionEnvelopeType::TxFeeBump => {
+                // Should not happen, handled by serialize_fee_bump_core_for_signature.
+                return Err(TransactionParseError::XdrError);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn serialize_fee_bump_core_for_signature(
+        parsed_tx: &ParsedTransaction,
+        buffer: &mut Vec<u8>,
+    ) -> Result<(), TransactionParseError> {
+        // Fee source (muxed)
+        Self::write_muxed_account(
+            &ParsedMuxedAccount::Ed25519 {
+                account_id: parsed_tx.source_account.clone(),
+            },
+            buffer,
+        )?;
+
+        // Fee (int64)
+        Self::write_u64(parsed_tx.fee as u64, buffer)?;
+
+        // Inner transaction type (currently always ENVELOPE_TYPE_TX = 2)
+        Self::write_u32(2, buffer)?;
+
+        // Inner transaction envelope (v1) WITHOUT the outer (fee bump) signatures.
+        //
+        // We reuse the same core layout as serialize_v1_transaction but skip
+        // writing ParsedTransaction.signatures at the end.
+        //
+        //   struct TransactionV1Envelope {
+        //     TransactionV1 tx;
+        //     DecoratedSignature signatures<20>; // inner signatures (not fee bump)
+        //   };
+        //
+        // Our ParsedTransaction currently does not distinguish between inner and
+        // outer signatures, so if/when you add that, you'll want to adjust this
+        // part to write the correct inner envelope.
+        Self::write_muxed_account(
+            &ParsedMuxedAccount::Ed25519 {
+                account_id: parsed_tx.source_account.clone(),
+            },
+            buffer,
+        )?;
+        Self::write_u32(parsed_tx.fee as u32, buffer)?;
+        Self::write_u64(parsed_tx.sequence_number as u64, buffer)?;
+        Self::serialize_preconditions(&parsed_tx.time_bounds, &parsed_tx.ledger_bounds, buffer)?;
+        Self::serialize_memo(parsed_tx.memo.as_ref(), buffer)?;
+        Self::serialize_operations(&parsed_tx.operations, buffer)?;
+        Self::write_u32(0, buffer)?; // tx.ext = 0
+
+        // FeeBumpTransaction ext = 0
+        Self::write_u32(0, buffer)?;
+
+        Ok(())
+    }
+
+    pub fn compute_signature_hint(account_hex: &String) -> [u8; 4] {
+        let pk_bytes = hex_to_bytes(account_hex).unwrap();
+        let len = pk_bytes.len();
+        let start = len.saturating_sub(4);
+        let mut hint = [0u8; 4];
+        hint.copy_from_slice(&pk_bytes[start..len]);
+        hint
+    }
+
+    fn serialize_v0_transaction(parsed_tx: &ParsedTransaction, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        printk!("Serializing V0 transaction\n");
+        
+        // Source account (32 bytes)
+        Self::write_account_id(&parsed_tx.source_account, buffer)?;
+        
+        // Fee (4 bytes)
+        Self::write_u32(parsed_tx.fee as u32, buffer)?;
+        
+        // Sequence number (8 bytes)
+        Self::write_u64(parsed_tx.sequence_number as u64, buffer)?;
+        
+        // Time bounds (optional)
+        if let Some(ref time_bounds) = parsed_tx.time_bounds {
+            Self::write_u32(1, buffer)?; // Present
+            Self::serialize_time_bounds(time_bounds, buffer)?;
+        } else {
+            Self::write_u32(0, buffer)?; // Not present
+        }
+        
+        // Memo
+        Self::serialize_memo(parsed_tx.memo.as_ref(), buffer)?;
+        
+        // Operations
+        Self::serialize_operations(&parsed_tx.operations, buffer)?;
+        
+        // Extension (V0 = 0)
+        Self::write_u32(0, buffer)?;
+        
+        // Signatures
+        Self::serialize_signatures(&parsed_tx.signatures, buffer)?;
+        
+        Ok(())
+    }
+
+    fn serialize_v1_transaction(parsed_tx: &ParsedTransaction, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        printk!("Serializing V1 transaction\n");
+        
+        // Source account (muxed)
+        Self::write_muxed_account(&ParsedMuxedAccount::Ed25519 {
+            account_id: parsed_tx.source_account.clone()
+        }, buffer)?;
+        
+        // Fee (4 bytes)
+        Self::write_u32(parsed_tx.fee as u32, buffer)?;
+        
+        // Sequence number (8 bytes)
+        Self::write_u64(parsed_tx.sequence_number as u64, buffer)?;
+        
+        // Preconditions
+        Self::serialize_preconditions(&parsed_tx.time_bounds, &parsed_tx.ledger_bounds, buffer)?;
+        
+        // Memo
+        Self::serialize_memo(parsed_tx.memo.as_ref(), buffer)?;
+        
+        // Operations
+        Self::serialize_operations(&parsed_tx.operations, buffer)?;
+        
+        // Extension (V0 = 0)
+        Self::write_u32(0, buffer)?;
+        
+        // Signatures
+        Self::serialize_signatures(&parsed_tx.signatures, buffer)?;
+        
+        Ok(())
+    }
+
+    fn serialize_fee_bump_transaction(parsed_tx: &ParsedTransaction, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        printk!("Serializing Fee Bump transaction\n");
+        
+        // Fee source (muxed account)
+        Self::write_muxed_account(&ParsedMuxedAccount::Ed25519 {
+            account_id: parsed_tx.source_account.clone()
+        }, buffer)?;
+        
+        // Fee
+        Self::write_u64(parsed_tx.fee as u64, buffer)?;
+        
+        // Inner transaction type (always TX = 2)
+        Self::write_u32(2, buffer)?;
+        
+        // Inner transaction (serialize as V1)
+        Self::serialize_v1_transaction(parsed_tx, buffer)?;
+        
+        // Extension (V0 = 0)
+        Self::write_u32(0, buffer)?;
+        
+        // Fee bump signatures (replace V1 signatures)
+        Self::serialize_signatures(&parsed_tx.signatures, buffer)?;
+        
+        Ok(())
+    }
+
+    fn serialize_memo(memo: Option<&ParsedMemo>, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        match memo {
+            None => {
+                Self::write_u32(0, buffer)?; // MEMO_NONE
+            },
+            Some(memo) => {
+                match memo.memo_type.as_str() {
+                    "none" => {
+                        Self::write_u32(0, buffer)?; // MEMO_NONE
+                    },
+                    "text" => {
+                        Self::write_u32(1, buffer)?; // MEMO_TEXT
+                        if let Some(ref text) = memo.value {
+                            Self::write_string(text, buffer)?;
+                        } else {
+                            Self::write_u32(0, buffer)?; // Empty string
+                        }
+                    },
+                    "id" => {
+                        Self::write_u32(2, buffer)?; // MEMO_ID
+                        if let Some(ref id_str) = memo.value {
+                            let id = Self::parse_u64_from_string(id_str)?;
+                            Self::write_u64(id, buffer)?;
+                        } else {
+                            Self::write_u64(0, buffer)?;
+                        }
+                    },
+                    "hash" => {
+                        Self::write_u32(3, buffer)?; // MEMO_HASH
+                        if let Some(ref hash_str) = memo.value {
+                            let hash_bytes = hex_to_bytes(hash_str).unwrap();
+                            Self::write_fixed_bytes(&hash_bytes.as_slice(), 32, buffer)?;
+                        } else {
+                            Self::write_fixed_bytes(&[0u8; 32], 32, buffer)?;
+                        }
+                    },
+                    "return" => {
+                        Self::write_u32(4, buffer)?; // MEMO_RETURN
+                        if let Some(ref return_str) = memo.value {
+                            let return_bytes = hex_to_bytes(return_str).unwrap();
+                            Self::write_fixed_bytes(&return_bytes.as_slice(), 32, buffer)?;
+                        } else {
+                            Self::write_fixed_bytes(&[0u8; 32], 32, buffer)?;
+                        }
+                    },
+                    _ => return Err(TransactionParseError::XdrError),
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn serialize_preconditions(
+        time_bounds: &Option<ParsedTimeBounds>,
+        ledger_bounds: &Option<ParsedLedgerBounds>,
+        buffer: &mut Vec<u8>
+    ) -> Result<(), TransactionParseError> {
+        match (time_bounds, ledger_bounds) {
+            (None, None) => {
+                Self::write_u32(0, buffer)?; // PRECOND_NONE
+            },
+            (Some(tb), None) => {
+                Self::write_u32(1, buffer)?; // PRECOND_TIME
+                Self::serialize_time_bounds(tb, buffer)?;
+            },
+            (time_bounds, ledger_bounds) => {
+                Self::write_u32(2, buffer)?; // PRECOND_V2
                 
-//                 // Time bounds (optional)
-//                 if let Some(tb) = time_bounds {
-//                     self.write_u32(1)?; // Present
-//                     self.serialize_time_bounds(tb)?;
-//                 } else {
-//                     self.write_u32(0)?; // Not present
-//                 }
+                // Time bounds (optional)
+                if let Some(tb) = time_bounds {
+                    Self::write_u32(1, buffer)?; // Present
+                    Self::serialize_time_bounds(tb, buffer)?;
+                } else {
+                    Self::write_u32(0, buffer)?; // Not present
+                }
                 
-//                 // Ledger bounds (optional)
-//                 if let Some(lb) = ledger_bounds {
-//                     self.write_u32(1)?; // Present
-//                     self.serialize_ledger_bounds(lb)?;
-//                 } else {
-//                     self.write_u32(0)?; // Not present
-//                 }
+                // Ledger bounds (optional)
+                if let Some(lb) = ledger_bounds {
+                    Self::write_u32(1, buffer)?; // Present
+                    Self::serialize_ledger_bounds(lb, buffer)?;
+                } else {
+                    Self::write_u32(0, buffer)?; // Not present
+                }
                 
-//                 // Min seq num (optional) - not present
-//                 self.write_u32(0)?;
+                // Min seq num (optional) - not present
+                Self::write_u32(0, buffer)?;
                 
-//                 // Min seq age
-//                 self.write_u64(0)?;
+                // Min seq age
+                Self::write_u64(0, buffer)?;
                 
-//                 // Min seq ledger gap
-//                 self.write_u32(0)?;
+                // Min seq ledger gap
+                Self::write_u32(0, buffer)?;
                 
-//                 // Extra signers (empty array)
-//                 self.write_u32(0)?;
-//             }
-//         }
-//         Ok(())
-//     }
+                // Extra signers (empty array)
+                Self::write_u32(0, buffer)?;
+            }
+        }
+        Ok(())
+    }
 
-//     fn serialize_time_bounds(&mut self, time_bounds: &ParsedTimeBounds) -> Result<(), TransactionParseError> {
-//         self.write_u64(time_bounds.min_time.unwrap_or(0))?;
-//         self.write_u64(time_bounds.max_time.unwrap_or(0))?;
-//         Ok(())
-//     }
+    fn serialize_time_bounds(time_bounds: &ParsedTimeBounds, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        Self::write_u64(time_bounds.min_time.unwrap_or(0), buffer)?;
+        Self::write_u64(time_bounds.max_time.unwrap_or(0), buffer)?;
+        Ok(())
+    }
 
-//     fn serialize_ledger_bounds(&mut self, ledger_bounds: &ParsedLedgerBounds) -> Result<(), TransactionParseError> {
-//         self.write_u32(ledger_bounds.min_ledger)?;
-//         self.write_u32(ledger_bounds.max_ledger)?;
-//         Ok(())
-//     }
+    fn serialize_ledger_bounds(ledger_bounds: &ParsedLedgerBounds, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        Self::write_u32(ledger_bounds.min_ledger, buffer)?;
+        Self::write_u32(ledger_bounds.max_ledger, buffer)?;
+        Ok(())
+    }
 
-//     fn serialize_operations(&mut self, operations: &[ParsedOperation]) -> Result<(), TransactionParseError> {
-//         // Write operation count
-//         self.write_u32(operations.len() as u32)?;
+    fn serialize_operations(operations: &[ParsedOperation], buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        // Write operation count
+        Self::write_u32(operations.len() as u32, buffer)?;
         
-//         for operation in operations.iter() {
-//             self.serialize_operation(operation)?;
-//         }
+        for operation in operations.iter() {
+            Self::serialize_operation(operation, buffer)?;
+        }
         
-//         Ok(())
-//     }
+        Ok(())
+    }
 
-//     fn serialize_operation(&mut self, operation: &ParsedOperation) -> Result<(), TransactionParseError> {
-//         // Source account (optional)
-//         if let Some(ref source) = operation.source_account {
-//             self.write_u32(1)?; // Present
-//             self.write_muxed_account(&ParsedMuxedAccount::Ed25519 {
-//                 account_id: source.clone()
-//             })?;
-//         } else {
-//             self.write_u32(0)?; // Not present
-//         }
+    fn serialize_operation(operation: &ParsedOperation, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        // Source account (optional)
+        if let Some(ref source) = operation.source_account {
+            Self::write_u32(1, buffer)?; // Present
+            Self::write_muxed_account(&ParsedMuxedAccount::Ed25519 {
+                account_id: source.clone()
+            }, buffer)?;
+        } else {
+            Self::write_u32(0, buffer)?; // Not present
+        }
         
-//         // Operation body
-//         match &operation.details {
-//             OperationDetails::CreateAccount { destination, starting_balance } => {
-//                 self.write_i32(0)?; // CREATE_ACCOUNT
-//                 self.write_account_id(destination)?;
-//                 self.write_i64(*starting_balance)?;
-//             },
-//             OperationDetails::Payment { destination, asset, amount } => {
-//                 self.write_u32(1)?; // PAYMENT
-//                 self.write_muxed_account(destination)?;
-//                 self.serialize_asset(asset)?;
-//                 self.write_i64(*amount)?;
-//             },
-//             OperationDetails::PathPaymentStrictReceive { send_asset, send_max, destination, dest_asset, dest_amount, path } => {
-//                 self.write_u32(2)?; // PATH_PAYMENT_STRICT_RECEIVE
-//                 self.serialize_asset(send_asset)?;
-//                 self.write_i64(*send_max)?;
-//                 self.write_muxed_account(destination)?;
-//                 self.serialize_asset(dest_asset)?;
-//                 self.write_i64(*dest_amount)?;
-//                 self.serialize_asset_path(path)?;
-//             },
-//             OperationDetails::PathPaymentStrictSend { send_asset, send_amount, destination, dest_asset, dest_min, path } => {
-//                 self.write_u32(13)?; // PATH_PAYMENT_STRICT_SEND
-//                 self.serialize_asset(send_asset)?;
-//                 self.write_i64(*send_amount)?;
-//                 self.write_muxed_account(destination)?;
-//                 self.serialize_asset(dest_asset)?;
-//                 self.write_i64(*dest_min)?;
-//                 self.serialize_asset_path(path)?;
-//             },
-//             OperationDetails::ChangeTrust { asset, limit } => {
-//                 self.write_u32(6)?; // CHANGE_TRUST
-//                 self.serialize_change_trust_asset(asset)?;
-//                 self.write_i64(*limit)?;
-//             },
-//             OperationDetails::AllowTrust { trustor, asset_code, authorize } => {
-//                 self.write_u32(7)?; // ALLOW_TRUST
-//                 self.write_account_id(trustor)?;
-//                 self.serialize_asset_code(asset_code)?;
-//                 self.write_u32(*authorize)?;
-//             },
-//             OperationDetails::AccountMerge { destination } => {
-//                 self.write_u32(8)?; // ACCOUNT_MERGE
-//                 self.write_muxed_account(&ParsedMuxedAccount::Ed25519 {
-//                     account_id: destination.clone()
-//                 })?;
-//             },
-//             OperationDetails::SetTrustLineFlags { trustor, asset, clear_flags, set_flags } => {
-//                 self.write_u32(21)?; // SET_TRUST_LINE_FLAGS
-//                 self.write_account_id(trustor)?;
-//                 self.serialize_asset(asset)?;
-//                 self.write_u32(*clear_flags)?;
-//                 self.write_u32(*set_flags)?;
-//             },
-//             OperationDetails::Other { .. } => {
-//                 return Err(TransactionParseError::UnsupportedOperation);
-//             }
-//         }
+        // Operation body
+        match &operation.details {
+            OperationDetails::CreateAccount { destination, starting_balance } => {
+                Self::write_i32(0, buffer)?; // CREATE_ACCOUNT
+                Self::write_account_id(destination, buffer)?;
+                Self::write_i64(*starting_balance, buffer)?;
+            },
+            OperationDetails::Payment { destination, asset, amount } => {
+                Self::write_u32(1, buffer)?; // PAYMENT
+                Self::write_muxed_account(destination, buffer)?;
+                Self::serialize_asset(asset, buffer)?;
+                Self::write_i64(*amount, buffer)?;
+            },
+            OperationDetails::PathPaymentStrictReceive { send_asset, send_max, destination, dest_asset, dest_amount, path } => {
+                Self::write_u32(2, buffer)?; // PATH_PAYMENT_STRICT_RECEIVE
+                Self::serialize_asset(send_asset, buffer)?;
+                Self::write_i64(*send_max, buffer)?;
+                Self::write_muxed_account(destination, buffer)?;
+                Self::serialize_asset(dest_asset, buffer)?;
+                Self::write_i64(*dest_amount, buffer)?;
+                Self::serialize_asset_path(path, buffer)?;
+            },
+            OperationDetails::PathPaymentStrictSend { send_asset, send_amount, destination, dest_asset, dest_min, path } => {
+                Self::write_u32(13, buffer)?; // PATH_PAYMENT_STRICT_SEND
+                Self::serialize_asset(send_asset, buffer)?;
+                Self::write_i64(*send_amount, buffer)?;
+                Self::write_muxed_account(destination, buffer)?;
+                Self::serialize_asset(dest_asset, buffer)?;
+                Self::write_i64(*dest_min, buffer)?;
+                Self::serialize_asset_path(path, buffer)?;
+            },
+            OperationDetails::ChangeTrust { asset, limit } => {
+                Self::write_u32(6, buffer)?; // CHANGE_TRUST
+                Self::serialize_change_trust_asset(asset, buffer)?;
+                Self::write_i64(*limit, buffer)?;
+            },
+            OperationDetails::AllowTrust { trustor, asset_code, authorize } => {
+                Self::write_u32(7, buffer)?; // ALLOW_TRUST
+                Self::write_account_id(trustor, buffer)?;
+                Self::serialize_asset_code(asset_code, buffer)?;
+                Self::write_u32(*authorize, buffer)?;
+            },
+            OperationDetails::AccountMerge { destination } => {
+                Self::write_u32(8, buffer)?; // ACCOUNT_MERGE
+                Self::write_muxed_account(&ParsedMuxedAccount::Ed25519 {
+                    account_id: destination.clone()
+                }, buffer)?;
+            },
+            OperationDetails::SetTrustLineFlags { trustor, asset, clear_flags, set_flags } => {
+                Self::write_u32(21, buffer)?; // SET_TRUST_LINE_FLAGS
+                Self::write_account_id(trustor, buffer)?;
+                Self::serialize_asset(asset, buffer)?;
+                Self::write_u32(*clear_flags, buffer)?;
+                Self::write_u32(*set_flags, buffer)?;
+            },
+            OperationDetails::Other { .. } => {
+                return Err(TransactionParseError::UnsupportedOperation);
+            }
+        }
         
-//         Ok(())
-//     }
+        Ok(())
+    }
 
-//     fn serialize_asset(&mut self, asset: &ParsedAsset) -> Result<(), TransactionParseError> {
-//         match asset {
-//             ParsedAsset::Native => {
-//                 self.write_u32(0)?; // ASSET_TYPE_NATIVE
-//             },
-//             ParsedAsset::CreditAlphanum4 { code, issuer } => {
-//                 self.write_u32(1)?; // ASSET_TYPE_CREDIT_ALPHANUM4
-//                 self.write_asset_code4(code)?;
-//                 self.write_account_id(issuer)?;
-//             },
-//             ParsedAsset::CreditAlphanum12 { code, issuer } => {
-//                 self.write_u32(2)?; // ASSET_TYPE_CREDIT_ALPHANUM12
-//                 self.write_asset_code12(code)?;
-//                 self.write_account_id(issuer)?;
-//             }
-//         }
-//         Ok(())
-//     }
+    fn serialize_asset(asset: &ParsedAsset, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        match asset {
+            ParsedAsset::Native => {
+                Self::write_u32(0, buffer)?; // ASSET_TYPE_NATIVE
+            },
+            ParsedAsset::CreditAlphanum4 { code, issuer } => {
+                Self::write_u32(1, buffer)?; // ASSET_TYPE_CREDIT_ALPHANUM4
+                Self::write_asset_code4(code, buffer)?;
+                Self::write_account_id(issuer, buffer)?;
+            },
+            ParsedAsset::CreditAlphanum12 { code, issuer } => {
+                Self::write_u32(2, buffer)?; // ASSET_TYPE_CREDIT_ALPHANUM12
+                Self::write_asset_code12(code, buffer)?;
+                Self::write_account_id(issuer, buffer)?;
+            }
+        }
+        Ok(())
+    }
 
-//     fn serialize_change_trust_asset(&mut self, asset: &ParsedChangeTrustAsset) -> Result<(), TransactionParseError> {
-//         match asset {
-//             ParsedChangeTrustAsset::Native => {
-//                 self.write_u32(0)?; // ASSET_TYPE_NATIVE
-//             },
-//             ParsedChangeTrustAsset::CreditAlphanum4 { code, issuer } => {
-//                 self.write_u32(1)?; // ASSET_TYPE_CREDIT_ALPHANUM4
-//                 self.write_asset_code4(code)?;
-//                 self.write_account_id(issuer)?;
-//             },
-//             ParsedChangeTrustAsset::CreditAlphanum12 { code, issuer } => {
-//                 self.write_u32(2)?; // ASSET_TYPE_CREDIT_ALPHANUM12
-//                 self.write_asset_code12(code)?;
-//                 self.write_account_id(issuer)?;
-//             },
-//             ParsedChangeTrustAsset::LiquidityPool { asset_a, asset_b, fee } => {
-//                 self.write_u32(3)?; // ASSET_TYPE_POOL_SHARE
-//                 self.write_u32(0)?; // LIQUIDITY_POOL_CONSTANT_PRODUCT
-//                 self.serialize_asset(asset_a)?;
-//                 self.serialize_asset(asset_b)?;
-//                 self.write_u32(*fee as u32)?;
-//             }
-//         }
-//         Ok(())
-//     }
+    fn serialize_change_trust_asset(asset: &ParsedChangeTrustAsset, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        match asset {
+            ParsedChangeTrustAsset::Native => {
+                Self::write_u32(0, buffer)?; // ASSET_TYPE_NATIVE
+            },
+            ParsedChangeTrustAsset::CreditAlphanum4 { code, issuer } => {
+                Self::write_u32(1, buffer)?; // ASSET_TYPE_CREDIT_ALPHANUM4
+                Self::write_asset_code4(code, buffer)?;
+                Self::write_account_id(issuer, buffer)?;
+            },
+            ParsedChangeTrustAsset::CreditAlphanum12 { code, issuer } => {
+                Self::write_u32(2, buffer)?; // ASSET_TYPE_CREDIT_ALPHANUM12
+                Self::write_asset_code12(code, buffer)?;
+                Self::write_account_id(issuer, buffer)?;
+            },
+            ParsedChangeTrustAsset::LiquidityPool { asset_a, asset_b, fee } => {
+                Self::write_u32(3, buffer)?; // ASSET_TYPE_POOL_SHARE
+                Self::write_u32(0, buffer)?; // LIQUIDITY_POOL_CONSTANT_PRODUCT
+                Self::serialize_asset(asset_a, buffer)?;
+                Self::serialize_asset(asset_b, buffer)?;
+                Self::write_u32(*fee as u32, buffer)?;
+            }
+        }
+        Ok(())
+    }
 
-//     fn serialize_asset_path(&mut self, path: &[ParsedAsset]) -> Result<(), TransactionParseError> {
-//         self.write_u32(path.len() as u32)?;
-//         for asset in path.iter() {
-//             self.serialize_asset(asset)?;
-//         }
-//         Ok(())
-//     }
+    fn serialize_asset_path(path: &[ParsedAsset], buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        Self::write_u32(path.len() as u32, buffer)?;
+        for asset in path.iter() {
+            Self::serialize_asset(asset, buffer)?;
+        }
+        Ok(())
+    }
 
-//     fn serialize_asset_code(&mut self, code: &BoundedString) -> Result<(), TransactionParseError> {
-//         if code.len() <= 4 {
-//             self.write_u32(1)?; // ASSET_TYPE_CREDIT_ALPHANUM4
-//             self.write_asset_code4(code)?;
-//         } else {
-//             self.write_u32(2)?; // ASSET_TYPE_CREDIT_ALPHANUM12
-//             self.write_asset_code12(code)?;
-//         }
-//         Ok(())
-//     }
+    fn serialize_asset_code(code: &String, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        if code.len() <= 4 {
+            Self::write_u32(1, buffer)?; // ASSET_TYPE_CREDIT_ALPHANUM4
+            Self::write_asset_code4(code, buffer)?;
+        } else {
+            Self::write_u32(2, buffer)?; // ASSET_TYPE_CREDIT_ALPHANUM12
+            Self::write_asset_code12(code, buffer)?;
+        }
+        Ok(())
+    }
 
-//     fn serialize_signatures(&mut self, signatures: &[ParsedSignature]) -> Result<(), TransactionParseError> {
-//         self.write_u32(signatures.len() as u32)?;
+    fn serialize_signatures(signatures: &[ParsedSignature], buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        Self::write_u32(signatures.len() as u32, buffer)?;
         
-//         for signature in signatures.iter() {
-//             // Signature hint (4 bytes)
-//             self.write_fixed_bytes(&signature.hint, 4)?;
+        for signature in signatures.iter() {
+            // Signature hint (4 bytes)
+            Self::write_fixed_bytes(&signature.hint, 4, buffer)?;
             
-//             // Signature (variable length)
-//             self.write_opaque_bytes(&signature.signature)?;
-//         }
+            // Signature (variable length)
+            Self::write_opaque_bytes(&signature.signature, buffer)?;
+        }
         
-//         Ok(())
-//     }
+        Ok(())
+    }
 
-//     // Low-level writing functions
-//     fn write_u32(&mut self, value: u32) -> Result<(), TransactionParseError> {
-//         let bytes = value.to_be_bytes();
-//         self.buffer.extend_from_slice(&bytes);
-//         Ok(())
-//     }
+    // Low-level writing functions
+    fn write_u32(value: u32, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        let bytes = value.to_be_bytes();
+        buffer.extend_from_slice(&bytes);
+        Ok(())
+    }
 
-//     fn write_u64(&mut self, value: u64) -> Result<(), TransactionParseError> {
-//         let bytes = value.to_be_bytes();
-//         self.buffer.extend_from_slice(&bytes);
-//         Ok(())
-//     }
+    fn write_u64(value: u64, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        let bytes = value.to_be_bytes();
+        buffer.extend_from_slice(&bytes);
+        Ok(())
+    }
 
-//     fn write_i64(&mut self, value: i64) -> Result<(), TransactionParseError> {
-//         let bytes = value.to_be_bytes();
-//         self.buffer.extend_from_slice(&bytes);
-//         Ok(())
-//     }
+    fn write_i64(value: i64, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        let bytes = value.to_be_bytes();
+        buffer.extend_from_slice(&bytes);
+        Ok(())
+    }
 
-//     fn write_i32(&mut self, value: i32) -> Result<(), TransactionParseError> {
-//         let bytes = value.to_be_bytes();
-//         self.buffer.extend_from_slice(&bytes);
-//         Ok(())
-//     }
+    fn write_i32(value: i32, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        let bytes = value.to_be_bytes();
+        buffer.extend_from_slice(&bytes);
+        Ok(())
+    }
 
-//     fn write_fixed_bytes(&mut self, bytes: &[u8], expected_len: usize) -> Result<(), TransactionParseError> {
-//         if bytes.len() > expected_len {
-//             return Err(TransactionParseError::DataTooLarge);
-//         }
+    fn write_fixed_bytes(bytes: &[u8], expected_len: usize, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        if bytes.len() > expected_len {
+            return Err(TransactionParseError::XdrError);
+        }
         
-//         self.buffer.extend_from_slice(bytes);
+        buffer.extend_from_slice(bytes);
         
-//         // Pad with zeros if needed
-//         for _ in bytes.len()..expected_len {
-//             self.buffer.push(0);
-//         }
+        // Pad with zeros if needed
+        for _ in bytes.len()..expected_len {
+            buffer.push(0);
+        }
         
-//         Ok(())
-//     }
+        Ok(())
+    }
 
-//     fn write_opaque_bytes(&mut self, bytes: &[u8]) -> Result<(), TransactionParseError> {
-//         // Write length
-//         self.write_u32(bytes.len() as u32)?;
+    fn write_opaque_bytes(bytes: &[u8], buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        // Write length
+        Self::write_u32(bytes.len() as u32, buffer)?;
         
-//         // Write data
-//         self.buffer.extend_from_slice(bytes);
+        // Write data
+        buffer.extend_from_slice(bytes);
         
-//         // Add padding to 4-byte boundary
-//         let padding = (4 - (bytes.len() % 4)) % 4;
-//         for _ in 0..padding {
-//             self.buffer.push(0);
-//         }
+        // Add padding to 4-byte boundary
+        let padding = (4 - (bytes.len() % 4)) % 4;
+        for _ in 0..padding {
+            buffer.push(0);
+        }
         
-//         Ok(())
-//     }
+        Ok(())
+    }
 
-//     fn write_string(&mut self, s: &BoundedString) -> Result<(), TransactionParseError> {
-//         let bytes = s.as_bytes();
-//         self.write_opaque_bytes(bytes)
-//     }
+    fn write_string(s: &String, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        let bytes = s.as_bytes();
+        Self::write_opaque_bytes(bytes, buffer)
+    }
 
-//     fn write_account_id(&mut self, account_hex: &BoundedString) -> Result<(), TransactionParseError> {
-//         self.write_u32(0)?;
-//         let bytes = self.hex_string_to_bytes(account_hex)?;
-//         self.write_fixed_bytes(&bytes, 32)
-//     }
+    fn write_account_id(account_hex: &String, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        Self::write_u32(0, buffer)?;
+        let bytes = hex_to_bytes(account_hex).unwrap();
+        Self::write_fixed_bytes(&bytes.as_slice(), 32, buffer)
+    }
 
-//     fn write_muxed_account(&mut self, account: &ParsedMuxedAccount) -> Result<(), TransactionParseError> {
-//         match account {
-//             ParsedMuxedAccount::Ed25519 { account_id } => {
-//                 self.write_u32(0)?; // KEY_TYPE_ED25519
-//                 let bytes = self.hex_string_to_bytes(account_id)?;
-//                 self.write_fixed_bytes(&bytes, 32)?;
-//             },
-//             ParsedMuxedAccount::MuxedEd25519 { id, account_id } => {
-//                 self.write_u32(256)?; // KEY_TYPE_MUXED_ED25519
-//                 self.write_u64(*id)?;
-//                 let bytes = self.hex_string_to_bytes(account_id)?;
-//                 self.write_fixed_bytes(&bytes, 32)?;
-//             }
-//         }
-//         Ok(())
-//     }
+    fn write_muxed_account(account: &ParsedMuxedAccount, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        match account {
+            ParsedMuxedAccount::Ed25519 { account_id } => {
+                Self::write_u32(0, buffer)?; // KEY_TYPE_ED25519
+                let bytes = hex_to_bytes(account_id).unwrap();
+                Self::write_fixed_bytes(&bytes.as_slice(), 32, buffer)?;
+            },
+            ParsedMuxedAccount::MuxedEd25519 { id, account_id } => {
+                Self::write_u32(256, buffer)?; // KEY_TYPE_MUXED_ED25519
+                Self::write_u64(*id, buffer)?;
+                let bytes = hex_to_bytes(account_id).unwrap();
+                Self::write_fixed_bytes(&bytes.as_slice(), 32, buffer)?;
+            }
+        }
+        Ok(())
+    }
 
-//     fn write_asset_code4(&mut self, code: &BoundedString) -> Result<(), TransactionParseError> {
-//         let mut code_bytes = [0u8; 4];
-//         let bytes = code.as_bytes();
-//         let len = bytes.len().min(4);
-//         code_bytes[..len].copy_from_slice(&bytes[..len]);
-//         self.buffer.extend_from_slice(&code_bytes);
-//         Ok(())
-//     }
+    fn write_asset_code4(code: &String, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        let mut code_bytes = [0u8; 4];
+        let bytes = code.as_bytes();
+        let len = bytes.len().min(4);
+        code_bytes[..len].copy_from_slice(&bytes[..len]);
+        buffer.extend_from_slice(&code_bytes);
+        Ok(())
+    }
 
-//     fn write_asset_code12(&mut self, code: &BoundedString) -> Result<(), TransactionParseError> {
-//         let mut code_bytes = [0u8; 12];
-//         let bytes = code.as_bytes();
-//         let len = bytes.len().min(12);
-//         code_bytes[..len].copy_from_slice(&bytes[..len]);
-//         self.buffer.extend_from_slice(&code_bytes);
-//         Ok(())
-//     }
+    fn write_asset_code12(code: &String, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+        let mut code_bytes = [0u8; 12];
+        let bytes = code.as_bytes();
+        let len = bytes.len().min(12);
+        code_bytes[..len].copy_from_slice(&bytes[..len]);
+        buffer.extend_from_slice(&code_bytes);
+        Ok(())
+    }
 
-//     // Helper functions
-//     fn parse_u64_from_string(&self, s: &BoundedString) -> Result<u64, TransactionParseError> {
-//         let bytes = s.as_bytes();
-//         let mut result = 0u64;
+    // Helper functions
+    fn parse_u64_from_string(s: &String) -> Result<u64, TransactionParseError> {
+        let bytes = s.as_bytes();
+        let mut result = 0u64;
         
-//         for &byte in bytes {
-//             match byte {
-//                 b'0'..=b'9' => {
-//                     let digit = (byte - b'0') as u64;
-//                     result = result.checked_mul(10)
-//                         .and_then(|r| r.checked_add(digit))
-//                         .ok_or(TransactionParseError::XdrError)?;
-//                 },
-//                 _ => return Err(TransactionParseError::XdrError),
-//             }
-//         }
+        for &byte in bytes {
+            match byte {
+                b'0'..=b'9' => {
+                    let digit = (byte - b'0') as u64;
+                    result = result.checked_mul(10)
+                        .and_then(|r| r.checked_add(digit))
+                        .ok_or(TransactionParseError::XdrError)?;
+                },
+                _ => return Err(TransactionParseError::XdrError),
+            }
+        }
         
-//         Ok(result)
-//     }
+        Ok(result)
+    }
 
-//     fn hex_string_to_bytes(&self, hex_str: &BoundedString) -> Result<Vec<u8>, TransactionParseError> {
-//         let hex_chars = hex_str.as_bytes();
-//         if hex_chars.len() % 2 != 0 {
-//             return Err(TransactionParseError::XdrError);
-//         }
+    fn hex_char_to_u8(c: u8) -> Result<u8, TransactionParseError> {
+        match c {
+            b'0'..=b'9' => Ok(c - b'0'),
+            b'a'..=b'f' => Ok(c - b'a' + 10),
+            b'A'..=b'F' => Ok(c - b'A' + 10),
+            _ => Err(TransactionParseError::XdrError),
+        }
+    }
 
-//         let mut bytes = Vec::new();
-//         let mut i = 0;
-//         while i < hex_chars.len() {
-//             let high = self.hex_char_to_u8(hex_chars[i])?;
-//             let low = self.hex_char_to_u8(hex_chars[i + 1])?;
-//             bytes.push((high << 4) | low);
-//             i += 2;
-//         }
-//         Ok(bytes)
-//     }
+    fn encode_base64(data: &[u8]) -> Result<String, TransactionParseError> {
+        let mut buf = [0u8; MAX_XDR_LEN * 4 / 3 + 4]; // Base64 expansion ratio
+        let encoded = Base64::encode(data, &mut buf)
+            .map_err(|_| TransactionParseError::Base64Error)?;
+        Ok(String::from(encoded))
+    }
+}
 
-//     fn hex_char_to_u8(&self, c: u8) -> Result<u8, TransactionParseError> {
-//         match c {
-//             b'0'..=b'9' => Ok(c - b'0'),
-//             b'a'..=b'f' => Ok(c - b'a' + 10),
-//             b'A'..=b'F' => Ok(c - b'A' + 10),
-//             _ => Err(TransactionParseError::XdrError),
-//         }
-//     }
-
-//     fn encode_base64(&self, data: &[u8]) -> Result<String, TransactionParseError> {
-//         let mut buf = [0u8; MAX_XDR_LEN * 4 / 3 + 4]; // Base64 expansion ratio
-//         let encoded = Base64::encode(data, &mut buf)
-//             .map_err(|_| TransactionParseError::Base64Error)?;
-//         Ok(String::from(encoded))
-//     }
-// }
-
-// impl Default for StellarTransactionSerializer {
-//     fn default() -> Self {
-//         Self::new()
-//     }
-// }
+impl Default for StellarTransactionSerializer {
+    fn default() -> Self {
+        Self::new()
+    }
+}

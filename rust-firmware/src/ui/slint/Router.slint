@@ -14,7 +14,7 @@ export global Router {
     }
     back() => {
         // Simple back navigation logic
-        if current == ScreenEnum.Send || current == ScreenEnum.Receive || current == ScreenEnum.Settings {
+        if current == ScreenEnum.Send || current == ScreenEnum.Receive || current == ScreenEnum.Settings || current == ScreenEnum.Signed {
             current = ScreenEnum.Home;
         }
         else if current == ScreenEnum.PairWithTheApp || current == ScreenEnum.DeviceInfo || current == ScreenEnum.ShowSeed {

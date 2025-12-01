@@ -30,7 +30,6 @@ pub struct StellarWallet {
 pub struct StellarKeypair {
     pub secret_key: [u8; 32],
     pub public_key: [u8; 32],
-    pub address: String,
 }
 
 // Custom error type for no_std compatibility
@@ -99,13 +98,12 @@ impl StellarWallet {
             pubkey
         };
         
-        // Generate Stellar address
-        let address = StellarWallet::encode_stellar_address(&public_key)?;
+        // // Generate Stellar address
+        // let address = StellarWallet::encode_stellar_address(&public_key)?;
         
         Ok(StellarKeypair {
             secret_key,
             public_key,
-            address,
         })
     }
 
@@ -153,9 +151,32 @@ impl StellarWallet {
         Ok(encoded)
     }
 
+    /// Encode public key as Stellar address (starting with 'G')
+    pub fn encode_stellar_secret(secret_key: &[u8; 32]) -> Result<String, StellarError> {
+        // Stellar uses account ID version byte (6 << 3 = 48)
+        let version_byte = 18u8 << 3; // 144 in decimal for secret key
+        
+        // Create payload: version_byte + secret_key
+        let mut payload = Vec::new();
+        payload.push(version_byte);
+        payload.extend_from_slice(secret_key);
+        
+        // Calculate CRC16 checksum
+        let crc = Crc::<u16>::new(&CRC_16_XMODEM);
+        let checksum = crc.checksum(&payload);
+        
+        // Append checksum (little-endian)
+        payload.extend_from_slice(&checksum.to_le_bytes());
+        
+        // Encode with base32 (RFC 4648 without padding)
+        let encoded = encode(Alphabet::Rfc4648 { padding: false }, &payload);
+
+        Ok(encoded)
+    }
+
     /// Generate a seed phrase address (for account 0)
     pub fn get_default_address(&self) -> Result<String, StellarError> {
         let keypair = self.derive_keypair(0)?;
-        Ok(keypair.address)
+        Ok(StellarWallet::encode_stellar_address(&keypair.public_key)?)
     }
 }

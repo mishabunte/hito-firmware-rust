@@ -1,8 +1,7 @@
 pub mod address;
-pub mod transaction_parser;
-// pub mod transaction_serializer;
+pub use address::{StellarKeypair, StellarWallet, StellarError};
 
-// Re-export main classes
+pub mod transaction_parser;
 pub use transaction_parser::StellarTransactionParser;
 //pub use transaction_serializer::StellarTransactionSerializer;
 
@@ -15,8 +14,6 @@ pub use transaction_parser::{
     MAX_OPERATIONS, MAX_PATH_ASSETS, MAX_SIGNATURES, MAX_CLAIMANTS,
     MAX_STRING_LEN, MAX_DATA_VALUE_LEN, MAX_ASSET_CODE_LEN, MAX_XDR_LEN
 };
-
-pub use address::StellarWallet;
 
 // // Re-export address functionality  
 // pub use address::*;

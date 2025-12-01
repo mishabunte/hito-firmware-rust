@@ -76,6 +76,21 @@ extern "C" {
     mnemonic: *mut u8,
     mnemonic_len: usize
   ) -> c_int;
+  pub fn crypt0_sha256(
+    data: *const u8,
+    data_len: usize,
+    out: *mut u8,
+    outlen: usize
+  ) -> bool;
+  pub fn crypt0_ed25519_sign(
+    message: *const u8,
+    messagelen: usize,
+    privkey: *const u8,
+    privlen: usize,
+    pubkey: *const u8,
+    publen: usize,
+    sig: *mut u8,
+    siglen: usize
+  ) -> c_int;
 }
-
 pub const CRYPT0_OK: c_int = 0;

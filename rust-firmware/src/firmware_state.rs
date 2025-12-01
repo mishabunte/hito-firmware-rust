@@ -2,6 +2,7 @@ use core::cell::{Cell, RefCell};
 extern crate alloc;
 use alloc::string::String;
 use crate::log_info;
+use crate::crypto::libcrypt0pro::stellar::ParsedTransaction;
 
 pub struct DeviceInfo {
     pub firmware_version: String,
@@ -47,6 +48,8 @@ pub struct FirmwareState {
   qr_data_requested: Cell<bool>,
   scale_shown_changed: Cell<bool>,
   protocol_requested: Cell<bool>,
+  parsed_tx: RefCell<Option<ParsedTransaction>>,
+  stellar_address: RefCell<Option<String>>,
 }
 
 impl FirmwareState {
@@ -61,13 +64,14 @@ impl FirmwareState {
           qr_data_requested: Cell::new(false),
           scale_shown_changed: Cell::new(false),
           protocol_requested: Cell::new(false),
+          parsed_tx: RefCell::new(None),  
+          stellar_address: RefCell::new(None),
       }
   }
   pub fn set_brightness(&self, v: u8)                 { self.brightness.set(Some(v)); }
   pub fn set_battery_level_requested(&self, v: bool)  { self.battery_req.set(v); }
-  pub fn append_to_pin(&self, digit: i32) {
-      let d = digit.clamp(0, 9) as u8;             
-      let ch = (b'0' + d) as char;                 
+  pub fn append_to_pin(&self, digit: u8) {
+      let ch = (b'0' + digit) as char;
       self.pin.borrow_mut().push(ch);
   }
   pub fn mark_device_info_requested(&self)          { self.device_info_requested.set(true); }
@@ -81,6 +85,13 @@ impl FirmwareState {
       self.unlock_req.set(false);
       self.pin.borrow_mut().clear();
   }
+
+  pub fn set_stellar_address(&self, address: String) {
+      self.stellar_address.borrow_mut().replace(address);
+  }
+  pub fn get_stellar_address(&self) -> Option<String> {
+      self.stellar_address.borrow().clone()
+  }
   pub fn mark_protocol_requested(&self) {
       self.protocol_requested.set(true);
   }
@@ -90,9 +101,15 @@ impl FirmwareState {
   pub fn clear_protocol_change_requested(&self) {
       self.protocol_requested.set(false);
   }
-    pub fn mark_scale_shown_changed(&self)          { self.scale_shown_changed.set(true); }
-    pub fn is_scale_shown_changed(&self) -> bool     { self.scale_shown_changed.get() }
-    pub fn clear_scale_shown_changed(&self)          { self.scale_shown_changed.set(false); }
+  pub fn get_parsed_tx(&self) -> Option<ParsedTransaction> {
+      self.parsed_tx.borrow().clone()
+  }
+  pub fn set_parsed_tx(&self, parsed_tx: ParsedTransaction) {
+    self.parsed_tx.borrow_mut().replace(parsed_tx);
+  }
+  pub fn mark_scale_shown_changed(&self)          { self.scale_shown_changed.set(true); }
+  pub fn is_scale_shown_changed(&self) -> bool     { self.scale_shown_changed.get() }
+  pub fn clear_scale_shown_changed(&self)          { self.scale_shown_changed.set(false); }
   pub fn is_qr_data_requested(&self) -> bool     { self.qr_data_requested.get() }
   pub fn mark_qr_data_requested(&self)          { self.qr_data_requested.set(true); }
   pub fn mark_qr_data_success(&self)          { self.qr_data_requested.set(false); }

@@ -22,12 +22,16 @@ pub use receive_data_callback_controller::ReceiveDataCallbackController;
 mod send_screen_callback_controller;
 pub use send_screen_callback_controller::SendScreenCallbackController;
 
+mod signed_data_callback_controller;
+pub use signed_data_callback_controller::SignedDataCallbackController;
+
 pub static UI_CALLBACK_CONTROLLERS: &[&dyn CallbackController] = &[
     &MainCallbackController,
     &EnterPinCallbackController,
     &DeviceInfoCallbackController,
     &ReceiveDataCallbackController,
     &SendScreenCallbackController,
+    &SignedDataCallbackController,
 ];
 
 

@@ -3,14 +3,128 @@
 extern crate alloc;
 use alloc::{string::String, vec::Vec, format};
 
-use substrate_stellar_sdk::{
-    Asset, AssetCode, Memo, MuxedAccount, Operation, TimeBounds, TransactionEnvelope, XdrCodec,
-    AccountId, PublicKey};
-use substrate_stellar_sdk::types::{DecoratedSignature, OperationBody, Preconditions, LedgerBounds, 
-    TransactionV0Envelope, TransactionV1Envelope, FeeBumpTransactionEnvelope, FeeBumpTransactionInnerTx, 
-    Uint256, ChangeTrustAsset, LiquidityPoolParameters};
+use base64ct::{Base64, Decoder, Encoding};
 
-use crate::crypto::crypt0::bytes_to_hex;
+use core::convert::TryInto;
+
+struct Xdr<'a> {
+    buf: &'a [u8],
+    pos: usize,
+}
+
+impl<'a> Xdr<'a> {
+    fn new(buf: &'a [u8]) -> Self {
+        Self { buf, pos: 0 }
+    }
+
+    fn remaining(&self) -> usize {
+        self.buf.len().saturating_sub(self.pos)
+    }
+
+    fn read_exact(&mut self, len: usize) -> Result<&'a [u8], TransactionParseError> {
+        if self.pos + len > self.buf.len() {
+            return Err(TransactionParseError::XdrError);
+        }
+        let out = &self.buf[self.pos..self.pos + len];
+        self.pos += len;
+        Ok(out)
+    }
+
+    fn align4(&mut self) {
+        let r = self.pos & 3;
+        if r != 0 {
+            self.pos += 4 - r;
+        }
+    }
+
+    fn read_u32(&mut self) -> Result<u32, TransactionParseError> {
+        let b = self.read_exact(4)?;
+        Ok(u32::from_be_bytes(b.try_into().unwrap()))
+    }
+
+    fn read_i32(&mut self) -> Result<i32, TransactionParseError> {
+        Ok(self.read_u32()? as i32)
+    }
+
+    fn read_u64(&mut self) -> Result<u64, TransactionParseError> {
+        let hi = self.read_u32()? as u64;
+        let lo = self.read_u32()? as u64;
+        Ok((hi << 32) | lo)
+    }
+
+    fn read_i64(&mut self) -> Result<i64, TransactionParseError> {
+        Ok(self.read_u64()? as i64)
+    }
+
+    fn read_bool(&mut self) -> Result<bool, TransactionParseError> {
+        match self.read_u32()? {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(TransactionParseError::XdrError),
+        }
+    }
+
+    fn read_fixed_opaque(&mut self, len: usize) -> Result<&'a [u8], TransactionParseError> {
+        // fixed-length opaque is NOT length-prefixed in Stellar XDR, just raw bytes.
+        self.read_exact(len)
+    }
+
+    fn read_opaque(&mut self, max_len: usize) -> Result<&'a [u8], TransactionParseError> {
+        let len = self.read_u32()? as usize;
+        if len > max_len {
+            return Err(TransactionParseError::XdrError);
+        }
+        let data = self.read_exact(len)?;
+        self.align4();
+        Ok(data)
+    }
+
+    fn read_string(&mut self, max_len: usize) -> Result<&'a str, TransactionParseError> {
+        let bytes = self.read_opaque(max_len)?;
+        core::str::from_utf8(bytes).map_err(|_| TransactionParseError::XdrError)
+    }
+}
+
+// EnvelopeType (from Stellar XDR)
+const ENVELOPE_TYPE_TX_V0: i32       = 0;
+const ENVELOPE_TYPE_TX: i32          = 2;
+const ENVELOPE_TYPE_TX_FEE_BUMP: i32 = 5;
+
+// MemoType
+const MEMO_NONE: i32   = 0;
+const MEMO_TEXT: i32   = 1;
+const MEMO_ID: i32     = 2;
+const MEMO_HASH: i32   = 3;
+const MEMO_RETURN: i32 = 4;
+
+// AssetType
+const ASSET_TYPE_NATIVE: i32            = 0;
+const ASSET_TYPE_CREDIT_ALPHANUM4: i32  = 1;
+const ASSET_TYPE_CREDIT_ALPHANUM12: i32 = 2;
+const ASSET_TYPE_POOL_SHARE: i32        = 3;
+
+// OperationType
+const OP_CREATE_ACCOUNT: i32           = 0;
+const OP_PAYMENT: i32                  = 1;
+const OP_PATH_PAYMENT_STRICT_RECEIVE: i32 = 2;
+const OP_CHANGE_TRUST: i32             = 6;
+const OP_ALLOW_TRUST: i32              = 7;
+const OP_ACCOUNT_MERGE: i32            = 8;
+const OP_PATH_PAYMENT_STRICT_SEND: i32 = 13;
+const OP_SET_TRUST_LINE_FLAGS: i32     = 21;
+
+// Preconditions types
+const PRECOND_NONE: i32 = 0;
+const PRECOND_TIME: i32 = 1;
+const PRECOND_V2: i32   = 2;
+
+// CryptoKeyType
+const KEY_TYPE_ED25519: i32         = 0;
+const KEY_TYPE_MUXED_ED25519: i32   = 256;
+
+
+
+use crate::{crypto::crypt0::bytes_to_hex, log_info};
 
 
 //use base64ct::{Base64, Encoding};
@@ -215,34 +329,41 @@ impl StellarTransactionParser {
         Self
     }
 
-    /// Parse a base64-encoded transaction envelope into structured data
-    pub fn parse_transaction(base64_data: &str) -> Result<ParsedTransaction, TransactionParseError> {
-        if base64_data.len() > MAX_XDR_LEN {
+    fn decode_base64(base64_data: &str) -> Result<Vec<u8>, TransactionParseError> {
+        let mut buf = [0u8; MAX_XDR_LEN * 4 / 3 + 4]; // Base64 expansion ratio
+        //log_info!("Decoding base64 data: {}", base64_data);
+        let encoded = Base64::decode(base64_data.as_bytes(), &mut buf)
+            .map_err(|_| TransactionParseError::Base64Error)?;
+        //log_info!("Decoded base64 length: {}", encoded.len());
+        Ok(encoded.to_vec())
+    }
+
+    pub fn parse_transaction_xdr(xdr_bytes: &[u8]) -> Result<ParsedTransaction, TransactionParseError> {
+        if xdr_bytes.len() > MAX_XDR_LEN {
             return Err(TransactionParseError::PayloadTooLarge);
         }
-        if base64_data.len() < 20 {
+        if xdr_bytes.len() < 20 {
             return Err(TransactionParseError::PayloadTooSmall);
         }
-        // Decode base64 using no-std compatible base64 decoder
-        //let xdr_bytes = Self::decode_base64(base64_data)?;
-        let xdr_bytes = base64_data.as_bytes();
-        
-        // Parse XDR envelope
-        let envelope = TransactionEnvelope::from_base64_xdr(&xdr_bytes);
 
-        if envelope.is_err() {
-            return Err(TransactionParseError::XdrError);
-        }
-        
-        match envelope.unwrap() {
-            TransactionEnvelope::EnvelopeTypeTxV0(env) => StellarTransactionParser::parse_v0_transaction(env),
-            TransactionEnvelope::EnvelopeTypeTx(env) => StellarTransactionParser::parse_v1_transaction(env),
-            TransactionEnvelope::EnvelopeTypeTxFeeBump(env) => StellarTransactionParser::parse_fee_bump_transaction(env),
+        let mut xr = Xdr::new(xdr_bytes);
+
+        let envelope_type = xr.read_i32()?;
+        match envelope_type {
+            ENVELOPE_TYPE_TX_V0 => Self::parse_v0_envelope(&mut xr),
+            ENVELOPE_TYPE_TX => Self::parse_v1_envelope(&mut xr),
+            ENVELOPE_TYPE_TX_FEE_BUMP => Self::parse_fee_bump_envelope(&mut xr),
             _ => Err(TransactionParseError::InvalidEnvelopeType),
         }
     }
 
-    fn uint256_to_bounded_hex( v: &Uint256) -> Result<String, TransactionParseError> {
+    /// Parse a base64-encoded transaction envelope into structured data
+    pub fn parse_transaction(base64_data: &str) -> Result<ParsedTransaction, TransactionParseError> {
+        let xdr_bytes = Self::decode_base64(base64_data)?;
+        Self::parse_transaction_xdr(&xdr_bytes)
+    }
+
+    fn uint256_to_bounded_hex(v: &[u8]) -> Result<String, TransactionParseError> {
         let hex = bytes_to_hex(v);
         if hex.len() > MAX_STRING_LEN {
             return Err(TransactionParseError::StringTooLong);
@@ -250,385 +371,567 @@ impl StellarTransactionParser {
         Ok(hex)
     }
 
-    fn asset_code_to_string( code: &AssetCode) -> Result<String, TransactionParseError> {
-        match code {
-            AssetCode::AssetTypeCreditAlphanum4(c) => {
-                let code_str = core::str::from_utf8(c).unwrap_or("invalid");
-                let trimmed_code = code_str.trim_end_matches('\0');
-                String::try_from(trimmed_code).map_err(|_| TransactionParseError::StringTooLong)
-            },
-            AssetCode::AssetTypeCreditAlphanum12(c) => {
-                let code_str = core::str::from_utf8(c).unwrap_or("invalid");
-                let trimmed_code = code_str.trim_end_matches('\0');
-                String::try_from(trimmed_code).map_err(|_| TransactionParseError::StringTooLong)
-            },
-            AssetCode::Default(c) => {
-                String::try_from("invalid").map_err(|_| TransactionParseError::StringTooLong)
-            }
-        }
-    }
+    // fn asset_code_to_string( code: &AssetCode) -> Result<String, TransactionParseError> {
+    //     match code {
+    //         AssetCode::AssetTypeCreditAlphanum4(c) => {
+    //             let code_str = core::str::from_utf8(c).unwrap_or("invalid");
+    //             let trimmed_code = code_str.trim_end_matches('\0');
+    //             String::try_from(trimmed_code).map_err(|_| TransactionParseError::StringTooLong)
+    //         },
+    //         AssetCode::AssetTypeCreditAlphanum12(c) => {
+    //             let code_str = core::str::from_utf8(c).unwrap_or("invalid");
+    //             let trimmed_code = code_str.trim_end_matches('\0');
+    //             String::try_from(trimmed_code).map_err(|_| TransactionParseError::StringTooLong)
+    //         },
+    //         AssetCode::Default(c) => {
+    //             String::try_from("invalid").map_err(|_| TransactionParseError::StringTooLong)
+    //         }
+    //     }
+    // }
 
-    fn parse_v0_transaction(envelope: TransactionV0Envelope) -> Result<ParsedTransaction, TransactionParseError> {
-        let tx = envelope.tx;
-        
-        let time_bounds = tx.time_bounds
-            .as_ref()
-            .map(|tb| Self::parse_time_bounds(tb))
-            .transpose()?;
-        let ledger_bounds = None; // V0 transactions do not have ledger bounds
-        
+    fn parse_v0_envelope(xr: &mut Xdr) -> Result<ParsedTransaction, TransactionParseError> {
+        // TransactionV0
+        let source = xr.read_fixed_opaque(32)?; // uint256
+        let fee = xr.read_u32()? as i64;
+        let seq_num = xr.read_i64()?;
+
+        // TimeBounds* timeBounds;
+        let has_tb = xr.read_bool()?;
+        let time_bounds = if has_tb {
+            Some(Self::parse_time_bounds(xr)?)
+        } else {
+            None
+        };
+
+        let memo = Self::parse_memo(xr)?;
+
+        let operations = Self::parse_operations(xr)?;
+
+        // ext (int v = 0; void)
+        let _ext = xr.read_i32()?; // should be 0
+
+        let signatures = Self::parse_signatures(xr)?;
+
         Ok(ParsedTransaction {
-            source_account: { Self::uint256_to_bounded_hex(&tx.source_account_ed25519)? },
-            sequence_number: tx.seq_num,
-            fee: tx.fee as i64,
-            memo: Some(Self::parse_memo(&tx.memo)?),
+            source_account: Self::uint256_to_bounded_hex(source)?,
+            sequence_number: seq_num,
+            fee,
+            memo: Some(memo),
             time_bounds,
-            ledger_bounds,
-            operations: Self::parse_operations(&tx.operations.get_vec())?,
-            signatures: Self::parse_signatures(&envelope.signatures.get_vec())?,
+            ledger_bounds: None,
+            operations,
+            signatures,
             envelope_type: TransactionEnvelopeType::TxV0,
         })
     }
 
-    fn parse_v1_transaction( envelope: TransactionV1Envelope) -> Result<ParsedTransaction, TransactionParseError> {
-        let tx = envelope.tx;
+    fn parse_v1_envelope(xr: &mut Xdr) -> Result<ParsedTransaction, TransactionParseError> {
+        // Transaction
+        let source = Self::parse_muxed_account(xr)?;
+        let fee = xr.read_u32()? as i64;
+        let seq_num = xr.read_i64()?;
 
-        let (time_bounds, ledger_bounds) = Self::parse_preconditions(&tx.cond)?;
-        
+        let (time_bounds, ledger_bounds) = Self::parse_preconditions(xr)?;
+
+        let memo = Self::parse_memo(xr)?;
+        let operations = Self::parse_operations(xr)?;
+
+        // tx ext (int v; case 0: void)
+        let _ext = xr.read_i32()?; // 0
+
+        let signatures = Self::parse_signatures(xr)?;
+
         Ok(ParsedTransaction {
-            source_account: Self::muxed_account_to_string(&tx.source_account)?,
-            sequence_number: tx.seq_num,
-            fee: tx.fee as i64,
-            memo: Some(Self::parse_memo(&tx.memo)?),
+            source_account: Self::muxed_account_to_string(&source)?,
+            sequence_number: seq_num,
+            fee,
+            memo: Some(memo),
             time_bounds,
             ledger_bounds,
-            operations: Self::parse_operations(&tx.operations.get_vec())?,
-            signatures: Self::parse_signatures(&envelope.signatures.get_vec())?,
+            operations,
+            signatures,
             envelope_type: TransactionEnvelopeType::Tx,
         })
     }
 
-    fn parse_fee_bump_transaction( envelope: FeeBumpTransactionEnvelope) -> Result<ParsedTransaction, TransactionParseError> {
-        let fee_bump = envelope.tx;
+    fn parse_fee_bump_envelope(xr: &mut Xdr) -> Result<ParsedTransaction, TransactionParseError> {
+        // FeeBumpTransaction
+        let fee_source = Self::parse_muxed_account(xr)?;
+        let fee = xr.read_i64()?;
 
-        // Extract the inner transaction
-        let inner_envelope = match fee_bump.inner_tx {
-            FeeBumpTransactionInnerTx::EnvelopeTypeTx(env) => env,
-            _ => return Err(TransactionParseError::InvalidEnvelopeType),
+        // innerTx
+        let inner_type = xr.read_i32()?;
+        if inner_type != ENVELOPE_TYPE_TX {
+            return Err(TransactionParseError::InvalidEnvelopeType);
+        }
+
+        // Inner TransactionV1Envelope (tx + signatures)
+        // Reuse same logic as v1 envelope, but we need to parse into temp first
+        let inner_tx = {
+            let source = Self::parse_muxed_account(xr)?;
+            let fee_inner = xr.read_u32()? as i64;
+            let seq_num = xr.read_i64()?;
+            let (time_bounds, ledger_bounds) = Self::parse_preconditions(xr)?;
+            let memo = Self::parse_memo(xr)?;
+            let operations = Self::parse_operations(xr)?;
+            let _ext = xr.read_i32()?; // tx ext v=0
+            let inner_signatures = Self::parse_signatures(xr)?;
+
+            ParsedTransaction {
+                source_account: Self::muxed_account_to_string(&source)?,
+                sequence_number: seq_num,
+                fee: fee_inner,
+                memo: Some(memo),
+                time_bounds,
+                ledger_bounds,
+                operations,
+                signatures: inner_signatures,
+                envelope_type: TransactionEnvelopeType::Tx,
+            }
         };
 
-        let mut parsed = Self::parse_v1_transaction(inner_envelope)?;
-        
-        // Override with fee bump details
-        parsed.source_account = Self::muxed_account_to_string(&fee_bump.fee_source)?;
-        parsed.fee = fee_bump.fee;
-        parsed.signatures = Self::parse_signatures(&envelope.signatures.get_vec())?;
-        parsed.envelope_type = TransactionEnvelopeType::TxFeeBump;
-        
-        Ok(parsed)
+        // fee bump ext
+        let _ext = xr.read_i32()?; // 0
+
+        let outer_sigs = Self::parse_signatures(xr)?;
+
+        let mut tx = inner_tx;
+        tx.source_account = Self::muxed_account_to_string(&fee_source)?;
+        tx.fee = fee;
+        tx.signatures = outer_sigs;
+        tx.envelope_type = TransactionEnvelopeType::TxFeeBump;
+
+        Ok(tx)
     }
 
-    fn parse_memo( memo: &Memo) -> Result<ParsedMemo, TransactionParseError> {
-        let parsed_memo = match memo {
-            Memo::MemoNone => ParsedMemo {
+
+    fn parse_memo(xr: &mut Xdr) -> Result<ParsedMemo, TransactionParseError> {
+        let t = xr.read_i32()?;
+        match t {
+            MEMO_NONE => Ok(ParsedMemo {
                 memo_type: String::try_from("none").map_err(|_| TransactionParseError::StringTooLong)?,
                 value: None,
-            },
-            Memo::MemoText(text) => {
-                ParsedMemo {
+            }),
+            MEMO_TEXT => {
+                let s = xr.read_string(MAX_STRING_LEN)?;
+                Ok(ParsedMemo {
                     memo_type: String::try_from("text").map_err(|_| TransactionParseError::StringTooLong)?,
-                    value: Some(String::try_from("babababa").map_err(|_| TransactionParseError::StringTooLong)?),
-                }
-            },
-            Memo::MemoId(id) => ParsedMemo {
-                memo_type: String::try_from("id").map_err(|_| TransactionParseError::StringTooLong)?,
-                value: Some(Self::u64_to_string(id.clone())?),
-            },
-            Memo::MemoHash(hash) => ParsedMemo {
-                memo_type: String::try_from("hash").map_err(|_| TransactionParseError::StringTooLong)?,
-                value: Some(bytes_to_hex(hash)),
-            },
-            Memo::MemoReturn(ret) => ParsedMemo {
-                memo_type: String::try_from("return").map_err(|_| TransactionParseError::StringTooLong)?,
-                value: Some(bytes_to_hex(ret)),
-            },
-        };
-        
-        Ok(parsed_memo)
+                    value: Some(String::try_from(s).map_err(|_| TransactionParseError::StringTooLong)?),
+                })
+            }
+            MEMO_ID => {
+                let id = xr.read_u64()?;
+                Ok(ParsedMemo {
+                    memo_type: String::try_from("id").map_err(|_| TransactionParseError::StringTooLong)?,
+                    value: Some(Self::u64_to_string(id)?),
+                })
+            }
+            MEMO_HASH => {
+                let h = xr.read_fixed_opaque(32)?;
+                Ok(ParsedMemo {
+                    memo_type: String::try_from("hash").map_err(|_| TransactionParseError::StringTooLong)?,
+                    value: Some(bytes_to_hex(h)),
+                })
+            }
+            MEMO_RETURN => {
+                let h = xr.read_fixed_opaque(32)?;
+                Ok(ParsedMemo {
+                    memo_type: String::try_from("return").map_err(|_| TransactionParseError::StringTooLong)?,
+                    value: Some(bytes_to_hex(h)),
+                })
+            }
+            _ => Err(TransactionParseError::XdrError),
+        }
     }
 
-    fn parse_preconditions( preconditions: &Preconditions) -> Result<(Option<ParsedTimeBounds>, Option<ParsedLedgerBounds>), TransactionParseError> {
-        match preconditions {
-            Preconditions::PrecondNone => Ok((None, None)),
-            Preconditions::PrecondTime(time_bounds) => Ok((Some(Self::parse_time_bounds(time_bounds)?), None)),
-            Preconditions::PrecondV2(preconditions_v2) => {
-                let time_bounds = preconditions_v2.time_bounds
-                    .as_ref()
-                    .map(|tb| Self::parse_time_bounds(tb))
-                    .transpose()?;
-                let ledger_bounds = preconditions_v2.ledger_bounds
-                    .as_ref()
-                    .map(|lb| Self::parse_ledger_bounds(lb))
-                    .transpose()?;
-                Ok((time_bounds, ledger_bounds))
+    fn parse_preconditions(xr: &mut Xdr) -> Result<(Option<ParsedTimeBounds>, Option<ParsedLedgerBounds>), TransactionParseError> {
+        let t = xr.read_i32()?;
+        match t {
+            PRECOND_NONE => Ok((None, None)),
+            PRECOND_TIME => {
+                let tb = Self::parse_time_bounds(xr)?;
+                Ok((Some(tb), None))
             }
+            PRECOND_V2 => {
+                let has_tb = xr.read_bool()?;
+                let tb = if has_tb {
+                    Some(Self::parse_time_bounds(xr)?)
+                } else {
+                    None
+                };
+                let has_lb = xr.read_bool()?;
+                let lb = if has_lb {
+                    Some(Self::parse_ledger_bounds(xr)?)
+                } else {
+                    None
+                };
+                // Skip minSeqNum*
+                let has_min_seq = xr.read_bool()?;
+                if has_min_seq {
+                    let _ = xr.read_i64()?; // ignore
+                }
+                // minSeqAge, minSeqLedgerGap
+                let _ = xr.read_u32()?;
+                let _ = xr.read_u32()?;
+                // extraSigners<2> - we skip them
+                let count = xr.read_u32()? as usize;
+                for _ in 0..count {
+                    let key_type = xr.read_i32()?;
+                    match key_type {
+                        // All known signer key variants have 32-byte bodies here
+                        _ => {
+                            let _key = xr.read_fixed_opaque(32)?;
+                        }
+                    }
+                }
+                Ok((tb, lb))
+            }
+            _ => Err(TransactionParseError::XdrError),
         }
     }
     
-    fn parse_time_bounds(time_bounds: &TimeBounds) -> Result<ParsedTimeBounds, TransactionParseError> {
+    fn parse_time_bounds(xr: &mut Xdr) -> Result<ParsedTimeBounds, TransactionParseError> {
+        let min_time = xr.read_u64()?;
+        let max_time = xr.read_u64()?;
         Ok(ParsedTimeBounds {
-            min_time: Some(time_bounds.min_time),
-            max_time: Some(time_bounds.max_time),
+            min_time: Some(min_time),
+            max_time: Some(max_time),
         })
     }
 
-    fn parse_ledger_bounds(ledger_bounds: &LedgerBounds) -> Result<ParsedLedgerBounds, TransactionParseError> {
+    fn parse_ledger_bounds(xr: &mut Xdr) -> Result<ParsedLedgerBounds, TransactionParseError> {
+        let min_ledger = xr.read_u32()?;
+        let max_ledger = xr.read_u32()?;
         Ok(ParsedLedgerBounds {
-            min_ledger: ledger_bounds.min_ledger,
-            max_ledger: ledger_bounds.max_ledger,
+            min_ledger,
+            max_ledger,
         })
     }
 
-    fn parse_operations(operations: &[Operation]) -> Result<Vec<ParsedOperation>, TransactionParseError> {
-        let mut parsed_ops = Vec::new();
-        
-        for operation in operations.iter() {
-            let parsed_op = Self::parse_operation(operation)?;
-            parsed_ops.push(parsed_op);
+    fn parse_operations(xr: &mut Xdr) -> Result<Vec<ParsedOperation>, TransactionParseError> {
+        let count = xr.read_u32()? as usize;
+        if count > MAX_OPERATIONS {
+            return Err(TransactionParseError::TooManyOperations);
         }
-        
-        Ok(parsed_ops)
-    }
 
-    fn parse_operation(operation: &Operation) -> Result<ParsedOperation, TransactionParseError> {
-        let source_account = match &operation.source_account {
-            Some(account) => Some(Self::muxed_account_to_string(account)?),
-            None => None,
-        };
-        
-        let operation_type = match &operation.body {
-            OperationBody::CreateAccount(create_account) => (
-                String::try_from("create_account").map_err(|_| TransactionParseError::StringTooLong)?,
-                OperationDetails::CreateAccount {
-                    destination: Self::account_id_to_string(&create_account.destination)?,
-                    starting_balance: create_account.starting_balance,
-                }
-            ),
-            OperationBody::Payment(payment) => (
-                String::try_from("payment").map_err(|_| TransactionParseError::StringTooLong)?,
-                OperationDetails::Payment {
-                    destination: Self::parse_muxed_account(&payment.destination)?,
-                    asset: Self::parse_asset(&payment.asset)?,
-                    amount: payment.amount,
-                }
-            ),
-            OperationBody::PathPaymentStrictSend(ppss) => (
-                String::try_from("path_payment_strict_send").map_err(|_| TransactionParseError::StringTooLong)?,
-                OperationDetails::PathPaymentStrictSend {
-                    send_asset: Self::parse_asset(&ppss.send_asset)?,
-                    send_amount: ppss.send_amount,
-                    destination: Self::parse_muxed_account(&ppss.destination)?,
-                    dest_asset: Self::parse_asset(&ppss.dest_asset)?,
-                    dest_min: ppss.dest_min,
-                    path: Self::parse_assets_path(&ppss.path.get_vec())?,
-                }
-            ),
-            OperationBody::PathPaymentStrictReceive(ppss) => (
-                String::try_from("path_payment_strict_send").map_err(|_| TransactionParseError::StringTooLong)?,
-                OperationDetails::PathPaymentStrictReceive {
-                    send_asset: Self::parse_asset(&ppss.send_asset)?,
-                    send_max: ppss.send_max,
-                    destination: Self::parse_muxed_account(&ppss.destination)?,
-                    dest_asset: Self::parse_asset(&ppss.dest_asset)?,
-                    dest_amount: ppss.dest_amount,
-                    path: Self::parse_assets_path(&ppss.path.get_vec())?,
-                }
-            ),
-            OperationBody::ChangeTrust(change_trust) => (
-                String::try_from("change_trust").map_err(|_| TransactionParseError::StringTooLong)?,
-                OperationDetails::ChangeTrust {
-                    asset: Self::parse_change_trust_asset(&change_trust.line)?,
-                    limit: change_trust.limit,
-                }
-            ),
-            OperationBody::AccountMerge(muxed_account) => (
-                String::try_from("account_merge").map_err(|_| TransactionParseError::StringTooLong)?,
-                OperationDetails::AccountMerge {
-                    destination: Self::muxed_account_to_string(muxed_account)?,
-                }
-            ),
-            OperationBody::AllowTrust(allow_trust) => (
-                String::try_from("allow_trust").map_err(|_| TransactionParseError::StringTooLong)?,
-                OperationDetails::AllowTrust {
-                    trustor: Self::account_id_to_string(&allow_trust.trustor)?,
-                    asset_code: Self::asset_code_to_string(&allow_trust.asset)?,
-                    authorize: allow_trust.authorize,
-                }
-            ),
-            OperationBody::SetTrustLineFlags(set_trust_line_flags) => (
-                String::try_from("set_trust_line_flags").map_err(|_| TransactionParseError::StringTooLong)?,
-                OperationDetails::SetTrustLineFlags {
-                    trustor: Self::account_id_to_string(&set_trust_line_flags.trustor)?,
-                    asset: Self::parse_asset(&set_trust_line_flags.asset)?,
-                    clear_flags: set_trust_line_flags.clear_flags,
-                    set_flags: set_trust_line_flags.set_flags,
-                }
-            ),
-            _ => (
-                String::try_from("other").map_err(|_| TransactionParseError::StringTooLong)?,
-                OperationDetails::Other {
-                    operation_type: String::try_from("unknown").map_err(|_| TransactionParseError::StringTooLong)?,
-                    raw_data_len: 0, // In no-std, we avoid storing raw data
-                }
-            ),
-        };
-        
-        Ok(ParsedOperation {
-            operation_type: operation_type.0,
-            source_account,
-            details: operation_type.1,
-        })
-    }
-
-    fn parse_assets_path( path: &[Asset]) -> Result<Vec<ParsedAsset>, TransactionParseError> {
-        let mut parsed_assets = Vec::new();
-        
-        for asset in path.iter() {
-            let parsed_asset = Self::parse_asset(asset)?;
-            parsed_assets.push(parsed_asset);
+        let mut ops = Vec::new();
+        for _ in 0..count {
+            ops.push(Self::parse_operation(xr)?);
         }
-        
-        Ok(parsed_assets)
+        Ok(ops)
     }
 
-    fn parse_muxed_account( muxed_account: &MuxedAccount) -> Result<ParsedMuxedAccount, TransactionParseError> {
-        match muxed_account {
-            MuxedAccount::KeyTypeEd25519(account_id) => Ok(ParsedMuxedAccount::Ed25519 {
-                account_id: bytes_to_hex(account_id),
-            }),
-            MuxedAccount::KeyTypeMuxedEd25519(muxed) => Ok(ParsedMuxedAccount::MuxedEd25519 {
-                id: muxed.id,
-                account_id: bytes_to_hex(&muxed.ed25519),
-            }),
-            MuxedAccount::Default(d) => Err(TransactionParseError::MuxedAccountError),
-        }
-    }
-
-    fn parse_asset( asset: &Asset) -> Result<ParsedAsset, TransactionParseError> {
-        let parsed_asset = match asset {
-            Asset::AssetTypeNative => ParsedAsset::Native {
-                // asset_type: String::try_from("native").map_err(|_| TransactionParseError::StringTooLong)?,
-                // asset_code: None,
-                // issuer: None,
-            },
-            Asset::AssetTypeCreditAlphanum4(alpha4) => {
-                let code_bytes = &alpha4.asset_code;
-                let code_str = core::str::from_utf8(code_bytes).unwrap_or("invalid");
-                let trimmed_code = code_str.trim_end_matches('\0');
-                
-                ParsedAsset::CreditAlphanum4 {
-                    code: String::from(trimmed_code),
-                    issuer: Self::account_id_to_string(&alpha4.issuer)?,
-                }
-            },
-            Asset::AssetTypeCreditAlphanum12(alpha12) => {
-                let code_bytes = &alpha12.asset_code;
-                let code_str = core::str::from_utf8(code_bytes).unwrap_or("invalid");
-                let trimmed_code = code_str.trim_end_matches('\0');
-
-                ParsedAsset::CreditAlphanum12 {
-                    code: String::from(trimmed_code),
-                    issuer: Self::account_id_to_string(&alpha12.issuer)?,
-                }
-            },
-            Asset::Default(d) => return Err(TransactionParseError::UnsupportedOperation),
+    fn parse_operation(xr: &mut Xdr) -> Result<ParsedOperation, TransactionParseError> {
+        // sourceAccount*
+        let has_src = xr.read_bool()?;
+        let source_account = if has_src {
+            let src = Self::parse_muxed_account(xr)?;
+            Some(Self::muxed_account_to_string(&src)?)
+        } else {
+            None
         };
-        
-        Ok(parsed_asset)
-    }
 
-    fn parse_change_trust_asset( asset: &ChangeTrustAsset) -> Result<ParsedChangeTrustAsset, TransactionParseError> {
-        let parsed_asset = match asset {
-            ChangeTrustAsset::AssetTypeNative => ParsedChangeTrustAsset::Native,
-            ChangeTrustAsset::AssetTypeCreditAlphanum4(alpha4) => {
-                let code_bytes = &alpha4.asset_code;
-                let code_str = core::str::from_utf8(code_bytes).unwrap_or("invalid");
-                let trimmed_code = code_str.trim_end_matches('\0');
-                
-                ParsedChangeTrustAsset::CreditAlphanum4 {
-                    code: String::from(trimmed_code),
-                    issuer: Self::account_id_to_string(&alpha4.issuer)?,
-                }
-            },
-            ChangeTrustAsset::AssetTypeCreditAlphanum12(alpha12) => {
-                let code_bytes = &alpha12.asset_code;
-                let code_str = core::str::from_utf8(code_bytes).unwrap_or("invalid");
-                let trimmed_code = code_str.trim_end_matches('\0');
+        let op_type = xr.read_i32()?;
 
-                ParsedChangeTrustAsset::CreditAlphanum12 {
-                    code: String::from(trimmed_code),
-                    issuer: Self::account_id_to_string(&alpha12.issuer)?,
-                }
-            },
-            ChangeTrustAsset::AssetTypePoolShare(lp) => {
-                match lp {
-                    LiquidityPoolParameters::LiquidityPoolConstantProduct(cp) => {
-                        let asset_a = Self::parse_asset(&cp.asset_a)?;
-                        let asset_b = Self::parse_asset(&cp.asset_b)?;
-                        ParsedChangeTrustAsset::LiquidityPool {
-                            asset_a,
-                            asset_b,
-                            fee: cp.fee,
-                        }
+        match op_type {
+            OP_CREATE_ACCOUNT => {
+                let dest = Self::account_id_to_string(xr)?;
+                let starting_balance = xr.read_i64()?;
+                Ok(ParsedOperation {
+                    operation_type: String::from("create_account"),
+                    source_account,
+                    details: OperationDetails::CreateAccount {
+                        destination: dest,
+                        starting_balance,
                     },
-                }
-            },
-        };
-        
-        Ok(parsed_asset)
+                })
+            }
+
+            OP_PAYMENT => {
+                let destination = Self::parse_muxed_account(xr)?;
+                let asset = Self::parse_asset(xr)?;
+                let amount = xr.read_i64()?;
+                Ok(ParsedOperation {
+                    operation_type: String::from("payment"),
+                    source_account,
+                    details: OperationDetails::Payment {
+                        destination,
+                        asset,
+                        amount,
+                    },
+                })
+            }
+
+            OP_PATH_PAYMENT_STRICT_SEND => {
+                let send_asset = Self::parse_asset(xr)?;
+                let send_amount = xr.read_i64()?;
+                let destination = Self::parse_muxed_account(xr)?;
+                let dest_asset = Self::parse_asset(xr)?;
+                let dest_min = xr.read_i64()?;
+                let path = Self::parse_asset_path(xr)?;
+                Ok(ParsedOperation {
+                    operation_type: String::from("path_payment_strict_send"),
+                    source_account,
+                    details: OperationDetails::PathPaymentStrictSend {
+                        send_asset,
+                        send_amount,
+                        destination,
+                        dest_asset,
+                        dest_min,
+                        path,
+                    },
+                })
+            }
+
+            OP_PATH_PAYMENT_STRICT_RECEIVE => {
+                let send_asset = Self::parse_asset(xr)?;
+                let send_max = xr.read_i64()?;
+                let destination = Self::parse_muxed_account(xr)?;
+                let dest_asset = Self::parse_asset(xr)?;
+                let dest_amount = xr.read_i64()?;
+                let path = Self::parse_asset_path(xr)?;
+                Ok(ParsedOperation {
+                    operation_type: String::from("path_payment_strict_receive"),
+                    source_account,
+                    details: OperationDetails::PathPaymentStrictReceive {
+                        send_asset,
+                        send_max,
+                        destination,
+                        dest_asset,
+                        dest_amount,
+                        path,
+                    },
+                })
+            }
+
+            OP_CHANGE_TRUST => {
+                let line = Self::parse_change_trust_asset(xr)?;
+                let limit = xr.read_i64()?;
+                Ok(ParsedOperation {
+                    operation_type: String::from("change_trust"),
+                    source_account,
+                    details: OperationDetails::ChangeTrust { asset: line, limit },
+                })
+            }
+
+            OP_ACCOUNT_MERGE => {
+                // union body is just a MuxedAccount
+                let dest = Self::parse_muxed_account(xr)?;
+                Ok(ParsedOperation {
+                    operation_type: String::from("account_merge"),
+                    source_account,
+                    details: OperationDetails::AccountMerge {
+                        destination: Self::muxed_account_to_string(&dest)?,
+                    },
+                })
+            }
+
+            OP_ALLOW_TRUST => {
+                let trustor = Self::account_id_to_string(xr)?;
+                // asset code union
+                let t = xr.read_i32()?;
+                let asset_code: String = match t {
+                    ASSET_TYPE_CREDIT_ALPHANUM4 => {
+                        let code_bytes = xr.read_fixed_opaque(4)?;
+                        let raw = core::str::from_utf8(code_bytes).unwrap_or("invalid");
+                        let trimmed = raw.trim_end_matches('\0');
+                        String::try_from(trimmed)
+                            .map_err(|_| TransactionParseError::StringTooLong)?
+                    }
+                    ASSET_TYPE_CREDIT_ALPHANUM12 => {
+                        let code_bytes = xr.read_fixed_opaque(12)?;
+                        let raw = core::str::from_utf8(code_bytes).unwrap_or("invalid");
+                        let trimmed = raw.trim_end_matches('\0');
+                        String::try_from(trimmed)
+                            .map_err(|_| TransactionParseError::StringTooLong)?
+                    }
+                    _ => return Err(TransactionParseError::UnsupportedOperation),
+                };
+
+                let authorize = xr.read_u32()?;
+
+                Ok(ParsedOperation {
+                    operation_type: String::try_from("allow_trust")
+                        .map_err(|_| TransactionParseError::StringTooLong)?,
+                    source_account,
+                    details: OperationDetails::AllowTrust {
+                        trustor,
+                        asset_code,
+                        authorize,
+                    },
+                })
+            }
+
+
+
+            OP_SET_TRUST_LINE_FLAGS => {
+                let trustor = Self::account_id_to_string(xr)?;
+                let asset = Self::parse_asset(xr)?;
+                let clear_flags = xr.read_u32()?;
+                let set_flags = xr.read_u32()?;
+                Ok(ParsedOperation {
+                    operation_type: String::from("set_trust_line_flags"),
+                    source_account,
+                    details: OperationDetails::SetTrustLineFlags {
+                        trustor,
+                        asset,
+                        clear_flags,
+                        set_flags,
+                    },
+                })
+            }
+
+            _ => Err(TransactionParseError::UnsupportedOperation),
+        }
     }
 
-    fn parse_signatures(signatures: &[DecoratedSignature]) -> Result<Vec<ParsedSignature>, TransactionParseError> {
-        let mut parsed_sigs = Vec::new();
-        
-        for sig in signatures.iter() {
-            let mut hint = [0u8; 4];
-            let mut signature = [0u8; 64];
-            
-            // Copy hint (always 4 bytes)
-            for (i, &byte) in sig.hint.iter().enumerate() {
-                hint[i] = byte;
-            }
-            
-            // Copy signature (up to 64 bytes for Ed25519)
-            for (i, &byte) in sig.signature.get_vec().iter().enumerate() {
-                signature[i] = byte;
-            }
-            
-            let parsed_sig = ParsedSignature { hint, signature };
-            parsed_sigs.push(parsed_sig);
+    fn parse_asset_path(xr: &mut Xdr) -> Result<Vec<ParsedAsset>, TransactionParseError> {
+        let count = xr.read_u32()? as usize;
+        if count > MAX_PATH_ASSETS {
+            return Err(TransactionParseError::PayloadTooLarge);
         }
-        
-        Ok(parsed_sigs)
+        let mut v = Vec::new();
+        for _ in 0..count {
+            v.push(Self::parse_asset(xr)?);
+        }
+        Ok(v)
+    }
+
+    fn parse_muxed_account(xr: &mut Xdr) -> Result<ParsedMuxedAccount, TransactionParseError> {
+        let t = xr.read_i32()?;
+        match t {
+            KEY_TYPE_ED25519 => {
+                let key = xr.read_fixed_opaque(32)?;
+                Ok(ParsedMuxedAccount::Ed25519 {
+                    account_id: bytes_to_hex(key),
+                })
+            }
+            KEY_TYPE_MUXED_ED25519 => {
+                let id = xr.read_u64()?;
+                let key = xr.read_fixed_opaque(32)?;
+                Ok(ParsedMuxedAccount::MuxedEd25519 {
+                    id,
+                    account_id: bytes_to_hex(key),
+                })
+            }
+            _ => Err(TransactionParseError::MuxedAccountError),
+        }
+    }
+
+    fn parse_asset(xr: &mut Xdr) -> Result<ParsedAsset, TransactionParseError> {
+        let t = xr.read_i32()?;
+        match t {
+            ASSET_TYPE_NATIVE => Ok(ParsedAsset::Native),
+            ASSET_TYPE_CREDIT_ALPHANUM4 => {
+                let code_bytes = xr.read_fixed_opaque(4)?;
+                let code_str = core::str::from_utf8(code_bytes).unwrap_or("invalid");
+                let trimmed = code_str.trim_end_matches('\0');
+                let issuer = Self::account_id_to_string(xr)?;
+                Ok(ParsedAsset::CreditAlphanum4 {
+                    code: String::from(trimmed),
+                    issuer,
+                })
+            }
+            ASSET_TYPE_CREDIT_ALPHANUM12 => {
+                let code_bytes = xr.read_fixed_opaque(12)?;
+                let code_str = core::str::from_utf8(code_bytes).unwrap_or("invalid");
+                let trimmed = code_str.trim_end_matches('\0');
+                let issuer = Self::account_id_to_string(xr)?;
+                Ok(ParsedAsset::CreditAlphanum12 {
+                    code: String::from(trimmed),
+                    issuer,
+                })
+            }
+            _ => Err(TransactionParseError::UnsupportedOperation),
+        }
+    }
+
+    fn parse_change_trust_asset(xr: &mut Xdr) -> Result<ParsedChangeTrustAsset, TransactionParseError> {
+        let t = xr.read_i32()?;
+        match t {
+            ASSET_TYPE_NATIVE => Ok(ParsedChangeTrustAsset::Native),
+            ASSET_TYPE_CREDIT_ALPHANUM4 => {
+                let code_bytes = xr.read_fixed_opaque(4)?;
+                let code_str = core::str::from_utf8(code_bytes).unwrap_or("invalid");
+                let trimmed = code_str.trim_end_matches('\0');
+                let issuer = Self::account_id_to_string(xr)?;
+                Ok(ParsedChangeTrustAsset::CreditAlphanum4 {
+                    code: String::from(trimmed),
+                    issuer,
+                })
+            }
+            ASSET_TYPE_CREDIT_ALPHANUM12 => {
+                let code_bytes = xr.read_fixed_opaque(12)?;
+                let code_str = core::str::from_utf8(code_bytes).unwrap_or("invalid");
+                let trimmed = code_str.trim_end_matches('\0');
+                let issuer = Self::account_id_to_string(xr)?;
+                Ok(ParsedChangeTrustAsset::CreditAlphanum12 {
+                    code: String::from(trimmed),
+                    issuer,
+                })
+            }
+            ASSET_TYPE_POOL_SHARE => {
+                // LiquidityPoolParameters (only constant product now)
+                // enum LiquidityPoolType { LIQUIDITY_POOL_CONSTANT_PRODUCT = 0; }
+                let lp_type = xr.read_i32()?; // expect 0
+                if lp_type != 0 {
+                    return Err(TransactionParseError::UnsupportedOperation);
+                }
+                // LiquidityPoolConstantProductParameters
+                let asset_a = Self::parse_asset(xr)?;
+                let asset_b = Self::parse_asset(xr)?;
+                let fee = xr.read_i32()?;
+                Ok(ParsedChangeTrustAsset::LiquidityPool { asset_a, asset_b, fee })
+            }
+            _ => Err(TransactionParseError::UnsupportedOperation),
+        }
+    }
+
+    fn parse_signatures(xr: &mut Xdr) -> Result<Vec<ParsedSignature>, TransactionParseError> {
+        let count = xr.read_u32()? as usize;
+        if count > MAX_SIGNATURES {
+            return Err(TransactionParseError::TooManySignatures);
+        }
+
+        let mut sigs = Vec::new();
+        for _ in 0..count {
+            let hint_bytes = xr.read_fixed_opaque(4)?;
+            let mut hint = [0u8; 4];
+            hint.copy_from_slice(hint_bytes);
+
+            let sig_bytes = xr.read_opaque(64)?;
+            let mut signature = [0u8; 64];
+            for (i, b) in sig_bytes.iter().enumerate() {
+                if i < 64 {
+                    signature[i] = *b;
+                }
+            }
+
+            sigs.push(ParsedSignature { hint, signature });
+        }
+
+        Ok(sigs)
     }
 
     fn account_id_to_string(
-        account_id: &AccountId,
+        xr: &mut Xdr,
     ) -> Result<String, TransactionParseError> {
-        match &account_id {
-            PublicKey::PublicKeyTypeEd25519(ed) => Ok(bytes_to_hex(ed)),
+        let t = xr.read_i32()?;
+        if t != KEY_TYPE_ED25519 {
+            return Err(TransactionParseError::AccountIdError);
         }
+        let key = xr.read_fixed_opaque(32)?;
+        Self::uint256_to_bounded_hex(key)
     }
 
-    fn muxed_account_to_string(muxed_account: &MuxedAccount) -> Result<String, TransactionParseError> {
+    fn muxed_account_to_string(muxed_account: &ParsedMuxedAccount) -> Result<String, TransactionParseError> {
         match muxed_account {
-            MuxedAccount::KeyTypeEd25519(account_id) => Ok(bytes_to_hex(account_id)),
-            MuxedAccount::KeyTypeMuxedEd25519(muxed) => {
-                // For muxed accounts, we'd normally encode both the account and ID
-                // For simplicity, just return the account part as hex
-                Ok(bytes_to_hex(&muxed.ed25519))
-            },
-            MuxedAccount::Default(d) => Err(TransactionParseError::MuxedAccountError),
+            ParsedMuxedAccount::Ed25519 { account_id } => {
+                String::try_from(account_id.as_str()).map_err(|_| TransactionParseError::StringTooLong)
+            }
+            ParsedMuxedAccount::MuxedEd25519 { account_id, .. } => {
+                String::try_from(account_id.as_str()).map_err(|_| TransactionParseError::StringTooLong)
+            }
         }
     }
 
