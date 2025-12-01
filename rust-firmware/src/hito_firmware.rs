@@ -13,6 +13,8 @@ use crate::vault::vault::HitoVault;
 #[cfg(feature = "minifb")]
 use crate::drivers::minifb::SocketProtocol;
 
+const TEST_PASSCODE: &[u8] = b"000000";
+
 pub struct HitoFirmware {
     pub display:   DisplayImpl,
     pub touch:     TouchImpl,
@@ -44,7 +46,8 @@ impl HitoFirmware {
         #[cfg(feature = "minifb")]
         {
             self.vault.set_entropy(hex_to_bytes("ffbff7feffdffbff7feffdffbff7feff").unwrap().as_slice(), 16);
-            self.vault.set_passcode(b"000000").expect("Failed to set passcode");
+            self.vault.set_passcode(TEST_PASSCODE).expect("Failed to set passcode");
+            self.vault.unlock_with_password(TEST_PASSCODE).expect("Failed to unlock vault");
         }
 
         #[cfg(feature = "zephyr")]

@@ -262,12 +262,12 @@ pub extern "C" fn rust_main() -> ! {
 
         window.draw_if_needed(|renderer| {
             unsafe {
-                #[cfg(feature = "minifb")]
-                {
-                    let heap_bytes = get_heap_usage();
-                    let stack_bytes = current_stack_used();
-                    drivers::minifb::simulator_window_set_memory_stats(heap_bytes, stack_bytes);
-                }
+                // #[cfg(feature = "minifb")]
+                // {
+                //     let heap_bytes = get_heap_usage();
+                //     let stack_bytes = current_stack_used();
+                //     drivers::minifb::simulator_window_set_memory_stats(heap_bytes, stack_bytes);
+                // }
                 renderer.render_by_line(DisplayWrapper {
                     display: &mut firmware.display,
                     line_buffer: &mut LINE_BUFFER,

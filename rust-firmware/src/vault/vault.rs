@@ -4,6 +4,7 @@ use core::slice;
 use crate::crypto;
 use crate::crypto::crypt0::bytes_to_hex;
 use crate::crypto::crypt0::hex_to_bytes;
+use crate::crypto::libcrypt0pro::stellar::StellarKeypair;
 use crate::log_info;
 use crate::now_us;
 use crate::vault::ffi;
@@ -274,6 +275,8 @@ pub struct HitoVault {
   eth_addr: [u8; 43],
   near_addr: [u8; 64],
   btc_addr: [u8; 75],
+  stellar_public: [u8; 32],
+  stellar_secret: [u8; 32],
   mnemonic: [u8; 215],
   entropy_len: entropy_len_t,
   pub unlock_job: Option<UnlockJob>,
@@ -366,6 +369,7 @@ impl HitoVault {
            entropy: [0; 32], seed: [0; 64], eth_key: [0; 32], near_key: [0; 32],
            solana_key: [0; 32], solana_addr: [0; 32], eth_addr: [0; 43],
            near_addr: [0; 64], btc_addr: [0; 75], mnemonic: [0; 215],
+           stellar_public: [0; 32], stellar_secret: [0; 32],
            entropy_len: entropy_len_t::ENTROPY_LEN_32,
            unlock_job: None
        }
@@ -780,8 +784,7 @@ impl HitoVault {
     if !self.is_unlocked() {
       return Err(VaultError::VaultLocked);
     }
-    let wallet = StellarWallet::from_seed(self.seed);
-    Ok(wallet.get_default_address().unwrap())
+    Ok(StellarWallet::encode_stellar_address(&self.stellar_public).unwrap())
   }
 
   /// Save vault data with new passcode
@@ -866,9 +869,30 @@ impl HitoVault {
     Ok(())
   }
 
+  fn save_stellar(&mut self) -> VaultResult<()> {
+    // log_info!("Saving Stellar secret key");
+    let wallet = StellarWallet::from_seed(self.seed);
+    let keypair = wallet.derive_keypair(0).unwrap();
+    self.stellar_secret[..keypair.secret_key.len()].copy_from_slice(&keypair.secret_key);
+    self.stellar_public[..keypair.public_key.len()].copy_from_slice(&keypair.public_key);
+    //log_info!("Stellar keys saved: public={:?}, secret={:?}", bytes_to_hex(&self.stellar_public), bytes_to_hex(&self.stellar_secret));
+    Ok(())
+  }
+
+  pub fn get_stellar_keypair(&self) -> VaultResult<StellarKeypair> {
+    if !self.is_unlocked() {
+      return Err(VaultError::VaultLocked);
+    }
+    Ok(StellarKeypair {
+      public_key: self.stellar_public,
+      secret_key: self.stellar_secret,
+    })
+  }
+
   fn save_vault_data(&mut self) -> VaultResult<()> {
     // log_info!("Saving vault data");
     self.save_mnemonic()?;
+    self.save_stellar()?;
     // log_info!("Vault data saved successfully");
     Ok(())
   }
@@ -886,6 +910,14 @@ impl HitoVault {
           Err(_) => return Err(VaultError::InvalidMnemonicUtf8),
       };
       Ok(mnemonic_str)
+  }
+
+  pub fn get_mnemonic_len(&self) -> usize {
+    match self.entropy_len {
+      entropy_len_t::ENTROPY_LEN_16 => 12,
+      entropy_len_t::ENTROPY_LEN_24 => 18,
+      entropy_len_t::ENTROPY_LEN_32 => 24,
+    }
   }
 
   /// Set a new passcode for the vault
@@ -941,12 +973,35 @@ impl HitoVault {
     let decrypted = HitoVault::block_decrypt(block, password)?;
     // Parse the decrypted data (entropy + seed) and store in vault
     // The first 32 bytes are entropy, next 64 bytes are seed
-    let entropy_len = self.entropy_len as usize;
-    if entropy_len > 0 && entropy_len <= 32 {
-      self.entropy[..entropy_len].copy_from_slice(&decrypted[..entropy_len]);
-      self.seed.copy_from_slice(&decrypted[32..]);
+    match block.magic {
+        HITO_VAULT_HEADER_MAGIC_12_WORDS_V1 => {
+            self.entropy_len = entropy_len_t::ENTROPY_LEN_16;
+        }
+        HITO_VAULT_HEADER_MAGIC_12_WORDS_ALPHA => {
+            self.entropy_len = entropy_len_t::ENTROPY_LEN_16;
+        }
+        HITO_VAULT_HEADER_MAGIC_18_WORDS_V1 => {
+            self.entropy_len = entropy_len_t::ENTROPY_LEN_24;
+        }
+        HITO_VAULT_HEADER_MAGIC_18_WORDS_ALPHA => {
+            self.entropy_len = entropy_len_t::ENTROPY_LEN_24;
+        }
+        HITO_VAULT_HEADER_MAGIC_24_WORDS_V1 => {
+            self.entropy_len = entropy_len_t::ENTROPY_LEN_32;
+        }
+        HITO_VAULT_HEADER_MAGIC_24_WORDS_ALPHA => {
+            self.entropy_len = entropy_len_t::ENTROPY_LEN_32;
+        }
+        _ => return Err(VaultError::CryptoError),
     }
-    
+    let entropy_len = self.entropy_len as usize;
+    if entropy_len == 0 || entropy_len > 32 {
+        return Err(VaultError::InvalidKeyLength);
+    }
+    self.entropy[..entropy_len].copy_from_slice(&decrypted[..entropy_len]);
+    self.seed.copy_from_slice(&decrypted[32..]);
+    self.save_vault_data()?;
+    //log_info!("Vault unlocked successfully");
     self.vaultIsUnlocked = true;
     Ok(())
   }

@@ -5,20 +5,8 @@ export global DeviceInfoState {
     in-out property <string> firmware-version;
     in-out property <string> bootloader-version;
     in-out property <string> serial-number;
-    in-out property <int> factory-reset-count: 0;
     callback request-device-info();
-    callback request-factory-reset-string();
-    in-out property <string> factory-reset-string: {
-      if factory-reset-count < 0 {
-          "Factory reset no data";
-      } else if factory-reset-count == 0 {
-          "Factory setup";
-      } else if factory-reset-count > 30 {
-          "Factory reset 30+ times";
-      } else {
-          "Factory reset " + (factory-reset-count - 1) + " times";
-      }
-    }
+    in-out property <string> factory-reset-string;
 }
 
 export component DeviceInfoScreenView {
