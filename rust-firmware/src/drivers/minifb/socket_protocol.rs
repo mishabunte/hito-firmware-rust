@@ -38,7 +38,7 @@ impl SocketProtocol {
 
         *self.listener.lock().unwrap() = Some(listener);
 
-        log_info!("Linux Socket initialized at {}", SOCKET_PATH);
+        //log_info!("Linux Socket initialized at {}", SOCKET_PATH);
         Ok(())
     }
 
@@ -51,7 +51,7 @@ impl SocketProtocol {
                     stream.set_nonblocking(true)?;
                     *self.client.lock().unwrap() = Some(stream);
                     *self.connected.lock().unwrap() = true;
-                    log_info!("Linux Socket: Client connected");
+                    //log_info!("Linux Socket: Client connected");
                     Ok(true)
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
@@ -79,13 +79,13 @@ impl SocketProtocol {
                     // Connection closed
                     *self.connected.lock().unwrap() = false;
                     *client_lock = None;
-                    log_info!("Linux Socket: Client disconnected");
+                    //log_info!("Linux Socket: Client disconnected");
                     Ok(None)
                 }
                 Ok(n) => {
                     let data = buffer[..n].to_vec();
-                    log_info!("Linux Socket: Received {} bytes", n);
-                    log_info!("Linux Socket: Data: {:?}", String::from_utf8_lossy(&data));
+                    //log_info!("Linux Socket: Received {} bytes", n);
+                    //log_info!("Linux Socket: Data: {:?}", String::from_utf8_lossy(&data));
                     Ok(Some(data))
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
@@ -109,7 +109,7 @@ impl SocketProtocol {
             match stream.write(data) {
                 Ok(n) => {
                     stream.flush()?;
-                    log_info!("Linux Socket: Sent {} bytes", n);
+                    //log_info!("Linux Socket: Sent {} bytes", n);
                     Ok(n)
                 }
                 Err(e) => {
@@ -135,7 +135,7 @@ impl SocketProtocol {
             let _ = fs::remove_file(SOCKET_PATH);
         }
 
-        log_info!("Linux Socket: Closed");
+        //log_info!("Linux Socket: Closed");
     }
 }
 
