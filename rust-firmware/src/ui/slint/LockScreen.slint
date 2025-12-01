@@ -34,6 +34,7 @@ export component LockScreenView {
     Text {
         text: key-is-pressed ? "Release to unlock" : "Swipe the key";
         font-size: 20px;
+        //font-family: "Roboto Mono";
         color: black;
         horizontal-alignment: center;
         y: 170px;
@@ -107,16 +108,16 @@ export component LockScreenView {
 
         pointer-event(event) => {
             if (event.kind == PointerEventKind.down) {
-                debug("Pointer down at " + self.mouse-x / 1px + ", " + self.mouse-y / 1px);
+                //debug("Pointer down at " + self.mouse-x / 1px + ", " + self.mouse-y / 1px);
                 mouse-pressed = true;
                 key-is-pressed = true;
                 start-x = self.mouse-x;
             } else if (event.kind == PointerEventKind.up) {
-                debug("Pointer up at " + self.mouse-x / 1px + ", " + self.mouse-y / 1px);
+                //debug("Pointer up at " + self.mouse-x / 1px + ", " + self.mouse-y / 1px);
                 mouse-pressed = false;
                 key-is-pressed = false;
                 if (key-offset >= unlock-threshold) {
-                  debug("Unlock threshold reached");
+                  //debug("Unlock threshold reached");
                     // Trigger unlock animation
                     unlock();
                 } else {
@@ -125,11 +126,11 @@ export component LockScreenView {
                     key-offset-start = (key-offset-start == -5px) ? 5px : -5px; // Simple back-and-forth
                 }
             } else if (event.kind == PointerEventKind.move && mouse-pressed) {
-                debug("Pointer move at " + self.mouse-x / 1px + ", " + self.mouse-y / 1px);
+                //debug("Pointer move at " + self.mouse-x / 1px + ", " + self.mouse-y / 1px);
                 // Calculate offset based on drag distance
                 key-offset = min(max(0px, self.mouse-x - start-x), unlock-threshold);
                 key-offset-start = key-offset;
-                debug("Key offset: " + key-offset / 1px);
+                //debug("Key offset: " + key-offset / 1px);
             }
         }
     }
@@ -163,7 +164,7 @@ export component LockScreenView {
 
     // Functions
     function unlock() {
-        debug("Unlocking...");
+        //debug("Unlocking...");
         key_shown = false;
         is-unlocked = true;
         key-is-pressed = false;
