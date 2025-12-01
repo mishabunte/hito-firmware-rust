@@ -320,7 +320,7 @@ impl SimulatorWindow {
             // Mouse button just released
             //println!("Mouse released");
             self.mouse_clicked = false;
-            log_info!("Mouse released");
+            //log_info!("Mouse released");
             return Some(false);
         }
         None
@@ -420,7 +420,7 @@ impl SimulatorWindow {
 
     pub fn update(&mut self) {
         if self.window.is_open() {
-            self.draw_memory_overlay();
+            //self.draw_memory_overlay();
 
             self.window.update_with_buffer(&self.buffer, WINDOW_WIDTH as usize, WINDOW_HEIGHT as usize).unwrap();
         }
