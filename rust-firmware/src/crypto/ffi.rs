@@ -92,5 +92,6 @@ extern "C" {
     sig: *mut u8,
     siglen: usize
   ) -> c_int;
+  pub fn hito_sys_rand32_get() -> u32;
 }
 pub const CRYPT0_OK: c_int = 0;

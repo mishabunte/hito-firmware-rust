@@ -88,6 +88,7 @@ set(LIBCRYPT0_SOURCES
   ${LIBCRYPT0_DIR}/src/crypt0_ripemd160.c
   ${LIBCRYPT0_DIR}/src/crypt0_rlp.c
   ${LIBCRYPT0_DIR}/src/crypt0_rng.c
+  ${LIBCRYPT0_DIR}/src/hito_rand.c
   ${LIBCRYPT0_DIR}/lib/SHA3IUF/sha3.c
   ${LIBCRYPT0_DIR}/src/crypt0_secp256k1.c
   ${LIBCRYPT0_DIR}/src/crypt0_sha.c

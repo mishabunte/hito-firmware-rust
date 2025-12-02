@@ -4,18 +4,13 @@ use crate::slint_generatedMainWindow::MainWindow;
 use slint::{ComponentHandle, ToSharedString};
 use crate::{log_info, ui};
 
-#[cfg(feature = "zephyr")]
-extern "C" {
-    fn sys_rand32_get() -> u32;
-}
 
 #[cfg(feature = "zephyr")]
-fn rand10() -> usize {
-    unsafe { (sys_rand32_get() % 10) as usize }
-}
-
-#[cfg(feature = "zephyr")]
-fn shuffle_digits(mut arr: [u8; 10]) -> [u8; 10] {
+pub fn shuffle_digits(mut arr: [u8; 10]) -> [u8; 10] {
+    use crate::crypto::ffi::hito_sys_rand32_get;
+    fn rand10() -> usize {
+        unsafe { (hito_sys_rand32_get() % 10) as usize }
+    }
     for _ in 0..128 {
         let i = rand10();
         let j = rand10();
@@ -28,9 +23,8 @@ fn shuffle_digits(mut arr: [u8; 10]) -> [u8; 10] {
 }
 
 #[cfg(feature = "minifb")]
-use rand::Rng;
-
 pub fn shuffle_digits(mut arr: [u8; 10]) -> [u8; 10] {
+    use rand::Rng;
     let mut rng = rand::thread_rng();
 
     for _ in 0..128 {
@@ -44,7 +38,6 @@ pub fn shuffle_digits(mut arr: [u8; 10]) -> [u8; 10] {
 
     arr
 }
-
 
 
 
