@@ -1,6 +1,8 @@
 import { Palette } from "Palette.slint";
 import { TransparentButton } from "TransparentButton.slint";
 import { Spacer } from "Spacer.slint";
+import { DeviceInfoState } from "DeviceInfoScreen.slint";
+import { ReceiveDataState } from "ReceiveScreen.slint";
 
 export global ShowSeedState {
   in-out property <string> seed-phrase-fragment;
@@ -22,16 +24,16 @@ component SeedWord inherits Text {
     letter-spacing: -0.5px;
     height: 30px;
     TouchArea {
-        width: parent.width;
-        height: parent.height;
-        pointer-event(event) => {
-            if (event.kind == PointerEventKind.down) {
-                ShowSeedState.all-words-hidden = false;
-                word-visible = !word-visible;
-            } else if (event.kind == PointerEventKind.up) {
-                //debug("Clicked pin", root.text);
-            }
+      width: parent.width;
+      height: parent.height;
+      pointer-event(event) => {
+        if (event.kind == PointerEventKind.down) {
+          ShowSeedState.all-words-hidden = false;
+          word-visible = !word-visible;
+        } else if (event.kind == PointerEventKind.up) {
+            //debug("Clicked pin", root.text);
         }
+      }
     }
     visible: index < ShowSeedState.seed-len;
 }
@@ -39,47 +41,34 @@ component SeedWord inherits Text {
 export component ShowSeedScreenView {
     width: 320px;
     height: 240px;
-    HorizontalLayout {
-      x: 20px;
-      alignment: start;
-      VerticalLayout {
-        y: 60px;
-        alignment: start;
-        width: parent.width / 2;
-        SeedWord { index: 0 + ShowSeedState.page-number * 8;  }
-        SeedWord { index: 1 + ShowSeedState.page-number * 8;  }
-        SeedWord { index: 2 + ShowSeedState.page-number * 8;  }
-        SeedWord { index: 3 + ShowSeedState.page-number * 8;  }
-      }
+    property <length> x-left: 22px;
+    property <length> x-right: 172px;
+    property <length> y-top: 55px;
+    property <length> y-gap: 30px;
+    init => {
+      ReceiveDataState.request-receive-data();
     }
-    HorizontalLayout {
-      x: 10px;
-      alignment: end;
-      VerticalLayout {
-        y: 60px;
-        alignment: start;
-        width: parent.width / 2;
-        SeedWord { index: 4 + ShowSeedState.page-number * 8;  }
-        SeedWord { index: 5 + ShowSeedState.page-number * 8;  }
-        SeedWord { index: 6 + ShowSeedState.page-number * 8;  }
-        SeedWord { index: 7 + ShowSeedState.page-number * 8;  }
-        Spacer {
-          height: 20px;
+    SeedWord { index: 0 + ShowSeedState.page-number * 8; x: x-left; y: y-top;}
+    SeedWord { index: 1 + ShowSeedState.page-number * 8; x: x-left; y: y-top + y-gap; }
+    SeedWord { index: 2 + ShowSeedState.page-number * 8; x: x-left; y: y-top + y-gap * 2; }
+    SeedWord { index: 3 + ShowSeedState.page-number * 8; x: x-left; y: y-top + y-gap * 3; }
+    SeedWord { index: 4 + ShowSeedState.page-number * 8; x: x-right; y: y-top; }
+    SeedWord { index: 5 + ShowSeedState.page-number * 8; x: x-right; y: y-top + y-gap; }
+    SeedWord { index: 6 + ShowSeedState.page-number * 8; x: x-right; y: y-top + y-gap * 2; }
+    SeedWord { index: 7 + ShowSeedState.page-number * 8; x: x-right; y: y-top + y-gap * 3; }
+    TransparentButton {
+      x: 180px;
+      y: 200px;
+      content: "Next Page";
+      text-color-pressed: Palette.black;
+      text-color-unpressed: Palette.blue;
+      clicked => {
+        if (ShowSeedState.page-number < ShowSeedState.total-pages - 1) {
+            ShowSeedState.page-number += 1;
+        } else {
+            ShowSeedState.page-number = 0;
         }
-        TransparentButton {
-          x: -5px;
-            content: "Next Page";
-            text-color-pressed: Palette.black;
-            text-color-unpressed: Palette.blue;
-            clicked => {
-                if (ShowSeedState.page-number < ShowSeedState.total-pages - 1) {
-                    ShowSeedState.page-number += 1;
-                } else {
-                    ShowSeedState.page-number = 0;
-                }
-                ShowSeedState.page-changed(ShowSeedState.page-number);
-            }
-        }
+        ShowSeedState.page-changed(ShowSeedState.page-number);
       }
     }
 }

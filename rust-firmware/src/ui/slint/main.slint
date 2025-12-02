@@ -6,7 +6,7 @@ import { EnterPinScreenView } from "EnterPinScreen.slint";
 import { SignedScreenView } from "SignedScreen.slint";
 import { SignedState } from "SignedScreen.slint";
 import { TransparentButton } from "TransparentButton.slint";
-import { SendScreenView } from "SendScreen.slint";
+import { CommunicateScreenView } from "SendScreen.slint";
 import { SettingsScreenView } from "SettingsScreen.slint";
 import { EnterPinState } from "EnterPinScreen.slint";
 import { PairWithTheAppScreenView } from "PairWithTheAppScreen.slint";
@@ -28,6 +28,7 @@ export { Router, ScreenEnum } // Export Router for global access
 export { StartScreen } from "SetStartScreen.slint";
 
 export { BrightnessController, BatteryController, EnterPinState, DeviceInfoState, ReceiveDataState, SendScreenState, SendStellarState, ShowSeedState, SignedState } // Export controllers for global access
+
 import "../../../res/fonts/RobotoMono-Regular.otf";
 import { BrightnessLogo, BrightnessBar } from "Brightness.slint";
 import { BatteryLevel } from "Battery.slint";
@@ -73,7 +74,7 @@ export component MainWindow inherits Window {
         if (Router.current == ScreenEnum.EnterPin) {
             "Enter Passcode";
         } else if (Router.current == ScreenEnum.Send) {
-            "SEND CRYPTO";
+            SendScreenState.error-occurred ? "ERROR" : "SEND CRYPTO";
         } else if (Router.current == ScreenEnum.PairWithTheApp) {
             "PAIR WITH THE APP";
         } else if (Router.current == ScreenEnum.DeviceInfo) {
@@ -172,7 +173,7 @@ export component MainWindow inherits Window {
         }
         if Router.current == ScreenEnum.EnterPin: EnterPinScreenView {}
         if Router.current == ScreenEnum.Home: HomeScreenView {}
-        if Router.current == ScreenEnum.Send: SendScreenView {}
+        if Router.current == ScreenEnum.Send: CommunicateScreenView {}
         if Router.current == ScreenEnum.Settings: SettingsScreenView {}
         if Router.current == ScreenEnum.PairWithTheApp: PairWithTheAppScreenView {}
         if Router.current == ScreenEnum.DeviceInfo: DeviceInfoScreenView {}

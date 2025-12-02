@@ -17,15 +17,22 @@ component SettingsButtonLine inherits Rectangle {
 export component SettingsButton {
     in-out property <bool> pressed: false;
     in-out property <string> content: "____";
-    in-out property <bool> border-shown: true;
     in-out property <color> text-color-unpressed: Palette.black;
-    in-out property <int> touch-area-ratio: 1;
     in-out property <color> text-color-pressed: Palette.blue;
-    in-out property <color> border-color: Palette.black;
     in-out property <length> letter-spacing: -2px;
+    line1:=SettingsButtonLine {
+      y: 5px;
+      background: pressed ? Palette.blue : Palette.black;
+    }
+    line2:=SettingsButtonLine {
+      y: 20px;
+      background: pressed ? Palette.blue : Palette.black;
+    }
     TouchArea {
-        width: root.width * root.touch-area-ratio;
-        height: root.height * root.touch-area-ratio;
+        x: line1.x - 5px;
+        y: line1.y - 5px;
+        width: line2.width + 5px;
+        height: line2.y + 5px;
         pointer-event(event) => {
             if (event.kind == PointerEventKind.down) {
                 pressed = true;
@@ -34,18 +41,6 @@ export component SettingsButton {
                 root.clicked();
             }
         }
-    }
-    layout:= VerticalLayout {
-      spacing: -3px;
-      SettingsButtonLine {
-        background: pressed ? Palette.blue : Palette.black;
-      }
-      Spacer {
-        height: 15px;
-      }
-      SettingsButtonLine {
-        background: pressed ? Palette.blue : Palette.black;
-      }
     }
     callback clicked();
     clicked() => {
@@ -60,59 +55,44 @@ export component HomeScreenView {
     // show-brightness: true; // Show brightness control on home screen
     width: 320px;
     height: 240px;
-    HorizontalLayout {
-        width: parent.width;
-        alignment: start;
-        VerticalLayout {
-            y: 20px;
-            alignment: start;
-            SettingsButton {
-                touch-area-ratio: 2.5;
-                x: 20px;
-            }
-        }
+    SettingsButton {
+      x: 30px;
+      y: 15px;
     }
-    HorizontalLayout {
-      alignment: center;
-      spacing: 30px;
-      y: -20px;
-      Image {
-        source: @image-url("../../../res/img/hito_logo.png");
+    Image {
+      y: 80px;
+      source: @image-url("../../../res/img/hito_logo.png");
+    }
+    BaseButton { 
+      content: "RECEIVE";
+      x: 40px;
+      y: 190px;
+      button-width: 130px;
+      button-height: 40px;
+      background-color-pressed: transparent;
+      background-color-unpressed: transparent;
+      text-color-pressed: Palette.blue;
+      text-color-unpressed: Palette.black;
+      border-color-pressed: Palette.blue;
+      border-color-unpressed: Palette.black;
+      clicked => {
+        ReceiveDataState.request-receive-data();
+        Router.navigate(ScreenEnum.Receive);
       }
     }
-    HorizontalLayout {
-      alignment: start;
-      x: 40px;
-      y: 175px;
-      height: 50px;
-      spacing: 90px;
-        BaseButton { 
-          content: "RECEIVE";
-          button-width: 130px;
-          button-height: 40px;
-          background-color-pressed: transparent;
-          background-color-unpressed: transparent;
-          text-color-pressed: Palette.blue;
-          text-color-unpressed: Palette.black;
-          border-color-pressed: Palette.blue;
-          border-color-unpressed: Palette.black;
-          clicked => {
-            ReceiveDataState.request-receive-data();
-            Router.navigate(ScreenEnum.Receive);
-          }
-        }
-        BaseButton { 
-          content: "SEND";
-          button-width: 130px;
-          button-height: 40px;
-          background-color-pressed: transparent;
-          background-color-unpressed: transparent;
-          text-color-pressed: Palette.blue;
-          text-color-unpressed: Palette.black;
-          clicked => {
-            Router.navigate(ScreenEnum.Send);
-          }
-        }
+    BaseButton {
+      x: 210px;
+      y: 190px; 
+      content: "SEND";
+      button-width: 130px;
+      button-height: 40px;
+      background-color-pressed: transparent;
+      background-color-unpressed: transparent;
+      text-color-pressed: Palette.blue;
+      text-color-unpressed: Palette.black;
+      clicked => {
+        Router.navigate(ScreenEnum.Send);
+      }
     }
   callback clicked();
 }

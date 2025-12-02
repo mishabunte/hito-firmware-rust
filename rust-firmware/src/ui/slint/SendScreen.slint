@@ -11,7 +11,7 @@ export enum Protocol {
 }
 
 export global SendScreenState {
-  in-out property <Protocol> current-protocol: Protocol.NFC;
+  in-out property <Protocol> current-protocol;
   in-out property <string> error-message;
   in-out property <bool> error-occurred;
   callback protocol-changed();
@@ -21,36 +21,27 @@ export global SendScreenState {
   }
 }
 
-export component SendScreenView {
+export component CommunicateScreenView {
     width: 320px;
     height: 240px;
     init => {
       SendScreenState.protocol-changed();
+      SendScreenState.current-protocol = Protocol.NFC;
       SendScreenState.error-occurred = false;
       SendScreenState.error-message = "";
     }
-    // show-brightness: true; // Show brightness control on home screen
-    // header-title: "SEND CRYPTO";
     in property <image> image-src: SendScreenState.current-protocol == Protocol.NFC ? @image-url("../../../res/img/nfc.png") : @image-url("../../../res/img/bt_logo.png");
     in-out property <string> current-protocol-name: SendScreenState.current-protocol == Protocol.NFC ? "NFC" : "Bluetooth";
     in-out property <string> next-protocol-name: SendScreenState.current-protocol == Protocol.NFC ? "Bluetooth" : "NFC";
-    HorizontalLayout {
-      alignment: center;
+    Text {
       y: 35px;
-      VerticalLayout {
-        width: 200px;
-        Text {
-          text: current-protocol-name + " is active";
-          font-size: 12px;
-          //font-italic: false;
-          //font-weight: 500;
-          horizontal-alignment: center;
-          wrap: word-wrap;
-          color: Palette.black;
-          vertical-alignment: center;
-          height: 30px;
-        }
-      }
+      text: current-protocol-name + " is active";
+      font-size: 12px;
+      horizontal-alignment: center;
+      wrap: word-wrap;
+      color: Palette.black;
+      vertical-alignment: center;
+      height: 30px;
       visible: !SendScreenState.error-occurred;
     }
     Text {
@@ -70,7 +61,6 @@ export component SendScreenView {
       vertical-alignment: center;
       visible: !SendScreenState.error-occurred;
     }
-    HorizontalLayout {}
     TransparentButton {
         content: "Switch to " + next-protocol-name;
         text-color-pressed: Palette.black;

@@ -13,41 +13,41 @@ component SettingsOptionButton inherits TransparentButton {
 export component SettingsScreenView {
     width: 320px;
     height: 240px;
-    VerticalLayout {
-        alignment: start;
-        y: 35px;
-        spacing: 10px;
-        width: 240px;
-        SettingsOptionButton {
-            content: "Pair with the app";
-            clicked => {
-                Router.navigate(ScreenEnum.PairWithTheApp);
-            }
+    in property <length> button-y: 30px;
+    in property <length> button-h: 35px;
+    SettingsOptionButton {
+        content: "Pair with the app";
+        y: button-y;
+        clicked => {
+            Router.navigate(ScreenEnum.PairWithTheApp);
         }
-        SettingsOptionButton {
-            content: "Show seed phrase";
-            clicked => {
-                Router.navigate(ScreenEnum.EnterPin);
-            }
+    }
+    SettingsOptionButton {
+        content: "Show seed phrase";
+        y: button-y + button-h;
+        clicked => {
+            Router.navigate(ScreenEnum.EnterPin);
         }
-        SettingsOptionButton {
-            content: "Device info";
-            clicked => {
-                Router.navigate(ScreenEnum.DeviceInfo);
-            }
+    }
+    SettingsOptionButton {
+        content: "Device info";
+        y: button-y + 2 * button-h;
+        clicked => {
+            Router.navigate(ScreenEnum.DeviceInfo);
         }
-        Spacer { height: 2px; }
-        SettingsOptionButton {
-            content: "Change passcode";
-            clicked => {
-                Router.navigate(ScreenEnum.Send);
-            }
+    }
+    SettingsOptionButton {
+        content: "Change passcode";
+        y: button-y + 3.5 * button-h ;
+        clicked => {
+            Router.navigate(ScreenEnum.Send);
         }
-        SettingsOptionButton {
-            content: "Factory reset";
-            clicked => {
-                Router.navigate(ScreenEnum.Send);
-            }
+    }
+    SettingsOptionButton {
+        content: "Factory reset";
+        y: button-y + 4.5 * button-h;
+        clicked => {
+            Router.navigate(ScreenEnum.Send);
         }
     }
     // Additional UI elements for the Settings screen can be added here

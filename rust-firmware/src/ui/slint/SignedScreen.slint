@@ -9,16 +9,12 @@ export global SignedState {
 export component SignedScreenView {
   width: 320px;
   height: 240px;
-  VerticalLayout {
-    alignment: end;
-    y: -10px;
-    TransparentButton {
-      content: "DONE";
-      text-color-pressed: Palette.black;
-      text-color-unpressed: Palette.blue;
-      clicked => {
-        Router.navigate(ScreenEnum.Home);
-      }
+  TransparentButton {
+    content: "DONE";
+    text-color-pressed: Palette.black;
+    text-color-unpressed: Palette.blue;
+    clicked => {
+      Router.navigate(ScreenEnum.Home);
     }
   }
 }

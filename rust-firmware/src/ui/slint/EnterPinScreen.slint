@@ -103,65 +103,69 @@ component ProgressBar {
 }
 
 component PinGrid {
-    property <length> spacing: 50px;
-    VerticalLayout {
-        spacing: 35px;
-        alignment: center;
-        HorizontalLayout {
-            spacing: spacing;
-            PassChar {content: EnterPinState.get-char(0);
-                clicked() => {
-                    number-clicked(EnterPinState.get-char(0));
-                }
-            }
-            PassChar {content: EnterPinState.get-char(1);
-                clicked() => {
-                    number-clicked(EnterPinState.get-char(1));
-                }
-            }
-            PassChar {content: EnterPinState.get-char(2);
-                clicked() => {
-                    number-clicked(EnterPinState.get-char(2));
-                }
-            }
-            PassChar {content: EnterPinState.get-char(3);
-                clicked() => {
-                    number-clicked(EnterPinState.get-char(3));
-                }
-            }
-            PassChar {content: EnterPinState.get-char(4);
-                clicked() => {
-                    number-clicked(EnterPinState.get-char(4));
-                }
-            }     
+    property <length> spacing: 65px;
+    top := PassChar {content: EnterPinState.get-char(0);
+        clicked() => {
+            number-clicked(EnterPinState.get-char(0));
         }
-        HorizontalLayout {
-            spacing: spacing;
-            PassChar {content: EnterPinState.get-char(5);
-                clicked() => {
-                    number-clicked(EnterPinState.get-char(5));
-                }
-            }
-            PassChar {content: EnterPinState.get-char(6);
-                clicked() => {
-                    number-clicked(EnterPinState.get-char(6));
-                }
-            }
-            PassChar {content: EnterPinState.get-char(7);
-                clicked() => {
-                    number-clicked(EnterPinState.get-char(7));
-                }
-            }
-            PassChar {content: EnterPinState.get-char(8);
-                clicked() => {
-                    number-clicked(EnterPinState.get-char(8));
-                }
-            }
-            PassChar {content: EnterPinState.get-char(9);
-                clicked() => {
-                    number-clicked(EnterPinState.get-char(9));
-                }
-            }
+    }
+    PassChar {content: EnterPinState.get-char(1);
+        x: top.x + spacing;
+        clicked() => {
+            number-clicked(EnterPinState.get-char(1));
+        }
+    }
+    PassChar {content: EnterPinState.get-char(2);
+        x: top.x + spacing * 2;
+        clicked() => {
+            number-clicked(EnterPinState.get-char(2));
+        }
+    }
+    PassChar {content: EnterPinState.get-char(3);
+        x: top.x + spacing * 3;
+        clicked() => {
+            number-clicked(EnterPinState.get-char(3));
+        }
+    }
+    PassChar {content: EnterPinState.get-char(4);
+        x: top.x + spacing * 4;
+        clicked() => {
+            number-clicked(EnterPinState.get-char(4));
+        }
+    }  
+    PassChar {content: EnterPinState.get-char(5);
+        y: top.y + spacing - 5px;
+        x: top.x;
+        clicked() => {
+            number-clicked(EnterPinState.get-char(5));
+        }
+    }
+    PassChar {content: EnterPinState.get-char(6);
+        y: top.y + spacing - 5px;
+        x: top.x + spacing;
+        clicked() => {
+            number-clicked(EnterPinState.get-char(6));
+        }
+    }
+    PassChar {content: EnterPinState.get-char(7);
+        y: top.y + spacing - 5px;
+        x: top.x + spacing * 2;
+        clicked() => {
+            number-clicked(EnterPinState.get-char(7));
+        }
+    }
+    PassChar {content: EnterPinState.get-char(8);
+        y: top.y + spacing - 5px;
+        x: top.x + spacing * 3;
+        clicked() => {
+            number-clicked(EnterPinState.get-char(8));
+        }
+    }
+    PassChar {content: EnterPinState.get-char(9);
+        y: top.y + spacing - 5px;
+        x: top.x + spacing * 4;
+        clicked() => {
+            number-clicked(EnterPinState.get-char(9));
         }
     }
     callback number-clicked(string);
@@ -250,8 +254,8 @@ export component EnterPinScreenView {
         password-count: entered-password-count;
     }
     PinGrid {
-        x: 27px;
-        y: 127px;
+        x: 30px;
+        y: 140px;
         number-clicked(digit) => {
             if (EnterPinState.wrong-passcode) {
                 EnterPinState.wrong-passcode = false;
