@@ -14,6 +14,7 @@ export global EnterPinState {
   callback progress-request();
   callback set-progress(progress: int);
   callback reset();
+  callback shuffle-password-sequence();
   pure callback get-char(index: int) -> string;
   unlock(result) => {
       if !result {
@@ -232,6 +233,9 @@ export component EnterPinScreenView {
     height: 240px;
     property <length> line-y: 60px;
     in-out property <int> entered-password-count: 0;
+    init => {
+        EnterPinState.shuffle-password-sequence();
+    }
     // back-shown: false;
     // header-title: "ENTER PASSCODE";
     EraseButton {

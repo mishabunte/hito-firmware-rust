@@ -1,14 +1,62 @@
 use crate::{STATE, ui::CallbackController, hito_firmware::HitoFirmware};
 use crate::slint_generatedMainWindow::EnterPinState;
 use crate::slint_generatedMainWindow::MainWindow;
-use slint::ComponentHandle;
+use slint::{ComponentHandle, ToSharedString};
 use crate::{log_info, ui};
+
+#[cfg(feature = "zephyr")]
+extern "C" {
+    fn sys_rand32_get() -> u32;
+}
+
+#[cfg(feature = "zephyr")]
+fn rand10() -> usize {
+    unsafe { (sys_rand32_get() % 10) as usize }
+}
+
+#[cfg(feature = "zephyr")]
+fn shuffle_digits(mut arr: [u8; 10]) -> [u8; 10] {
+    for _ in 0..128 {
+        let i = rand10();
+        let j = rand10();
+
+        if i != j {
+            arr.swap(i, j);
+        }
+    }
+    arr
+}
+
+#[cfg(feature = "minifb")]
+use rand::Rng;
+
+pub fn shuffle_digits(mut arr: [u8; 10]) -> [u8; 10] {
+    let mut rng = rand::thread_rng();
+
+    for _ in 0..128 {
+        let i = rng.gen_range(0..10);
+        let j = rng.gen_range(0..10);
+
+        if i != j {
+            arr.swap(i, j);
+        }
+    }
+
+    arr
+}
+
+
+
 
 pub struct EnterPinCallbackController;
 
 impl CallbackController for EnterPinCallbackController {
     fn register_main_window_callbacks(&self, ui: &MainWindow, firmware: &mut HitoFirmware) {
         // PIN input mechanics
+        // let arr = [b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9'];
+        // let shuffled = shuffle_digits(arr);
+        // let shuffled_str = alloc::string::String::from_utf8_lossy(&shuffled).to_shared_string();
+        // ui.global::<EnterPinState>().set_password_sequence(shuffled_str);
         ui.global::<EnterPinState>().on_append_char(move |digit| {
             log_info!("Append char to PIN: {}", digit);
             let s = STATE.get().unwrap().lock();
@@ -17,7 +65,17 @@ impl CallbackController for EnterPinCallbackController {
             // log_info!("PIN code updated: {}", s.get_pin());
         });
 
-        ui.global::<EnterPinState>().set_password_sequence(slint::SharedString::from("7890123456"));
+        let ui_weak = ui.as_weak();
+
+        ui.global::<EnterPinState>().on_shuffle_password_sequence(move || {
+            let ui = ui_weak.upgrade();
+            if let Some(ui) = ui {
+                let arr = [b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9'];
+                let shuffled = shuffle_digits(arr);
+                let shuffled_str = alloc::string::String::from_utf8_lossy(&shuffled).to_shared_string();
+                ui.global::<EnterPinState>().set_password_sequence(shuffled_str);
+            }
+        });
 
         let ui_weak = ui.as_weak();
 
