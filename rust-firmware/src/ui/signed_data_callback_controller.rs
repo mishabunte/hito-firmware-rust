@@ -35,7 +35,7 @@ impl CallbackController for SignedDataCallbackController {
       if s.is_qr_data_requested() || s.is_scale_shown_changed() {
         if router.get_current() == ScreenEnum::Signed {
           let parsed_tx = s.get_parsed_tx().unwrap();
-          let base = StellarTransactionSerializer::build_signature_base(&parsed_tx, NETWORK_ID).unwrap();
+          let base = StellarTransactionSerializer::build_signature_base(&parsed_tx).unwrap();
           let sha256_sig_base = unsafe {
               let mut hash = [0u8; 32];
               let res = crate::crypto::ffi::crypt0_sha256(

@@ -83,23 +83,10 @@ impl StellarTransactionSerializer {
 
     pub fn build_signature_base(
         parsed_tx: &ParsedTransaction,
-        network_id: &str,
     ) -> Result<Vec<u8>, TransactionParseError> {
         let mut buffer = Vec::with_capacity(MAX_XDR_LEN);
 
-        let network_id_hash = unsafe {
-            let mut hash = [0u8; 32];
-            let res = crate::crypto::ffi::crypt0_sha256(
-                network_id.as_ptr(),
-                network_id.len(),
-                hash.as_mut_ptr(),
-                hash.len(),
-            );
-            if !res {
-                return Err(TransactionParseError::XdrError);
-            }
-            hash
-        };
+        let network_id_hash = &parsed_tx.network_hash;
 
         // 1. networkId (already SHA256(passphrase) done outside)
         buffer.extend_from_slice(network_id_hash.as_slice());

@@ -1,3 +1,4 @@
+use crate::crypto::crypt0::bytes_to_hex;
 use crate::firmware_state::FirmwareState;
 use crate::{STATE, ui::CallbackController, hito_firmware::HitoFirmware};
 use crate::slint_generatedMainWindow::SendScreenState;
@@ -19,22 +20,29 @@ use slint::ToSharedString;
 use crate::drivers::minifb::SocketProtocol;
 
 #[cfg(feature = "zephyr")]
-use crate::drivers::zephyr::{NFCProtocol, BLEProtocol};
+use crate::drivers::zephyr::{BLEProtocol, NFCProtocol};
 
 use alloc::string::String;
 
 const ADDRESS_SHORT_LENGTH: usize = 10;
 
 #[cfg(feature = "zephyr")]
-static NFC_HARDWARE_HANDLER: NFCProtocol = NFCProtocol::new();
+static mut NFC_HARDWARE_HANDLER: Option<NFCProtocol> = None;
 #[cfg(feature = "zephyr")]
-static BLE_HARDWARE_HANDLER: BLEProtocol = BLEProtocol::new();
+static mut BLE_HARDWARE_HANDLER: Option<BLEProtocol> = None;
+
 #[cfg(feature = "minifb")]
 static mut SOCKET_PROTOCOL_HANDLER: Option<SocketProtocol> = None;
 
 pub struct SendScreenCallbackController;
 
 static mut DATA: Option<alloc::vec::Vec<u8>> = None;
+
+use crate::crypto::libcrypt0pro::stellar::{
+    NETWORK_ID_MAINNET,
+    NETWORK_ID_TESTNET,
+    NETWORK_ID_FUTURENET,
+};
 
 enum CallType {
     Stellar,
@@ -66,8 +74,6 @@ fn handle_stellar_transaction(tx_data: &str, ui: &MainWindow, state: &FirmwareSt
         Ok(parsed_tx) => {
             use crate::crypto::crypt0::hex_to_bytes;
 
-            //log_info!("Parsed Stellar transaction: {:#?}", parsed_tx);
-
             let send_stellar_state = ui.global::<SendStellarState>();
             let pk_vec = hex_to_bytes(&parsed_tx.source_account).expect("invalid hex for source_account");
             let pk: [u8; 32] = pk_vec
@@ -82,6 +88,26 @@ fn handle_stellar_transaction(tx_data: &str, ui: &MainWindow, state: &FirmwareSt
                 send_screen_state.set_error_message(slint::SharedString::from("Wallet is not paired"));
                 return;
             }
+
+            let network_hash_hex = bytes_to_hex(&parsed_tx.network_hash).to_shared_string();
+            match network_hash_hex.as_str() {
+                NETWORK_ID_TESTNET => {
+                    send_stellar_state.set_network("Testnet".to_shared_string());
+                },
+                NETWORK_ID_MAINNET => {
+                    send_stellar_state.set_network("Mainnet".to_shared_string());
+                },
+                NETWORK_ID_FUTURENET => {
+                    send_stellar_state.set_network("Futurenet".to_shared_string());
+                },
+                _ => {
+                  send_stellar_state.invoke_error_occurred();
+                  send_screen_state.set_error_occurred(true);
+                  send_screen_state.set_error_message(slint::SharedString::from("Unknown network"));
+                }
+            }
+
+
             send_stellar_state.set_source_short(slint::SharedString::from(&shorten_address(&address)));
             send_stellar_state.set_sequence(slint::SharedString::from(format!("{}", parsed_tx.sequence_number)));
 
@@ -193,7 +219,7 @@ fn handle_stellar_transaction(tx_data: &str, ui: &MainWindow, state: &FirmwareSt
         }
         Err(e) => {
             send_screen_state.set_error_occurred(true);
-            send_screen_state.set_error_message(slint::SharedString::from(format!("Failed to parse Stellar transaction:\n{:?}", e)));
+            send_screen_state.set_error_message(slint::SharedString::from(format!("Failed to parse Stellar transaction:\n{:?}", e.to_shared_string().replace('"', ""))));
         }
     }
 }
@@ -240,14 +266,30 @@ impl CallbackController for SendScreenCallbackController {
               let protocol = send_screen_state.get_current_protocol();
               match protocol {
                   Protocol::NFC => {
-                    NFC_HARDWARE_HANDLER.init("Thou shall not use std!");
-                    // //log_info!("Protocol set to NFC - NFC handler initialized");
-                    BLE_HARDWARE_HANDLER.stop();
+                    unsafe {
+                      NFC_HARDWARE_HANDLER = Some(NFCProtocol::new());
+                      if let Some(ref mut handler) = NFC_HARDWARE_HANDLER {
+                        handler.init(format!("app.hito.dev/#eth/send/!from={}", s.get_stellar_address().unwrap()).as_str());
+                      }
+                      // //log_info!("Protocol set to NFC - NFC handler initialized");
+                      if let Some(ref mut handler) = BLE_HARDWARE_HANDLER {
+                        handler.stop();
+                      }
+                      BLE_HARDWARE_HANDLER = None;
+                    }
                   },
                   Protocol::Bluetooth => {
-                    BLE_HARDWARE_HANDLER.init();
-                    // //log_info!("Protocol set to Bluetooth - BLE handler initialized");
-                    NFC_HARDWARE_HANDLER.stop();
+                    unsafe {
+                      BLE_HARDWARE_HANDLER = Some(BLEProtocol::new());
+                      if let Some(ref mut handler) = BLE_HARDWARE_HANDLER {
+                        handler.init();
+                      }
+                      // //log_info!("Protocol set to Bluetooth - BLE handler initialized");
+                      if let Some(ref mut handler) = NFC_HARDWARE_HANDLER {
+                        handler.stop();
+                      }
+                      NFC_HARDWARE_HANDLER = None;
+                    }
                   },
               }
             }
@@ -303,12 +345,16 @@ impl CallbackController for SendScreenCallbackController {
               match protocol {
                   Protocol::NFC => {
                     unsafe {
-                      DATA = NFC_HARDWARE_HANDLER.get_data();
+                      if let Some(ref mut nfc_handler) = NFC_HARDWARE_HANDLER {
+                        DATA = nfc_handler.get_data();
+                      }
                     }
                   },
                   Protocol::Bluetooth => {
                     unsafe {
-                      DATA = BLE_HARDWARE_HANDLER.get_data();
+                      if let Some(ref mut ble_handler) = BLE_HARDWARE_HANDLER {
+                        DATA = ble_handler.get_data();
+                      }
                     }
                   }
               }
@@ -333,8 +379,16 @@ impl CallbackController for SendScreenCallbackController {
             }
             #[cfg(feature = "zephyr")]
             {
-              NFC_HARDWARE_HANDLER.stop();
-              BLE_HARDWARE_HANDLER.stop();
+              unsafe {
+                if let Some(ref mut nfc_handler) = NFC_HARDWARE_HANDLER {
+                    nfc_handler.stop();
+                }
+                if let Some(ref mut ble_handler) = BLE_HARDWARE_HANDLER {
+                    ble_handler.stop();
+                }
+                NFC_HARDWARE_HANDLER = None;
+                BLE_HARDWARE_HANDLER = None;
+              }
             }
         }
     }

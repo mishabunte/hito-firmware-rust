@@ -10,12 +10,18 @@ from PyQt6 import QtCore, QtWidgets
 SOCKET_PATH = "/tmp/hito_Linux.sock"
 BUFFER_SIZE = 4096
 STELLAR_PREFIX = "stellar.sign:"
+NETWORK_TO_HASH = {
+    "Mainnet": "7ac33997544e3175d266bd022439b22cdb16508c01163f26e5cb2a3e1045a979",
+    "Testnet": "cee0302d59844d32bdca915c8203dd44b33fbb7edc19051ea37abedf28ecd472",
+    "Futurenet": "a3a1c6a78286713e29be0e9785670fa838d13917cd8eaeb4a3579ff1debc7fd5",
+}
+NETWORK_PREFIX = None
 
 def create_test_message() -> bytes:
     prefix = STELLAR_PREFIX.encode("utf-8")
     # test payload: send 13 XLM to GCEMPQ7LYZ7EYWFYQYXIFQRUHKLRT74TLORALIOZIP2KPED7TD3GG352 with fee 5 XLM
-    test_payload = b"AAAAAgAAAACdr++ECgMp7XJRAM8An6JDIwr7HfywJyQCDQd2Cn6CLwL68IAACsu/AAAAAgAAAAEAAAAAAAAAAAAAAABpG2bVAAAAAAAAAAEAAAAAAAAAAQAAAACIx8Prxn5MWLiGLoLCNDqXGf+TW6IFodlD9KeQf5j2YwAAAAAAAAAAB7+kgAAAAAAAAAAA"
-    return prefix + test_payload
+    test_payload = b"AAAAAgAAAACIx8Prxn5MWLiGLoLCNDqXGf+TW6IFodlD9KeQf5j2YwAAAGQACs4eAAAAAwAAAAEAAAAAAAAAAAAAAABpLz/JAAAAAAAAAAEAAAAAAAAAAQAAAACIx8Prxn5MWLiGLoLCNDqXGf+TW6IFodlD9KeQf5j2YwAAAAAAAAAAAJiWgAAAAAAAAAAA"
+    return prefix + NETWORK_PREFIX.encode("utf-8") + b":" + test_payload
 
 class SocketThread(QtCore.QThread):
     log = QtCore.pyqtSignal(str)
@@ -164,9 +170,38 @@ class MainWindow(QtWidgets.QMainWindow):
         top_layout.addWidget(self.status_label)
 
         # Message input
-        layout.addWidget(QtWidgets.QLabel("Message:"))
+        header_layout = QtWidgets.QHBoxLayout()
+        header_layout.addWidget(QtWidgets.QLabel("Message:"))
+
+        # Clear message button
+        clear_btn = QtWidgets.QPushButton("X")
+        clear_btn.setStyleSheet("background-color: #ff0000; color: white; font-weight: bold;")
+        header_layout.addWidget(clear_btn)
+        clear_btn.clicked.connect(lambda: self.msg_edit.clear())
+        clear_btn.setFixedWidth(40)
+        layout.addLayout(header_layout)
+
         self.msg_edit = QtWidgets.QLineEdit()
         layout.addWidget(self.msg_edit)
+
+        # Buttons for choosing network
+        layout.addWidget(QtWidgets.QLabel("Choose network:"))
+        btn_layout = QtWidgets.QHBoxLayout()
+        self.mainnet_btn = QtWidgets.QPushButton(f"Mainnet")
+        self.testnet_btn = QtWidgets.QPushButton(f"Testnet")
+        self.futurenet_btn = QtWidgets.QPushButton(f"Futurenet")
+        btn_layout.addWidget(self.mainnet_btn)
+        btn_layout.addWidget(self.testnet_btn)
+        btn_layout.addWidget(self.futurenet_btn)
+        layout.addLayout(btn_layout)
+        self.network_buttons = {
+            "Mainnet": self.mainnet_btn,
+            "Testnet": self.testnet_btn,
+            "Futurenet": self.futurenet_btn,
+        }
+        self.mainnet_btn.clicked.connect(lambda: self.on_set_network("Mainnet"))
+        self.testnet_btn.clicked.connect(lambda: self.on_set_network("Testnet"))
+        self.futurenet_btn.clicked.connect(lambda: self.on_set_network("Futurenet"))
 
         # Buttons for sending
         btn_layout = QtWidgets.QHBoxLayout()
@@ -176,7 +211,7 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_layout.addWidget(self.send_stellar_btn)
         layout.addLayout(btn_layout)
 
-        self.send_custom_btn = QtWidgets.QPushButton("Send")
+        self.send_custom_btn = QtWidgets.QPushButton("SEND MESSAGE")
         layout.addWidget(self.send_custom_btn)
 
         # Log output
@@ -187,7 +222,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Socket thread (created but not started yet)
         self.socket_thread: SocketThread | None = None
-        self.init_signal.connect(self.on_connect)
+        self.init_signal.connect(self.on_init)
 
         # GUI actions
         self.send_custom_btn.clicked.connect(self.on_send_custom)
@@ -196,6 +231,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.append_prefix_btn.clicked.connect(self.on_append_prefix)
 
         self.init_signal.emit()
+
+    @QtCore.pyqtSlot()
+    def on_init(self):
+        self.on_set_network("Mainnet")  # Default
+        self.on_connect()
 
     @QtCore.pyqtSlot()
     def on_connect(self):
@@ -227,11 +267,28 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.pyqtSlot()
     def on_append_prefix(self):
-        self.msg_edit.setText(STELLAR_PREFIX + self.msg_edit.text())
+        self.msg_edit.setText(STELLAR_PREFIX + self.msg_edit.text() + NETWORK_PREFIX + ":")
+
+    @QtCore.pyqtSlot(str)
+    def on_set_network(self, network: str):
+        global NETWORK_PREFIX
+        previous_network = NETWORK_PREFIX
+        NETWORK_PREFIX = NETWORK_TO_HASH.get(network)
+        self.append_log(f"[PY] Network set to {network}")
+        if previous_network is not None:
+            self.msg_edit.setText(self.msg_edit.text().replace(previous_network, NETWORK_PREFIX))
+        self.update_network_button_colors(network)
 
     @QtCore.pyqtSlot(str)
     def append_log(self, text: str):
         self.log_edit.append(text)
+
+    def update_network_button_colors(self, selected: str):
+        for name, btn in self.network_buttons.items():
+            if name == selected:
+                btn.setStyleSheet("background-color: #a9a9a9; color: white; font-weight: bold; border: 1px solid black;")
+            else:
+                btn.setStyleSheet("")
 
     @QtCore.pyqtSlot(str)
     def update_status(self, status: str):

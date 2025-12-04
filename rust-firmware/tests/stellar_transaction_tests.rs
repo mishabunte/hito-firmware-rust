@@ -7,6 +7,7 @@ use hito_firmware_rust::crypto::crypt0::{bytes_to_hex, hex_to_bytes};
 
 const TEST_SEED: &str = "38b6a363e88b28138cc71f0145ab429c251baa8cd8fa6d80bcfb39c35076f1766e24dfc01ce0e22e8dfec185ad7a67ce748cd6551ad1b738619b8859808bbf88";
 
+
 #[test]
 fn test_create_account() {
     
@@ -75,17 +76,18 @@ fn test_payment_with_memo() {
 
 #[test]
 fn test_transaction_sign() {
-    let base64_tx = "AAAAAgAAAACIx8Prxn5MWLiGLoLCNDqXGf+TW6IFodlD9KeQf5j2YwAAAGQACsu/AAAAAgAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAQAAAACdr++ECgMp7XJRAM8An6JDIwr7HfywJyQCDQd2Cn6CLwAAAAAAAAAABfXhAAAAAAAAAAAA";
+    let network_hash = NETWORK_ID_MAINNET;
+    let base64_tx = network_hash.to_string() + ":AAAAAgAAAACIx8Prxn5MWLiGLoLCNDqXGf+TW6IFodlD9KeQf5j2YwAAAGQACsu/AAAAAgAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAQAAAACdr++ECgMp7XJRAM8An6JDIwr7HfywJyQCDQd2Cn6CLwAAAAAAAAAABfXhAAAAAAAAAAAA";
     let wallet = StellarWallet::from_seed(hex_to_bytes(TEST_SEED).unwrap().try_into().unwrap());
     let keypair = wallet.derive_keypair(0).expect("Failed to derive keypair");
     let secret_encoded = StellarWallet::encode_stellar_secret(&keypair.secret_key).expect("Failed to encode secret key");
     println!("Derived secret key address: {}", secret_encoded);
     println!("Derived keypair: public={}, secret={}", bytes_to_hex(&keypair.public_key), bytes_to_hex(&keypair.secret_key));
-    match StellarTransactionParser::parse_transaction(base64_tx) {
+    match StellarTransactionParser::parse_transaction(&base64_tx) {
         Ok(parsed) => {
             println!("Parsed transaction: {:#?}", parsed);
             assert!(!parsed.operations.is_empty());
-            let sig_base = StellarTransactionSerializer::build_signature_base(&parsed, "Public Global Stellar Network ; September 2015").expect("sig_base");
+            let sig_base = StellarTransactionSerializer::build_signature_base(&parsed).expect("sig_base");
             let sha256_sig_base = unsafe {
                 let mut hash = [0u8; 32];
                 let res = crypt0_sha256(
