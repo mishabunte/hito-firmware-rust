@@ -26,6 +26,9 @@ export global Router {
         else if current == ScreenEnum.ErrorSending {
             current = ScreenEnum.Home;
         }
+        else if current == ScreenEnum.EnterPin && previous == ScreenEnum.Settings {
+            current = ScreenEnum.Settings;
+        }
         else {
             current = ScreenEnum.Lock;
         }

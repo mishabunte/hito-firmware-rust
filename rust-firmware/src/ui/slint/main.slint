@@ -92,7 +92,9 @@ export component MainWindow inherits Window {
         }
     }
     in-out property <bool> back-shown: {
-        if (Router.current == ScreenEnum.Lock || Router.current == ScreenEnum.Home || Router.current == ScreenEnum.EnterPin) {
+        if (Router.current == ScreenEnum.Lock || Router.current == ScreenEnum.Home) {
+            false;
+        } else if (Router.current == ScreenEnum.EnterPin && Router.previous == ScreenEnum.Lock) {
             false;
         } else {
             true;
