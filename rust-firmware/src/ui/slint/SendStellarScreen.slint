@@ -6,19 +6,19 @@ import { TransparentButton } from "TransparentButton.slint";
 
 export global SendStellarState {
     callback error-occurred();
-    in-out property <string> amount: "12.345";               // "12.345"
-    in-out property <string> asset-code: "XLM";           // "XLM"
-    in-out property <string> destination-short: "GABCD...WXYZ";    // "GABCD…WXYZ"
-    in-out property <string> memo-summary: "Invoice #42";         // 'text "Invoice #42"' or "None"
+    in-out property <string> amount;               // "12.345"
+    in-out property <string> asset-code;           // "XLM"
+    in-out property <string> destination-short;    // "GABCD…WXYZ"
+    in-out property <string> memo-summary;         // 'text "Invoice #42"' or "None"
 
     // Details properties (bind from Rust)
-    in-out property <string> source-short: "GA123...WXYZ";         // "GA123…WXYZ"
-    in-out property <string> sequence: "1234567890123";             // "1234567890123"
-    in-out property <string> fee: "0.0000001";                  // "0.0000001 XLM"
-    in-out property <int>    op-count: 0;             // 1, 2, 3…
-    in-out property <string> asset-issuer-short: "Native";   // "GBRPY…IR3J" or "Native"
-    in-out property <int> page-index: 0;
-    in-out property <string> network: "Testnet";
+    in-out property <string> source-short;         // "GA123…WXYZ"
+    in-out property <string> sequence;             // "1234567890123"
+    in-out property <string> fee;                  // "0.0000001 XLM"
+    in-out property <int>    op-count;             // 1, 2, 3…
+    in-out property <string> asset-issuer-short;   // "GBRPY…IR3J" or "Native"
+    in-out property <int> page-index;
+    in-out property <string> network;
     error-occurred => {
       Router.navigate(ScreenEnum.Send);
     }
@@ -77,8 +77,8 @@ component SendStellarPage2 {
     font-size: 15px; 
   }
   TransparentButton {
-    x: top.x + 190px;
-    y: top.y + 105px;
+    x: top.x + 185px;
+    y: top.y + 92px;
     width: 50px;
     height: 50px;
     text-color-pressed: Palette.black;
@@ -102,6 +102,9 @@ export component SendStellarScreenView {
     callback confirm-clicked;
     callback page-changed(page: int);
     // SUMMARY PAGE (SendStellarState.page-index == 0)
+    init => {
+        SendStellarState.page-index = 0;
+    }
     SendStellarPage1 {
         y: -50px;
         width: root.width;
