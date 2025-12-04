@@ -60,6 +60,7 @@ const HITO_VAULT_HEADER_MAGIC_24_WORDS_V1: u32 = 0xE0364141;
 // Vault step counts
 const HITO_VAULT_STEPS_COUNT_FLASH: u32 = 1500;
 const HITO_VAULT_STEPS_COUNT_RAM: u32 = 100;
+const HITO_VAULT_STEPS_COUNT_FACTORY_SETUP: u32 = 5;
 
 const VAULT_PAGE_SIZE_BLOCKS: usize = 4096 / core::mem::size_of::<VaultEncryptedBlock>();
 
@@ -97,9 +98,22 @@ static mut VAULT_BACKUP_STORAGE: [VaultEncryptedBlock; VAULT_PAGE_SIZE_BLOCKS] =
 }; VAULT_PAGE_SIZE_BLOCKS];
 
 #[cfg(feature = "minifb")]
+static mut VAULT_RAM_STORAGE: [VaultEncryptedBlock; VAULT_PAGE_SIZE_BLOCKS] = [VaultEncryptedBlock {
+    magic: 0xffffffff,
+    steps_count: 0,
+    encrypted: [0; 96],
+    nonce: [0; NONCE_LEN],
+    auth_data: [0; AAD_LEN],
+    tag: [0; TAG_LEN],
+    crc16_ccitt: 0,
+}; VAULT_PAGE_SIZE_BLOCKS];
+
+#[cfg(feature = "minifb")]
 const VAULT_MAIN_PAGE: *const VaultEncryptedBlock = unsafe { VAULT_MAIN_STORAGE.as_ptr() };
 #[cfg(feature = "minifb")]
 const VAULT_BACKUP_PAGE: *const VaultEncryptedBlock = unsafe { VAULT_BACKUP_STORAGE.as_ptr() };
+#[cfg(feature = "minifb")]
+const VAULT_RAM_PAGE: *const VaultEncryptedBlock = unsafe { VAULT_RAM_STORAGE.as_ptr() };
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum VaultError {
@@ -128,6 +142,7 @@ enum UnlockPhase {
 #[derive(Clone)]
 struct UnlockJob {
     block: VaultEncryptedBlock,
+    ram_block: Option<VaultEncryptedBlock>,
     pass_buf: [u8; 32],
     pass_len: usize,
     steps_total: u32,
@@ -147,18 +162,25 @@ struct UnlockJob {
 }
 
 impl UnlockJob {
-    fn new(block: &VaultEncryptedBlock, password: &[u8]) -> Self {
+    fn new(block: &VaultEncryptedBlock, ram_block: Option<VaultEncryptedBlock>, password: &[u8]) -> Self {
         let mut pass = [0u8; 32];
         let len = core::cmp::min(password.len(), 32);
         pass[..len].copy_from_slice(&password[..len]);
         let mut key = [0u8; 32];
         key[..len].copy_from_slice(&pass[..len]);
+        let steps_total = if ram_block.is_none() {
+            block.steps_count
+        } else {
+            ram_block.unwrap().steps_count
+        };
+        log_info!("UnlockJob created: steps_total={}", steps_total);
 
         Self {
             block: *block,
+            ram_block: ram_block,
             pass_buf: pass,
             pass_len: len,
-            steps_total: block.steps_count,
+            steps_total: steps_total,
             phase: UnlockPhase::DeriveKeyStep,
             step_idx: 0,
             key,
@@ -177,11 +199,15 @@ impl UnlockJob {
     }
 
     /// Advance a small chunk. Returns Some(progress) when a visible change happened.
-    fn poll(&mut self) -> Option<u8> {
+    fn poll(&mut self) -> VaultResult<Option<u8>> {
       // log_info!("UnlockJob poll: phase={:?}, step_idx={}, hw_iters_left_in_this_step={}, pbkdf2_iters_left_in_this_step={}, total_steps={}",
         //self.phase, self.step_idx, self.hw_iters_left_in_this_step, self.pbkdf2_iters_left_in_this_step, self.steps_total);
     let start = (self.now)();            // monotonic tick (provide this)
-    let budget_us = 40000;                  // ~40 ms per UI tick (tune)
+    let budget_us = match (self.steps_total) {
+        n if n <= HITO_VAULT_STEPS_COUNT_FACTORY_SETUP => 5000,          // 5ms for RAM-based vaults
+        n if n <= HITO_VAULT_STEPS_COUNT_RAM => 20000, // 20ms for factory setup vaults
+        _ => 50000,                                            // 50ms for flash-based vaults
+    };
 
     let mut last_progress: Option<u8> = None;
 
@@ -197,7 +223,9 @@ impl UnlockJob {
                     self.derived.copy_from_slice(&hw);
                     self.key.copy_from_slice(&self.derived);
                     self.hw_iters_left_in_this_step -= 1;
-                    if (self.now)() - start >= budget_us { break 'budget; }
+                    if (self.now)() - start >= budget_us { 
+                      return Ok(last_progress);
+                    }
                 }
 
                 if self.hw_iters_left_in_this_step == 0 {
@@ -229,18 +257,31 @@ impl UnlockJob {
                     self.hw_iters_left_in_this_step = 40;
                     self.pbkdf2_iters_left_in_this_step = 10;
 
+                    // if self.steps_total <= HITO_VAULT_STEPS_COUNT_RAM {
+                    //   return Ok(last_progress);
+                    // }
+
                     if self.step_idx >= self.steps_total {
                         // log_info!("All steps done, moving to Finalize phase, steps_total={}, current_step={}", self.steps_total, self.step_idx);
                         self.phase = UnlockPhase::Finalize;
                     }
 
-                    if (self.now)() - start >= budget_us { break 'budget; }
+                    if (self.now)() - start >= budget_us { 
+                      return Ok(last_progress);
+                    }
+                } else {
+                  // log_info!("Continuing HW derivation in next poll, steps left: {}", self.hw_iters_left_in_this_step);
                 }
             }
 
             UnlockPhase::Finalize => {
                 // log_info!("Finalizing vault unlock");
-                match HitoVault::block_decrypt_with_key(&self.block, &self.key) {
+                let to_decode = if (self.ram_block.is_some()) {
+                    self.ram_block.unwrap()
+                } else {
+                    self.block
+                };
+                match HitoVault::block_decrypt_with_key(&to_decode, &self.key) {
                     Ok(decrypted) => {
                         self.decrypted = Some(decrypted);
                         self.result = Some(Ok(()));
@@ -256,7 +297,7 @@ impl UnlockJob {
         }
     }
 
-    last_progress
+    Ok(last_progress)
 }
 }
 
@@ -567,15 +608,56 @@ impl HitoVault {
     Ok(())
   }
 
+  fn erase_ram_block() {
+    unsafe {
+      if !VAULT_RAM_PAGE.is_null() {
+        let ram_slice = slice::from_raw_parts_mut(
+          VAULT_RAM_PAGE as *mut VaultEncryptedBlock,
+          VAULT_PAGE_SIZE_BLOCKS
+        );
+        for block in ram_slice.iter_mut() {
+          block.magic = 0xffffffff;
+        }
+      }
+    }
+  }
+
+  fn is_block_checksum_valid(block: Option<VaultEncryptedBlock>) -> bool {
+    let block = match block {
+      Some(b) => b,
+      None => return false,
+    };
+    let crc_size = core::mem::size_of::<VaultEncryptedBlock>() - 
+                   core::mem::size_of::<u16>(); // crc16_ccitt
+    let calculated_crc = unsafe {
+      crypto::ffi::crypt0_crc16_ccitt(&block as *const VaultEncryptedBlock as *const u8, crc_size)
+    };
+    calculated_crc == block.crc16_ccitt
+  }
+
   pub fn start_unlock(&mut self, password: &[u8]) -> VaultResult<()> {
+      log_info!("Starting vault unlock job");
       let block = self.last_block()?; // copies the block into RAM
       if password.is_empty() || password.len() > 32 {
           return Err(VaultError::InvalidKeyLength);
       }
-      self.unlock_job = Some(UnlockJob::new(&block, password));
-      // log_info!("Starting unlock job with password: {:?}", bytes_to_hex(password));
-      // Optional: immediately report 0% for UI
-      // self.set_progress(0);
+      let mut ramBlock = unsafe {
+          if VAULT_RAM_PAGE.is_null() {
+              None
+          } else {
+              Some(*VAULT_RAM_PAGE)
+          }
+      };
+      if !Self::is_block_checksum_valid(ramBlock) {
+          ramBlock = None;
+      } else if (block.magic == HITO_VAULT_HEADER_MAGIC_12_WORDS_ALPHA) ||
+                (block.magic == HITO_VAULT_HEADER_MAGIC_18_WORDS_ALPHA) ||
+                (block.magic == HITO_VAULT_HEADER_MAGIC_24_WORDS_ALPHA)
+      {
+          HitoVault::erase_ram_block();
+          ramBlock = None;
+      }
+      self.unlock_job = Some(UnlockJob::new(&block, ramBlock, password));
       Ok(())
   }
 
@@ -585,14 +667,16 @@ impl HitoVault {
           return Ok(None);
       };
 
-      if let Some(p) = job.poll() {
-          // log_info!("Current phase: {:?}, progress: {}%", job.phase, p);
+      if let Some(p) = job.poll().unwrap_or(None) {
+
+          log_info!("Current phase: {:?}, progress: {}%", job.phase, p);
           // If the job reached Done, take it and commit results while holding &mut self.
           if matches!(job.phase, UnlockPhase::Done) {
               let job = self.unlock_job.take().unwrap();
               let result = job.result.unwrap_or(Err(VaultError::CryptoError));
               match result {
                   Ok(()) => {
+                      log_info!("Vault unlocked successfully");
                       // Commit decrypted bytes into the vault state
                       let decrypted = job.decrypted.expect("decrypted present on Ok");
                       match (job.block.magic) {
@@ -622,20 +706,41 @@ impl HitoVault {
                       }
                       self.entropy[..entropy_len].copy_from_slice(&decrypted[..entropy_len]);
                       self.seed.copy_from_slice(&decrypted[32..]);
+                      if job.ram_block.is_none() {
+                        let blockRam = VAULT_RAM_PAGE as *mut VaultEncryptedBlock;
+                        unsafe {
+                          if !blockRam.is_null() {
+                            (*blockRam).steps_count = if self.is_factory_setup() {
+                              HITO_VAULT_STEPS_COUNT_FACTORY_SETUP
+                            } else {
+                              HITO_VAULT_STEPS_COUNT_RAM
+                            };
+                          }
+                          self.block_encrypt(blockRam.as_mut().unwrap(), self.entropy_len, &self.entropy, &self.seed, &job.pass_buf[..job.pass_len])?;
+                        }
+                      }
                       self.save_vault_data()?;
                       self.vaultIsUnlocked = true;
-
                   }
                   Err(e) => {
-                    // log_info!("Unlock failed with error: {:?}", e);
+                    log_info!("Unlock failed with error: {:?}", e);
+                    self.vaultIsUnlocked = false;
                     return Err(e)
                   }
               }
+          } else {
+            //log_info!("Nothing to commit yet, unlock job still in progress");
           }
           return Ok(Some(p));
+      } else {
+          log_info!("No progress update from unlock job");
       }
 
       Ok(None)
+  }
+
+  fn is_factory_setup(&self) -> bool {
+    self.get_reset_count() == 0
   }
 
 
@@ -968,9 +1073,33 @@ impl HitoVault {
   pub fn unlock_with_password(&mut self, password: &[u8]) -> VaultResult<()> {
     // Get the last block
     let block = self.last_block()?;
-    
+
+    let mut ram_block = unsafe {
+        if VAULT_RAM_PAGE.is_null() {
+            None
+        } else {
+            Some(*VAULT_RAM_PAGE)
+        }
+    };
+
+    if !Self::is_block_checksum_valid(ram_block) {
+        ram_block = None;
+    } else if (block.magic == HITO_VAULT_HEADER_MAGIC_12_WORDS_ALPHA) ||
+              (block.magic == HITO_VAULT_HEADER_MAGIC_18_WORDS_ALPHA) ||
+              (block.magic == HITO_VAULT_HEADER_MAGIC_24_WORDS_ALPHA)
+    {
+        HitoVault::erase_ram_block();
+        ram_block = None;
+    }
+
+    let to_decode = if let Some(ram) = ram_block {
+        ram
+    } else {
+        *block
+    };
+
     // Decrypt the block
-    let decrypted = HitoVault::block_decrypt(block, password)?;
+    let decrypted = HitoVault::block_decrypt(&to_decode, password)?;
     // Parse the decrypted data (entropy + seed) and store in vault
     // The first 32 bytes are entropy, next 64 bytes are seed
     match block.magic {
@@ -998,8 +1127,24 @@ impl HitoVault {
     if entropy_len == 0 || entropy_len > 32 {
         return Err(VaultError::InvalidKeyLength);
     }
+
     self.entropy[..entropy_len].copy_from_slice(&decrypted[..entropy_len]);
     self.seed.copy_from_slice(&decrypted[32..]);
+
+    if ram_block.is_none() {
+      let blockRam = VAULT_RAM_PAGE as *mut VaultEncryptedBlock;
+      unsafe {
+        if !blockRam.is_null() {
+          (*blockRam).steps_count = if self.is_factory_setup() {
+            HITO_VAULT_STEPS_COUNT_FACTORY_SETUP
+          } else {
+            HITO_VAULT_STEPS_COUNT_RAM
+          };
+        }
+        self.block_encrypt(blockRam.as_mut().unwrap(), self.entropy_len, &self.entropy, &self.seed, password)?;
+      }
+    }
+    
     self.save_vault_data()?;
     //log_info!("Vault unlocked successfully");
     self.vaultIsUnlocked = true;
