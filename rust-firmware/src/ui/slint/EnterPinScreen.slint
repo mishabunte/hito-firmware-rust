@@ -18,13 +18,13 @@ export global EnterPinState {
   pure callback get-char(index: int) -> string;
   unlock(result) => {
       if !result {
+          debug("Wrong passcode!!!!!!");
           wrong-passcode = true;
       } else if Router.previous == ScreenEnum.Lock {
           Router.navigate(ScreenEnum.Home);
       } else if Router.previous == ScreenEnum.Settings{
           Router.navigate(ScreenEnum.ShowSeed);
       }
-      reset();
   }
   set-progress(progress) => {
       decoding-progress = progress;
@@ -93,18 +93,10 @@ component ProgressBar {
         }
         visible: progress != -1;
     }
-    Timer {
-        interval: 2000ms;
-        running: EnterPinState.wrong-passcode;
-        triggered => {
-            progress = -1;
-            EnterPinState.set-progress(-1);
-        }
-    }
 }
 
 component PinGrid {
-    property <length> spacing: 65px;
+    property <length> spacing: 60px;
     top := PassChar {content: EnterPinState.get-char(0);
         clicked() => {
             number-clicked(EnterPinState.get-char(0));
@@ -135,35 +127,35 @@ component PinGrid {
         }
     }  
     PassChar {content: EnterPinState.get-char(5);
-        y: top.y + spacing - 5px;
+        y: top.y + spacing;
         x: top.x;
         clicked() => {
             number-clicked(EnterPinState.get-char(5));
         }
     }
     PassChar {content: EnterPinState.get-char(6);
-        y: top.y + spacing - 5px;
+        y: top.y + spacing;
         x: top.x + spacing;
         clicked() => {
             number-clicked(EnterPinState.get-char(6));
         }
     }
     PassChar {content: EnterPinState.get-char(7);
-        y: top.y + spacing - 5px;
+        y: top.y + spacing;
         x: top.x + spacing * 2;
         clicked() => {
             number-clicked(EnterPinState.get-char(7));
         }
     }
     PassChar {content: EnterPinState.get-char(8);
-        y: top.y + spacing - 5px;
+        y: top.y + spacing;
         x: top.x + spacing * 3;
         clicked() => {
             number-clicked(EnterPinState.get-char(8));
         }
     }
     PassChar {content: EnterPinState.get-char(9);
-        y: top.y + spacing - 5px;
+        y: top.y + spacing;
         x: top.x + spacing * 4;
         clicked() => {
             number-clicked(EnterPinState.get-char(9));
@@ -225,6 +217,21 @@ component EnteredPassword {
             background: Palette.black;
             visible: false; // Disabled for now
         }
+        property <int> count: 0;
+        Timer {
+            interval: 500ms;
+            running: EnterPinState.wrong-passcode;
+            triggered => {
+                if count == 0 {
+                    EnterPinState.set-progress(99);
+                }
+                else {
+                    EnterPinState.set-progress(-1);
+                    count = 0;
+                }
+                count = count + 1;
+            }
+        }
     }
 }
 
@@ -258,7 +265,7 @@ export component EnterPinScreenView {
         password-count: entered-password-count;
     }
     PinGrid {
-        x: 30px;
+        x: 40px;
         y: 140px;
         number-clicked(digit) => {
             if (EnterPinState.wrong-passcode) {
