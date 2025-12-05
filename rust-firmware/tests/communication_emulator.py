@@ -185,7 +185,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.msg_edit)
 
         # Buttons for choosing network
-        layout.addWidget(QtWidgets.QLabel("Choose network:"))
+        layout.addWidget(QtWidgets.QLabel("Choose Stellar Network:"))
         btn_layout = QtWidgets.QHBoxLayout()
         self.mainnet_btn = QtWidgets.QPushButton(f"Mainnet")
         self.testnet_btn = QtWidgets.QPushButton(f"Testnet")
@@ -274,7 +274,7 @@ class MainWindow(QtWidgets.QMainWindow):
         global NETWORK_PREFIX
         previous_network = NETWORK_PREFIX
         NETWORK_PREFIX = NETWORK_TO_HASH.get(network)
-        self.append_log(f"[PY] Network set to {network}")
+        self.append_log(f"[PY] Stellar network set to {network}")
         if previous_network is not None:
             self.msg_edit.setText(self.msg_edit.text().replace(previous_network, NETWORK_PREFIX))
         self.update_network_button_colors(network)
