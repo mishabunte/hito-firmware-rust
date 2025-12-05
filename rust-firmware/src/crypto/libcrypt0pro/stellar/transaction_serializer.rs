@@ -86,10 +86,10 @@ impl StellarTransactionSerializer {
     ) -> Result<Vec<u8>, TransactionParseError> {
         let mut buffer = Vec::with_capacity(MAX_XDR_LEN);
 
-        let network_id_hash = &parsed_tx.network_hash;
+        let network_id_bytes = &parsed_tx.network_hash.clone().unwrap().get_hash_bytes();
 
         // 1. networkId (already SHA256(passphrase) done outside)
-        buffer.extend_from_slice(network_id_hash.as_slice());
+        buffer.extend_from_slice(network_id_bytes);
 
         match parsed_tx.envelope_type {
             TransactionEnvelopeType::TxV0 | TransactionEnvelopeType::Tx => {

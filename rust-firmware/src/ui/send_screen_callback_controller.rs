@@ -89,8 +89,12 @@ fn handle_stellar_transaction(tx_data: &str, ui: &MainWindow, state: &FirmwareSt
                 return;
             }
 
-            let network_hash_hex = bytes_to_hex(&parsed_tx.network_hash).to_shared_string();
-            match network_hash_hex.as_str() {
+            let network_hash_hex = parsed_tx
+                .network_hash
+                .as_ref()
+                .unwrap()
+                .get_hash_hex();
+            match network_hash_hex {
                 NETWORK_ID_TESTNET => {
                     send_stellar_state.set_network("Testnet".to_shared_string());
                 },
@@ -111,8 +115,8 @@ fn handle_stellar_transaction(tx_data: &str, ui: &MainWindow, state: &FirmwareSt
             send_stellar_state.set_source_short(slint::SharedString::from(&shorten_address(&address)));
             send_stellar_state.set_sequence(slint::SharedString::from(format!("{}", parsed_tx.sequence_number)));
 
-            let memo = parsed_tx.memo.clone().unwrap().value.unwrap_or(String::from("None"));
-            send_stellar_state.set_memo_summary(slint::SharedString::from(&memo));
+            let memo = parsed_tx.memo.as_ref().unwrap().value.as_ref().unwrap();
+            send_stellar_state.set_memo_summary(slint::SharedString::from(memo));
 
             send_stellar_state.set_fee(slint::SharedString::from(StellarTransactionParser::stroops_to_xlm_string(parsed_tx.fee)));
 

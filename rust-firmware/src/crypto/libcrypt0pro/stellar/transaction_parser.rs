@@ -5,7 +5,7 @@ use alloc::{string::String, vec::Vec, format};
 
 use base64ct::{Base64, Decoder, Encoding};
 
-use core::convert::TryInto;
+use core::{convert::TryInto, hash};
 
 struct Xdr<'a> {
     buf: &'a [u8],
@@ -149,7 +149,7 @@ pub const MAX_XDR_LEN: usize = 8192; // Maximum expected XDR length
 
 #[derive(Debug, Clone)]
 pub struct ParsedTransaction {
-    pub network_hash: [u8; 32],
+    pub network_hash: Option<Network>,
     pub source_account: String,
     pub sequence_number: i64,
     pub fee: i64,
@@ -159,6 +159,38 @@ pub struct ParsedTransaction {
     pub operations: Vec<ParsedOperation>,
     pub signatures: Vec<ParsedSignature>,
     pub envelope_type: TransactionEnvelopeType,
+}
+
+#[derive(Debug, Clone)]
+enum NetworkId {
+    Mainnet,
+    Testnet,
+    Futurenet,
+}
+
+#[derive(Debug, Clone)]
+pub struct Network {
+    id: NetworkId,
+    hash: String,
+}
+
+impl Network {
+  pub fn new(id: NetworkId, hash_str: String) -> Self {
+      Self {
+          id,
+          hash: hash_str,
+      }
+  }
+  pub fn get_hash_bytes(&self) -> [u8; 32] {
+      let mut hash_bytes = [0u8; 32];
+      let decoded = hex_to_bytes(&self.hash).unwrap();
+      hash_bytes.copy_from_slice(&decoded[..32]);
+      hash_bytes
+  }
+
+  pub fn get_hash_hex(&self) -> &str {
+      &self.hash
+  }
 }
 
 #[derive(Debug, Clone)]
@@ -351,7 +383,7 @@ impl StellarTransactionParser {
         Ok(encoded.to_vec())
     }
 
-    pub fn parse_transaction_xdr(xdr_bytes: &[u8], network_hash: &[u8]) -> Result<ParsedTransaction, TransactionParseError> {
+    fn parse_transaction_xdr(xdr_bytes: &[u8], network_hash: &str) -> Result<ParsedTransaction, TransactionParseError> {
         if xdr_bytes.len() > MAX_XDR_LEN {
             return Err(TransactionParseError::PayloadTooLarge);
         }
@@ -362,12 +394,24 @@ impl StellarTransactionParser {
         let mut xr = Xdr::new(xdr_bytes);
 
         let envelope_type = xr.read_i32()?;
-        match envelope_type {
-            ENVELOPE_TYPE_TX_V0 => Self::parse_v0_envelope(&mut xr, network_hash),
-            ENVELOPE_TYPE_TX => Self::parse_v1_envelope(&mut xr, network_hash),
-            ENVELOPE_TYPE_TX_FEE_BUMP => Self::parse_fee_bump_envelope(&mut xr, network_hash),
+        let tx = match envelope_type {
+            ENVELOPE_TYPE_TX_V0 => Self::parse_v0_envelope(&mut xr),
+            ENVELOPE_TYPE_TX => Self::parse_v1_envelope(&mut xr),
+            ENVELOPE_TYPE_TX_FEE_BUMP => Self::parse_fee_bump_envelope(&mut xr),
             _ => Err(TransactionParseError::InvalidEnvelopeType),
-        }
+        };
+        let mut parsed_tx = tx?;
+        use alloc::string::ToString;
+        parsed_tx.network_hash = Some(Network::new(
+            match network_hash {
+                NETWORK_ID_MAINNET => NetworkId::Mainnet,
+                NETWORK_ID_TESTNET => NetworkId::Testnet,
+                NETWORK_ID_FUTURENET => NetworkId::Futurenet,
+                _ => return Err(TransactionParseError::InvalidNetworkId),
+            },
+            network_hash.to_string(),
+        ));
+        Ok(parsed_tx)
     }
 
     /// Parse a base64-encoded transaction envelope into structured data
@@ -378,14 +422,10 @@ impl StellarTransactionParser {
         if (hash_str.len() != 64) {
             return Err(TransactionParseError::InvalidPrefix);
         }
-        match hash_str {
-            _ if !NETWORK_IDS.contains(&hash_str) => return Err(TransactionParseError::InvalidNetworkId),
-            _ => {},
-        }
         let xdr_bytes = Self::decode_base64(xdr_base64)?;
-        let mut network_hash = [0u8; 32]; // Placeholder, replace with actual network hash retrieval
-        network_hash.copy_from_slice(hex_to_bytes(hash_str).unwrap().as_slice());
-        Self::parse_transaction_xdr(&xdr_bytes, &network_hash)
+        // let mut network_hash = [0u8; 32]; // Placeholder, replace with actual network hash retrieval
+        // network_hash.copy_from_slice(hex_to_bytes(hash_str).unwrap().as_slice());
+        Self::parse_transaction_xdr(&xdr_bytes, &hash_str)
     }
 
     fn uint256_to_bounded_hex(v: &[u8]) -> Result<String, TransactionParseError> {
@@ -396,7 +436,7 @@ impl StellarTransactionParser {
         Ok(hex)
     }
 
-    fn parse_v0_envelope(xr: &mut Xdr, network_hash: &[u8]) -> Result<ParsedTransaction, TransactionParseError> {
+    fn parse_v0_envelope(xr: &mut Xdr) -> Result<ParsedTransaction, TransactionParseError> {
         // TransactionV0
         let source = xr.read_fixed_opaque(32)?; // uint256
         let fee = xr.read_u32()? as i64;
@@ -418,9 +458,9 @@ impl StellarTransactionParser {
         let _ext = xr.read_i32()?; // should be 0
 
         let signatures = Self::parse_signatures(xr)?;
-
+        
         Ok(ParsedTransaction {
-            network_hash: network_hash.try_into().unwrap(),
+            network_hash: None,
             source_account: Self::uint256_to_bounded_hex(source)?,
             sequence_number: seq_num,
             fee,
@@ -433,7 +473,7 @@ impl StellarTransactionParser {
         })
     }
 
-    fn parse_v1_envelope(xr: &mut Xdr, network_hash: &[u8]) -> Result<ParsedTransaction, TransactionParseError> {
+    fn parse_v1_envelope(xr: &mut Xdr) -> Result<ParsedTransaction, TransactionParseError> {
         // Transaction
         let source = Self::parse_muxed_account(xr)?;
         let fee = xr.read_u32()? as i64;
@@ -450,7 +490,7 @@ impl StellarTransactionParser {
         let signatures = Self::parse_signatures(xr)?;
 
         Ok(ParsedTransaction {
-            network_hash: network_hash.try_into().unwrap(),
+            network_hash: None,
             source_account: Self::muxed_account_to_string(&source)?,
             sequence_number: seq_num,
             fee,
@@ -463,7 +503,7 @@ impl StellarTransactionParser {
         })
     }
 
-    fn parse_fee_bump_envelope(xr: &mut Xdr, network_hash: &[u8]) -> Result<ParsedTransaction, TransactionParseError> {
+    fn parse_fee_bump_envelope(xr: &mut Xdr) -> Result<ParsedTransaction, TransactionParseError> {
         // FeeBumpTransaction
         let fee_source = Self::parse_muxed_account(xr)?;
         let fee = xr.read_i64()?;
@@ -487,7 +527,7 @@ impl StellarTransactionParser {
             let inner_signatures = Self::parse_signatures(xr)?;
 
             ParsedTransaction {
-                network_hash: network_hash.try_into().unwrap(),
+                network_hash: None,
                 source_account: Self::muxed_account_to_string(&source)?,
                 sequence_number: seq_num,
                 fee: fee_inner,
