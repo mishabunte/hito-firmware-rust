@@ -34,7 +34,7 @@ export component CommunicateScreenView {
     in-out property <string> current-protocol-name: SendScreenState.current-protocol == Protocol.NFC ? "NFC" : "Bluetooth";
     in-out property <string> next-protocol-name: SendScreenState.current-protocol == Protocol.NFC ? "Bluetooth" : "NFC";
     Text {
-      y: 35px;
+      y: 25px;
       text: current-protocol-name + " is active";
       font-size: 12px;
       horizontal-alignment: center;

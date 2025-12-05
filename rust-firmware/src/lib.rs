@@ -229,20 +229,15 @@ pub extern "C" fn rust_main() -> ! {
 
     window.set_size(slint::PhysicalSize::new(320, 240));
 
-    // // log_info!("Initializing platform");
-
     // Initialize platform (common code)
     initialize_platform(window.clone());
 
     #[cfg(feature = "minifb")]
     let _profiler = dhat::Profiler::builder().build();
 
-    // // log_info!("Platform initialized");
-
     STATE.call_once(|| Mutex::new(FirmwareState::new()));
     // let state = FirmwareState::new();
     firmware.indicator.turn_on(LedColor::Blue);
-    // // log_info!("Starting embedded event loop");
     
     // Run platform-specific main loop
     let ui = MainWindow::new().unwrap();
