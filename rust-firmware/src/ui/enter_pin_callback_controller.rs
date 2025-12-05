@@ -72,9 +72,9 @@ impl CallbackController for EnterPinCallbackController {
             if let Some(ui) = ui {
                 let enter_pin = ui.global::<EnterPinState>();
                 let password_sequence = enter_pin.get_password_sequence();
-                let word = password_sequence[index as usize..(index as usize + 1)].to_ascii_lowercase();
+                let ch = password_sequence[index as usize..(index as usize + 1)].to_shared_string();
                 //log_info!("Get char at index {}: {}", index, word);
-                slint::SharedString::from(word)
+                ch
             } else {
                 // UI was destroyed
                 slint::SharedString::new()
