@@ -939,10 +939,6 @@ impl HitoVault {
     Ok(())
   }
 
-  pub fn set_seed(&mut self, seed: &[u8]) {
-    self.seed[..64].copy_from_slice(&seed[..64]);
-  }
-
   pub fn set_entropy(&mut self, entropy: &[u8], entropy_len: usize) {
     self.entropy[..entropy_len].copy_from_slice(&entropy[..entropy_len]);
     self.entropy_len = match entropy_len {
@@ -1042,7 +1038,7 @@ impl HitoVault {
         )
       };
 
-      // log_info!("Generated seed from entropy");
+      log_info!("Generated seed from entropy: {:?}", &self.seed[..64]);
       
       if result != crypto::ffi::CRYPT0_OK {
         return Err(VaultError::CryptoError);
@@ -1129,7 +1125,8 @@ impl HitoVault {
     }
 
     self.entropy[..entropy_len].copy_from_slice(&decrypted[..entropy_len]);
-    self.seed.copy_from_slice(&decrypted[32..]);
+    self.seed.copy_from_slice(&decrypted[entropy_len..(entropy_len + 64)]);
+    log_info!("Vault decrypted successfully, decrypted: {:?}, entropy_len: {}", &decrypted[..(entropy_len + 64)], entropy_len);
 
     if ram_block.is_none() {
       let blockRam = VAULT_RAM_PAGE as *mut VaultEncryptedBlock;
@@ -1279,4 +1276,144 @@ impl HitoVault {
       }
     }
   }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vault_create_set_passcode_and_unlock() {
+        let mut vault = HitoVault::new();
+        vault.init();
+
+        // Set up initial entropy and seed
+        let entropy = [0x12u8; 32];
+        let passcode = b"test_password_123";
+
+        // Set entropy and seed
+        vault.set_entropy(&entropy, 32);
+
+        // Set passcode on empty vault
+        assert!(vault.set_passcode(passcode).is_ok());
+        
+        let seed = vault.seed;
+
+        // Create new vault instance and unlock with the same passcode
+        let mut vault2 = HitoVault::new();
+        vault2.init();
+
+        // Unlock with the passcode
+        let passcode = b"test_password_123";
+        assert!(vault2.unlock_with_password(passcode).is_ok());
+
+        // Verify vault is unlocked
+        assert!(vault2.is_unlocked());
+
+        // Verify entropy and seed match
+        assert_eq!(vault2.entropy[..32], entropy);
+        assert_eq!(vault2.seed, seed);
+    }
+
+    #[test]
+    fn test_vault_unlock_with_wrong_passcode() {
+        let mut vault = HitoVault::new();
+        vault.init();
+
+        let entropy = [0xAAu8; 32];
+        let correct_passcode = b"correct_password";
+        let wrong_passcode = b"wrong_password!!";
+
+        vault.set_entropy(&entropy, 32);
+        assert!(vault.set_passcode(correct_passcode).is_ok());
+
+        let mut vault2 = HitoVault::new();
+        vault2.init();
+
+        // Try to unlock with wrong passcode
+        let result = vault2.unlock_with_password(wrong_passcode);
+        assert!(result.is_err());
+        assert!(!vault2.is_unlocked());
+    }
+
+    #[test]
+    fn test_vault_empty_raises_error() {
+        let vault = HitoVault::new();
+        assert!(vault.is_empty());
+        assert!(vault.last_block().is_err());
+    }
+
+    #[test]
+    fn test_vault_unlock_empty_vault_fails() {
+        let mut vault = HitoVault::new();
+        vault.init();
+
+        let result = vault.unlock_with_password(b"any_password");
+        assert!(result.is_err());
+        assert!(!vault.is_unlocked());
+    }
+
+    #[test]
+    fn test_vault_multiple_passcode_changes() {
+        let mut vault = HitoVault::new();
+        vault.init();
+
+        let entropy = [0xCCu8; 32];
+        let passcode1 = b"first_password";
+        let passcode2 = b"second_password";
+
+        vault.set_entropy(&entropy, 32);
+        assert!(vault.set_passcode(passcode1).is_ok());
+
+        // Change passcode
+        vault.vaultIsUnlocked = true; // Simulate unlocked state for passcode change
+        assert!(vault.set_passcode(passcode2).is_ok());
+
+        // Create new vault and unlock with second passcode
+        let mut vault2 = HitoVault::new();
+        vault2.init();
+        assert!(vault2.unlock_with_password(passcode2).is_ok());
+        assert!(vault2.is_unlocked());
+
+        // Create another vault and verify old passcode doesn't work
+        let mut vault3 = HitoVault::new();
+        vault3.init();
+        assert!(vault3.unlock_with_password(passcode1).is_err());
+    }
+
+    #[test]
+    fn test_vault_different_entropy_lengths() {
+        for entropy_len in &[16, 24, 32] {
+            let mut vault = HitoVault::new();
+            vault.init();
+
+            let entropy: [u8; 32] = [0xEEu8; 32];
+            let passcode = b"test_pass";
+
+            vault.set_entropy(&entropy, *entropy_len);
+            assert!(vault.set_passcode(passcode).is_ok());
+
+            let mut vault2 = HitoVault::new();
+            vault2.init();
+            assert!(vault2.unlock_with_password(passcode).is_ok());
+            assert_eq!(vault2.entropy_len as usize, *entropy_len);
+        }
+    }
+
+    #[test]
+    fn test_vault_passcode_length_validation() {
+        let mut vault = HitoVault::new();
+        vault.init();
+
+        let entropy = [0x99u8; 32];
+
+        vault.set_entropy(&entropy, 32);
+
+        // Valid passcode lengths (1-32 bytes)
+        assert!(vault.set_passcode(b"a").is_ok());
+        
+        let mut vault2 = HitoVault::new();
+        vault2.init();
+        assert!(vault2.unlock_with_password(b"a").is_ok());
+    }
 }
