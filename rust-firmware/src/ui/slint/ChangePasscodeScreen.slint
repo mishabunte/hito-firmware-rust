@@ -1,0 +1,35 @@
+import { Palette } from "Palette.slint";
+import { Spacer } from "Spacer.slint";
+import { Router } from "Router.slint";
+import { ScreenEnum } from "ScreenEnum.slint";
+import { EnterPinScreenView } from "EnterPinScreen.slint";
+
+export global ChangePasscodeState {
+  in-out property <int> decoding-progress: -1; // -1 means no progress
+  in-out property <bool> wrong-passcode;
+  in-out property <string> password-sequence;
+  callback append-char(digit: string);
+  callback remove-char();
+  callback passcode-entered();
+  pure callback get-char(index: int) -> string;
+  callback shuffle-password-sequence();
+}
+
+export component ChangePasscodeScreenView inherits EnterPinScreenView {
+  // Override callbacks to use ChangePasscodeState instead of EnterPinState
+  on-append-char(digit) => {
+    ChangePasscodeState.append-char(digit);
+  }
+  
+  on-remove-char() => {
+    // Add remove-char callback to ChangePasscodeState if needed
+  }
+  
+  on-passcode-entered() => {
+    // Add passcode-entered callback to ChangePasscodeState if needed
+  }
+  
+  on-wrong-passcode-changed(value) => {
+    ChangePasscodeState.wrong-passcode = value;
+  }
+}

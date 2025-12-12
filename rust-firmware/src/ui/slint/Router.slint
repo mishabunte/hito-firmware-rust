@@ -29,6 +29,15 @@ export global Router {
         else if current == ScreenEnum.EnterPin && previous == ScreenEnum.Settings {
             current = ScreenEnum.Settings;
         }
+        else if current == ScreenEnum.ChangePasscode {
+            current = ScreenEnum.Settings;
+        }
+        else if current == ScreenEnum.ConfirmChangePasscode {
+            current = ScreenEnum.ChangePasscode;
+        }
+        else if current == ScreenEnum.PasscodeChanged {
+            current = ScreenEnum.Settings;
+        }
         else {
             current = ScreenEnum.Lock;
         }

@@ -20,6 +20,7 @@ import { SendScreenState } from "SendScreen.slint";
 import { Protocol } from "SendScreen.slint";
 import { SendStellarScreenView } from "SendStellarScreen.slint";
 import { SendStellarState } from "SendStellarScreen.slint";
+import {ChangePasscodeScreenView} from "ChangePasscodeScreen.slint";
 
 import { Router } from "Router.slint";
 import { ScreenEnum } from "ScreenEnum.slint";
@@ -88,7 +89,10 @@ export component MainWindow inherits Window {
             "SCAN TRANSACTION";
         } else if (Router.current == ScreenEnum.Receive) {
             "YOUR ADDRESS";
-        } else {
+        } else if (Router.current == ScreenEnum.ChangePasscode) {
+            "CHANGE PASSCODE";
+        }
+        else {
             "";
         }
     }
@@ -184,5 +188,6 @@ export component MainWindow inherits Window {
         if Router.current == ScreenEnum.ShowSeed: ShowSeedScreenView {}
         if Router.current == ScreenEnum.SendStellar: SendStellarScreenView {}
         if Router.current == ScreenEnum.Signed: SignedScreenView {}
+        if Router.current == ScreenEnum.ChangePasscode: ChangePasscodeScreenView {}
     }
 }

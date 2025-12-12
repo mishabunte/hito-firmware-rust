@@ -238,6 +238,27 @@ export component EnterPinScreenView {
     height: 240px;
     property <length> line-y: 60px;
     in-out property <int> entered-password-count: 0;
+    
+    // Callbacks for state management - can be overridden
+    callback on-append-char(string);
+    callback on-remove-char();
+    callback on-passcode-entered();
+    callback on-wrong-passcode-changed(bool);
+    
+    // Default implementation uses EnterPinState
+    on-append-char(digit) => {
+        EnterPinState.append-char(digit);
+    }
+    on-remove-char() => {
+        EnterPinState.remove-char();
+    }
+    on-passcode-entered() => {
+        EnterPinState.passcode-entered();
+    }
+    on-wrong-passcode-changed(value) => {
+        EnterPinState.wrong-passcode = value;
+    }
+    
     init => {
         EnterPinState.shuffle-password-sequence();
     }
@@ -248,11 +269,11 @@ export component EnterPinScreenView {
         y: line-y;
         clicked() => {
             if (EnterPinState.wrong-passcode) {
-                EnterPinState.wrong-passcode = false;
+                root.on-wrong-passcode-changed(false);
             }
             if (entered-password-count > 0) {
                 entered-password-count = entered-password-count - 1;
-                EnterPinState.remove-char();
+                root.on-remove-char();
             }
         }
         visible: entered-password-count > 0;
@@ -267,14 +288,14 @@ export component EnterPinScreenView {
         y: 140px;
         number-clicked(digit) => {
             if (EnterPinState.wrong-passcode) {
-                EnterPinState.wrong-passcode = false;
+                root.on-wrong-passcode-changed(false);
             }
             if (entered-password-count < 6) {
                 entered-password-count = entered-password-count + 1;
-                EnterPinState.append-char(digit);
+                root.on-append-char(digit);
             }
             if (entered-password-count == 6) {
-                EnterPinState.passcode-entered();
+                root.on-passcode-entered();
                 entered-password-count = 0;
             }
         }
