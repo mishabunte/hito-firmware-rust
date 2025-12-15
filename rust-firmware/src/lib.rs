@@ -1,7 +1,11 @@
 #![no_std]
 extern crate alloc;
 use alloc::{boxed::Box, rc::Rc};
+use slint::ModelRc;
+use slint::VecModel;
 use core::{mem::MaybeUninit};
+
+use alloc::vec;
 
 #[cfg(feature = "minifb")]
 extern crate std;
@@ -34,11 +38,11 @@ mod vault;
 mod firmware_state;
 mod ui;
 
-use ui::CallbackController;
-use ui::MainCallbackController;
-use ui::EnterPinCallbackController;
-use ui::DeviceInfoCallbackController;
-use ui::ReceiveDataCallbackController;
+// use ui::CallbackController;
+// use ui::MainCallbackController;
+// use ui::EnterPinCallbackController;
+// use ui::DeviceInfoCallbackController;
+// use ui::ReceiveDataCallbackController;
 
 pub use vault::vault::{HitoVault, VaultError, VaultResult};
 pub use firmware_state::DeviceInfo;
@@ -55,7 +59,7 @@ static BASE_STACK_REMAINING: AtomicUsize = AtomicUsize::new(8388608);
 
 use spin::{Once, Mutex};
 
-use crate::ui::UI_CALLBACK_CONTROLLERS;
+//use crate::ui::UI_CALLBACK_CONTROLLERS;
 
 static STATE: Once<Mutex<FirmwareState>> = Once::new();
 
@@ -247,16 +251,30 @@ pub extern "C" fn rust_main() -> ! {
     // Run platform-specific main loop
     let ui = MainWindow::new().unwrap();
 
-    for cb in UI_CALLBACK_CONTROLLERS {
-        cb.register_main_window_callbacks(&ui, &mut firmware);
-    }
+    let items = ModelRc::new(VecModel::from(vec![
+        ScreenItem { label: "Firmware".into(), value: "1.0.0".into(), is_button: false },
+        ScreenItem { label: "Factory Reset".into(), value: "".into(), is_button: true },
+    ]));
+    ui.on_pressed(|item| {
+        log_info!("Pressed item: {} (is_button: {})", item.label, item.is_button);
+        if item.is_button && item.label == "Factory Reset" {
+            log_info!("Factory Reset button pressed");
+            // Handle factory reset logic here
+        }
+    });
+    ui.set_items(items);
+    ui.set_header_title(slint::SharedString::from("First screen"));
+
+    // for cb in UI_CALLBACK_CONTROLLERS {
+    //     cb.register_main_window_callbacks(&ui, &mut firmware);
+    // }
 
     loop {
         slint::platform::update_timers_and_animations();
 
-        for cb in UI_CALLBACK_CONTROLLERS {
-            cb.handle_loop_events(&ui, &mut firmware);
-        }
+        // for cb in UI_CALLBACK_CONTROLLERS {
+        //     cb.handle_loop_events(&ui, &mut firmware);
+        // }
 
         handle_touch_events(&mut firmware, &*window);
 
