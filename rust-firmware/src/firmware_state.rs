@@ -40,9 +40,8 @@ impl DeviceInfo {
 
 pub struct FirmwareState {
   brightness: Cell<Option<u8>>,
-  battery_req: Cell<bool>,
   pin: RefCell<String>,
-  unlock_req: Cell<bool>,
+  derive_key_requested: Cell<bool>,
   is_unlocked: Cell<bool>,
   device_info_requested: Cell<bool>,
   qr_data_requested: Cell<bool>,
@@ -56,9 +55,8 @@ impl FirmwareState {
   pub fn new() -> Self {
       Self {
           brightness: Cell::new(None),
-          battery_req: Cell::new(false),
           pin: RefCell::new(String::new()),
-          unlock_req: Cell::new(false),
+          derive_key_requested: Cell::new(false),
           is_unlocked: Cell::new(false),
           device_info_requested: Cell::new(false),
           qr_data_requested: Cell::new(false),
@@ -69,7 +67,6 @@ impl FirmwareState {
       }
   }
   pub fn set_brightness(&self, v: u8)                 { self.brightness.set(Some(v)); }
-  pub fn set_battery_level_requested(&self, v: bool)  { self.battery_req.set(v); }
   pub fn append_to_pin(&self, digit: u8) {
       let ch = (b'0' + digit) as char;
       self.pin.borrow_mut().push(ch);
@@ -78,11 +75,10 @@ impl FirmwareState {
   pub fn is_device_info_requested(&self) -> bool     { self.device_info_requested.get() }
   pub fn clear_device_info_requested(&self)          { self.device_info_requested.set(false); }
   pub fn remove_pin_char(&self)                       { self.pin.borrow_mut().pop(); }
-  pub fn mark_unlock_requested(&self)                 { self.unlock_req.set(true); }
-  pub fn is_battery_level_requested(&self) -> bool    { self.battery_req.get() }
-  pub fn is_unlock_in_progress(&self) -> bool         { self.unlock_req.get() }
-  pub fn unlock_finished(&self) {
-      self.unlock_req.set(false);
+  pub fn mark_derive_key_requested(&self)                 { self.derive_key_requested.set(true); }
+  pub fn is_derive_key_in_progress(&self) -> bool         { self.derive_key_requested.get() }
+  pub fn derive_key_finished(&self) {
+      self.derive_key_requested.set(false);
       self.pin.borrow_mut().clear();
   }
 
@@ -119,6 +115,5 @@ impl FirmwareState {
 
   // --- consumed in the main loop ---
   pub fn take_brightness(&self) -> Option<u8>         { self.brightness.take() }
-  pub fn take_battery_req(&self) -> bool              { self.battery_req.replace(false) }
   pub fn get_pin(&self) -> String                     { self.pin.borrow().clone() }
 }

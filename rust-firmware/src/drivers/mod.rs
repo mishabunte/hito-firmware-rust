@@ -20,7 +20,7 @@ pub use battery::Battery;
 pub mod logging;
 
 pub mod qr_code;
-pub use qr_code::{QrCodeWrapper, IMAGE_MAX_WIDTH};
+pub use qr_code::{QrCodeWrapper};
 
 #[cfg(feature = "minifb")]
 pub use minifb::led_desktop::DesktopLedDriver;

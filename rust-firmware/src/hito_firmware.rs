@@ -6,6 +6,11 @@ use crate::drivers::{ Indicator, IndicatorImpl, LedColor, BlinkSpeed };
 //use crate::lib::crypt0;
 
 use crate::crypto::crypt0::hex_to_bytes;
+#[cfg(feature = "minifb")]
+use crate::log_info;
+extern crate alloc;
+use alloc::sync::Arc;
+use spin::Mutex;
 
 #[cfg(feature = "zephyr")]
 use crate::drivers::zephyr::logging;
@@ -16,22 +21,22 @@ use crate::drivers::minifb::SocketProtocol;
 const TEST_PASSCODE: &[u8] = b"000000";
 
 pub struct HitoFirmware {
-    pub display:   DisplayImpl,
-    pub touch:     TouchImpl,
-    pub indicator: IndicatorImpl,
-    pub battery:   BatteryImpl,
-    pub vault:     HitoVault,
+    pub display:   Arc<Mutex<DisplayImpl>>,
+    pub touch:     Arc<Mutex<TouchImpl>>,
+    pub indicator: Arc<Mutex<IndicatorImpl>>,
+    pub battery:   Arc<Mutex<BatteryImpl>>,
+    pub vault:     Arc<Mutex<HitoVault>>,
 }
 
 
 impl HitoFirmware {
     pub fn new() -> Self {
         Self {
-            indicator: IndicatorImpl::new(),
-            display:   DisplayImpl::new(),
-            touch:     TouchImpl::new(),
-            battery:   BatteryImpl::new(),
-            vault:     HitoVault::new(),
+            indicator: Arc::new(Mutex::new(IndicatorImpl::new())),
+            display:   Arc::new(Mutex::new(DisplayImpl::new())),
+            touch:     Arc::new(Mutex::new(TouchImpl::new())),
+            battery:   Arc::new(Mutex::new(BatteryImpl::new())),
+            vault:     Arc::new(Mutex::new(HitoVault::new())),
         }
     }
 
@@ -39,43 +44,47 @@ impl HitoFirmware {
         #[cfg(feature = "zephyr")]
         logging::log_info("Initializing hardware...");
 
-        self.display.init();
-        self.indicator.init();
-        self.touch.init();
-        self.vault.init();
+        self.display.lock().init();
+        self.indicator.lock().init();
+        self.touch.lock().init();
+        self.vault.lock().init();
         #[cfg(feature = "minifb")]
         {
-            self.vault.set_entropy(hex_to_bytes("ffbff7feffdffbff7feffdffbff7feff").unwrap().as_slice(), 16);
-            self.vault.set_passcode(TEST_PASSCODE).expect("Failed to set passcode");
-            self.vault.unlock_with_password(TEST_PASSCODE).expect("Failed to unlock vault");
+          let mut vault_lock = self.vault.lock();
+            //vault_lock.set_entropy(hex_to_bytes("ffbff7feffdffbff7feffdffbff7feff").unwrap().as_slice(), 16);
+            vault_lock.set_passcode(TEST_PASSCODE).expect("Failed to set passcode");
+            vault_lock.unlock_with_password(TEST_PASSCODE).expect("Failed to unlock vault");
         }
 
         #[cfg(feature = "zephyr")]
         logging::log_info("Hardware initialization complete");
 
+        #[cfg(feature = "minifb")]
+        log_info!("Hardware initialization complete");
+
         //self.display.fill_rect(10, 10, 100, 50, 0xF800); // Red rectangle
     }
 
     pub fn main_loop(&mut self) {
-        self.indicator.turn_on(LedColor::Blue);
+        self.indicator.lock().turn_on(LedColor::Blue);
 
         let mut x = 0xffff;
         let mut y = 0xffff;
 
         loop {
-            self.indicator.blink(LedColor::Red, BlinkSpeed::Slow);
-            if self.touch.is_pressed().unwrap_or(false) {
+            self.indicator.lock().blink(LedColor::Red, BlinkSpeed::Slow);
+            if self.touch.lock().is_pressed().unwrap_or(false) {
 
                 // clear screen
                 if x != 0xffff {
-                    self.display.fill_rect(x as u16, y as u16, 20, 20, 0xffff); // Red rectangle at touch position
+                    self.display.lock().fill_rect(x as u16, y as u16, 20, 20, 0xffff); // Red rectangle at touch position
                 }
 
-                (x, y) = self.touch.get_position();
-                self.display.fill_rect(x, y, 20, 20, 0x07E0); // Green rectangle at touch position
+                (x, y) = self.touch.lock().get_position();
+                self.display.lock().fill_rect(x, y, 20, 20, 0x07E0); // Green rectangle at touch position
             }
 
-            self.display.update()
+            self.display.lock().update()
         }
     }
 

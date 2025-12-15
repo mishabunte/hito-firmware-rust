@@ -1,12 +1,14 @@
 use core::ffi::{c_char, c_int};
 
+pub const CRYPT0_BIP39_MNEMONIC_ENGLISH_MAXWORDS: usize = 2048;
+
 extern "C" {
   pub fn crypt0_bech32_encode(data: *const u8, datalen: c_int, buf: *mut c_char, buflen: c_int) -> c_int;
   pub fn crypt0_bip39_entropy_to_seed_en(
     entropy: *const u8,
-    entropy_len: usize,
+    entropy_len: u16,
     seed: *mut u8,
-    seed_len: usize
+    seed_len: u16
   ) -> c_int;
   pub fn crypt0_crc16_ccitt(data: *const u8, len: usize) -> u16;
   pub fn crypt0_encrypt_aes_ccm(
@@ -93,5 +95,12 @@ extern "C" {
     siglen: usize
   ) -> c_int;
   pub fn hito_sys_rand32_get() -> u32;
+  pub fn crypt0_bip39_mnemonic_to_entropy(
+    mnemonic: *const u16,
+    mnemonic_len: u16,
+    entropy: *mut u8,
+    entropy_len: u16
+  ) -> bool;
+  pub static crypt0_bip39_english: [*const c_char; CRYPT0_BIP39_MNEMONIC_ENGLISH_MAXWORDS];
 }
 pub const CRYPT0_OK: c_int = 0;
