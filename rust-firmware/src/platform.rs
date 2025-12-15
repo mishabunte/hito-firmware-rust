@@ -1,8 +1,9 @@
 extern crate alloc;
-use alloc::{rc::Rc, boxed::Box};
+use alloc::{rc::Rc, sync::Arc};
 use slint::platform::{Platform, software_renderer::MinimalSoftwareWindow};
 use slint::platform::software_renderer::{LineBufferProvider, Rgb565Pixel};
 use crate::drivers::{Display, DisplayImpl};
+use spin::Mutex;
 
 #[cfg(feature = "zephyr")]
 use crate::drivers::zephyr::timer::ZephyrTimer;
@@ -66,7 +67,7 @@ impl Platform for MyPlatform {
 }
 
 pub struct DisplayWrapper<'a> {
-    pub display: &'a mut DisplayImpl,
+    pub display: &'a mut Arc<Mutex<DisplayImpl>>,
     pub line_buffer: &'a mut [Rgb565Pixel],
 }
 
@@ -81,7 +82,6 @@ impl<'a> LineBufferProvider for DisplayWrapper<'a> {
     ) {
         // Render into the line buffer
         render_fn(&mut self.line_buffer[range.clone()]);
-
         // Convert Rgb565Pixel to raw u16 values and send to display
         let raw_pixels: &[u16] = unsafe {
             core::slice::from_raw_parts(
@@ -90,8 +90,10 @@ impl<'a> LineBufferProvider for DisplayWrapper<'a> {
             )
         };
 
+        let display_arc = self.display.clone();
+
         // Send the line to the display
-        self.display.draw_line(
+        display_arc.lock().draw_line(
             line as u16,
             range.start as u16,
             range.end as u16,

@@ -1,4 +1,7 @@
 #![no_std]
+#![allow(dead_code)]
+#[cfg(any(feature = "minifb", feature = "zephyr"))]
+slint::include_modules!();
 extern crate alloc;
 use alloc::{boxed::Box, rc::Rc};
 use slint::ModelRc;
@@ -37,12 +40,9 @@ mod platform;
 mod vault;
 mod firmware_state;
 mod ui;
+mod common;
 
-// use ui::CallbackController;
-// use ui::MainCallbackController;
-// use ui::EnterPinCallbackController;
-// use ui::DeviceInfoCallbackController;
-// use ui::ReceiveDataCallbackController;
+pub use common::QR_CODE;
 
 pub use vault::vault::{HitoVault, VaultError, VaultResult};
 pub use firmware_state::DeviceInfo;
@@ -50,9 +50,6 @@ pub use firmware_state::DeviceInfo;
 use hito_firmware::HitoFirmware;
 use firmware_state::FirmwareState;
 use slint::platform::software_renderer::MinimalSoftwareWindow;
-
-#[cfg(any(feature = "minifb", feature = "zephyr"))]
-slint::include_modules!();
 
 #[cfg(feature = "minifb")]
 static BASE_STACK_REMAINING: AtomicUsize = AtomicUsize::new(8388608);
@@ -62,13 +59,6 @@ use spin::{Once, Mutex};
 //use crate::ui::UI_CALLBACK_CONTROLLERS;
 
 static STATE: Once<Mutex<FirmwareState>> = Once::new();
-
-#[cfg(feature = "minifb")]
-pub fn init_stack_baseline() {
-    // let rem = stacker::remaining_stack();
-    // // // log_info!("Initial stack remaining: {:?}", rem);
-    // BASE_STACK_REMAINING.store(rem.unwrap_or(0), Ordering::Relaxed);
-}
 
 #[cfg(feature = "minifb")]
 pub fn current_stack_used() -> usize {
@@ -151,11 +141,11 @@ fn handle_touch_events(
     firmware: &mut HitoFirmware,
     window: &MinimalSoftwareWindow,
 ) {
-    let is_pressed = firmware.touch.is_pressed();
+    let is_pressed = firmware.touch.lock().is_pressed();
     
     match is_pressed {
         Some(true) => {
-            let pos = firmware.touch.get_position();
+            let pos = firmware.touch.lock().get_position();
             let event = slint::platform::WindowEvent::PointerPressed {
                 position: slint::LogicalPosition {
                     x: pos.0 as f32,
@@ -167,7 +157,7 @@ fn handle_touch_events(
             let _ = window.try_dispatch_event(event);
         }
         Some(false) => {
-            let pos = firmware.touch.get_position();
+            let pos = firmware.touch.lock().get_position();
             let event = slint::platform::WindowEvent::PointerReleased {
                 position: slint::LogicalPosition {
                     x: pos.0 as f32,
@@ -180,8 +170,8 @@ fn handle_touch_events(
         }
         None => {}
     }
-    if firmware.touch.has_touch() {
-        let pos = firmware.touch.get_position();
+    if firmware.touch.lock().has_touch() {
+        let pos = firmware.touch.lock().get_position();
         
         unsafe {
             if LAST_MOUSE_POS != pos {
@@ -233,7 +223,7 @@ pub extern "C" fn rust_main() -> ! {
 
     window.set_size(slint::PhysicalSize::new(320, 240));
 
-    // // log_info!("Initializing platform");
+    // log_info!("Initializing platform");
 
     // Initialize platform (common code)
     initialize_platform(window.clone());
@@ -241,12 +231,14 @@ pub extern "C" fn rust_main() -> ! {
     #[cfg(feature = "minifb")]
     let _profiler = dhat::Profiler::builder().build();
 
-    // // log_info!("Platform initialized");
+    //calculate_sizeof_screens();
+
+    log_info!("Platform initialized");
 
     STATE.call_once(|| Mutex::new(FirmwareState::new()));
     // let state = FirmwareState::new();
-    firmware.indicator.turn_on(LedColor::Blue);
-    // // log_info!("Starting embedded event loop");
+    firmware.indicator.lock().turn_on(LedColor::Blue);
+    log_info!("Starting embedded event loop");
     
     // Run platform-specific main loop
     let ui = MainWindow::new().unwrap();
@@ -280,20 +272,23 @@ pub extern "C" fn rust_main() -> ! {
 
         window.draw_if_needed(|renderer| {
             unsafe {
-                #[cfg(feature = "minifb")]
-                {
-                    let heap_bytes = get_heap_usage();
-                    let stack_bytes = current_stack_used();
-                    drivers::minifb::simulator_window_set_memory_stats(heap_bytes, stack_bytes);
-                }
                 renderer.render_by_line(DisplayWrapper {
                     display: &mut firmware.display,
                     line_buffer: &mut LINE_BUFFER,
                 });
+              let display_arc = firmware.display.clone();
+              unsafe {
+                if QR_CODE.is_some() {
+                    let qr_data = QR_CODE.as_ref().unwrap().get_data();
+                    let qr_width = QR_CODE.as_ref().unwrap().get_width() as usize;
+                    let (x, y) = QR_CODE.as_ref().unwrap().get_coords();
+                    display_arc.lock().draw_qr_from_buffer(x, y, &qr_data, qr_width);
+                }
+              }
             }
         });
 
-        firmware.display.update();
+        firmware.display.lock().update();
     }
 }
 // ARM EABI unwinding stub for embedded targets only
