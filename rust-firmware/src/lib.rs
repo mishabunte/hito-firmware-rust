@@ -1,11 +1,7 @@
 #![no_std]
 extern crate alloc;
 use alloc::{boxed::Box, rc::Rc};
-use slint::ModelRc;
-use slint::VecModel;
-use core::{mem::MaybeUninit};
-
-use alloc::vec;
+use core::mem::MaybeUninit;
 
 #[cfg(feature = "minifb")]
 extern crate std;
@@ -249,27 +245,20 @@ pub extern "C" fn rust_main() -> ! {
     // // log_info!("Starting embedded event loop");
     
     // Run platform-specific main loop
-    let ui = MainWindow::new().unwrap();
-
-    let items = ModelRc::new(VecModel::from(vec![
-        ScreenItem { label: "Firmware".into(), value: "1.0.0".into(), is_button: false },
-        ScreenItem { label: "Factory Reset".into(), value: "".into(), is_button: true },
-    ]));
-    ui.on_pressed(|item| {
-        log_info!("Pressed item: {} (is_button: {})", item.label, item.is_button);
-        if item.is_button && item.label == "Factory Reset" {
-            log_info!("Factory Reset button pressed");
-            // Handle factory reset logic here
-        }
-    });
-    ui.set_items(items);
-    ui.set_header_title(slint::SharedString::from("First screen"));
+    let ui = Rc::new(MainWindow::new().unwrap());
+    
+    // Initialize the global router and navigate to the initial screen (Menu)
+    ui::init_global_router(ui.clone());
+    ui::navigate_to(ui::Screen::Menu);
 
     // for cb in UI_CALLBACK_CONTROLLERS {
     //     cb.register_main_window_callbacks(&ui, &mut firmware);
     // }
 
     loop {
+        // Process any pending navigation requests (deferred from callbacks)
+        ui::process_pending_navigation();
+
         slint::platform::update_timers_and_animations();
 
         // for cb in UI_CALLBACK_CONTROLLERS {

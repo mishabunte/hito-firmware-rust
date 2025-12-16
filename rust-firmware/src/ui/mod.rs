@@ -14,4 +14,9 @@ use crate::hito_firmware::HitoFirmware;
 //     &MainWindowWrapper,
 // ];
 
+pub mod router;
+pub mod screens;
+
+pub use router::{Router, Screen, init_global_router, navigate_to, go_back, process_pending_navigation};
+
 
