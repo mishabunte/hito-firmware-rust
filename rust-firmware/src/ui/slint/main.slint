@@ -3,7 +3,7 @@ import { BatteryController,  BatteryLevel } from "Battery.slint";
 import { TransparentButton } from "TransparentButton.slint";
 import { Palette } from "Palette.slint";
 
-import "../../../res/fonts/RobotoMono-Regular.otf";
+import "../../../res/fonts/RobotoMono-Regular.ttf";
 
 export { BrightnessController, BatteryController}
 
@@ -13,19 +13,18 @@ component BackButton inherits TransparentButton {
     text-color-pressed: Palette.black;
     text-color-unpressed: Palette.blue;
     clicked() => {
-        //Router.back();
+        debug("Back button clicked");
     }
 }
 
 export struct ScreenItem {
-    label: string,
-    value: string,
+    text: string,
     is_button: bool,
     // is_image: bool,
-    // width: length,
-    // height: length,
-    // x: length,
-    // y: length,
+    width: length,
+    height: length,
+    x: length,
+    y: length,
 }
 
 export component MainWindow inherits Window {
@@ -39,15 +38,20 @@ export component MainWindow inherits Window {
     in-out property <[ScreenItem]> items;
     
     for item in items: Rectangle {
-        if !item.is_button: Text { text: item.is_button ? item.label : item.label + ": " + item.value; 
-        font-size: 20px;
+          x: item.x;
+          y: item.y;
+         width: item.width;
+          height: item.height;
+        if !item.is_button: Text { 
+          text: item.text; 
+          font-size: 20px;
         }
         if item.is_button: TransparentButton {
-            content: item.label;
-            in-font-size: 20px;
-            clicked => {
-                root.pressed(item);
-            }
+          content: item.text;
+          in-font-size: 20px;
+          clicked => {
+              root.pressed(item);
+          }
         }
     } 
 
