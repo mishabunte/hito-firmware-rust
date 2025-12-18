@@ -33,3 +33,25 @@ bool hitoVaultWriteFlash(const void *offset, const void *data, size_t len)
     return true;
   #endif
 }
+
+bool hitoVaultEraseFlash(const void *offset, size_t len)
+{
+  #ifdef __ZEPHYR__
+    const struct device *flash_dev;
+    flash_dev = device_get_binding(DT_CHOSEN_ZEPHYR_FLASH_CONTROLLER_LABEL);
+    // LOG_DBG("Try to erase 0x%x bytes at 0x%x", len, offset);
+    if (flash_erase(flash_dev, (int)offset, len) == 0)
+    {
+      return true;
+    } else 
+    {
+      //printk("Flash erase error");
+      return false;
+    }
+  #else
+    // LOG_DBG("Try to erase 0x%x bytes at 0x%x", len, offset);
+    memset((void *)offset, 0xFF, len);
+    // TODO check
+    return true;
+  #endif
+}

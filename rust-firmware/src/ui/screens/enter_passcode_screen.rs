@@ -4,6 +4,8 @@
 //! Each function sets up the UI items, header, and callbacks for its respective screen.
 
 extern crate alloc;
+use core::ops::Sub;
+
 use alloc::string::String;
 
 use alloc::vec;
@@ -54,7 +56,7 @@ pub fn shuffle_digits(mut arr: [u8; 10]) -> [u8; 10] {
 }
 
 /// Create the "Enter Passcode" screen
-pub fn create_enter_passcode_screen(ui: &Rc<MainWindow>) {
+pub fn create_enter_passcode_screen(ui: &Rc<MainWindow>, success_screen: Screen) {
     let char_button_x = 10.0;
     let char_button_y = 115.0;
 
@@ -186,7 +188,7 @@ pub fn create_enter_passcode_screen(ui: &Rc<MainWindow>) {
                 match result {
                     Ok(_) => {
                         log_info!("Unlock successful!");
-                        navigate_to(Screen::Home);
+                        navigate_to(success_screen);
                     }
                     Err(e) => {
                         log_info!("Unlock failed: {:?}", e);

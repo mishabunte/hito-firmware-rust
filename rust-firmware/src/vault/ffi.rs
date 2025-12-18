@@ -71,6 +71,9 @@ extern "C" {
 
   //bridge to bool hitoVaultWriteFlash(const void *offset, const void *data, size_t len)
   pub fn hitoVaultWriteFlash(offset: *const u8, data: *const u8, len: usize) -> bool;
+
+  // Flash erase function
+  pub fn hitoVaultEraseFlash(offset: u32, len: usize) -> bool;
 }
 
 pub const HUK_KEYSLOT_MKEK: hw_unique_key_slot = hw_unique_key_slot::HUK_KEYSLOT_MKEK;

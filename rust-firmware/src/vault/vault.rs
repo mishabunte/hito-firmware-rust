@@ -1188,6 +1188,73 @@ impl HitoVault {
     }
   }
 
+  /// Erase the vault (main and/or backup pages)
+  /// Returns true on success
+  pub fn erase(&mut self, main: bool, backup: bool) -> bool {
+    // Erase RAM block
+    Self::erase_ram_block();
+
+    #[cfg(feature = "zephyr")]
+    {
+      const VAULT_PAGE_SIZE_BYTES: usize = 4096;
+
+      // Increment reset counter if erasing both main and backup
+      if main && backup {
+        if let Some(seal) = HitoSealBlock::get() {
+          let mut seal_update = seal;
+          seal_update.reset_counter_bits = seal_update.reset_counter_bits << 1;
+          
+          const HITO_BOOTLOADER_SEAL_ADDRESS: u32 = 0x100000 
+            - core::mem::size_of::<HitoSealBlock>() as u32 
+            - core::mem::size_of::<HitoBootloaderVersionBlock>() as u32;
+          
+          let success = unsafe {
+            ffi::hitoVaultWriteFlash(
+              HITO_BOOTLOADER_SEAL_ADDRESS as *const u8,
+              &seal_update as *const HitoSealBlock as *const u8,
+              core::mem::size_of::<HitoSealBlock>()
+            )
+          };
+          
+          if !success {
+            unsafe { ffi::hito_power_reboot(); }
+          }
+        }
+      }
+
+      if main {
+        unsafe {
+          ffi::hitoVaultEraseFlash(VAULT_MAIN_PAGE as u32, VAULT_PAGE_SIZE_BYTES);
+        }
+      }
+      if backup {
+        unsafe {
+          ffi::hitoVaultEraseFlash(VAULT_BACKUP_PAGE as u32, VAULT_PAGE_SIZE_BYTES);
+        }
+      }
+    }
+
+    #[cfg(feature = "minifb")]
+    {
+      const VAULT_PAGE_SIZE_BYTES: usize = 4096;
+      
+      if main {
+        unsafe {
+          ptr::write_bytes(VAULT_MAIN_PAGE as *mut u8, 0xff, VAULT_PAGE_SIZE_BYTES);
+        }
+      }
+      if backup {
+        unsafe {
+          ptr::write_bytes(VAULT_BACKUP_PAGE as *mut u8, 0xff, VAULT_PAGE_SIZE_BYTES);
+        }
+      }
+    }
+
+    // Lock the vault
+    self.vaultIsUnlocked = false;
+    true
+  }
+
   /// Flash write implementation - handles both Zephyr flash and simulation memory copy
   fn write_flash(
     offset: *const VaultEncryptedBlock,
