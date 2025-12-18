@@ -1036,7 +1036,7 @@ impl HitoVault {
       let result = unsafe {
         crypto::ffi::crypt0_bip39_entropy_to_seed_en(
           self.entropy.as_ptr(),
-          self.entropy_len as usize,
+          self.entropy_len as u16,
           self.seed.as_mut_ptr(),
           64
         )

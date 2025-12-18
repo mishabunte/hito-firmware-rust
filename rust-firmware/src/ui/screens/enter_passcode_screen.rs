@@ -15,6 +15,7 @@ use slint::VecModel;
 use crate::slint_generatedMainWindow::{MainWindow, ScreenItem, ScreenButton, ScreenImage};
 use crate::log_info;
 use crate::ui::router::{navigate_to, go_back};
+use crate::firmware;
 
 use super::Screen;
 
@@ -174,10 +175,24 @@ pub fn create_enter_passcode_screen(ui: &Rc<MainWindow>) {
     ui.on_pressed(move |item| {
         let Some(ui) = ui_weak.upgrade() else { return };
         if item.text.parse::<u8>().is_ok() {
-          if passcode_entered.len() >= 5 {
-              navigate_to(Screen::Home);
-          }
             passcode_entered.push_str(&item.text.to_ascii_lowercase());
+            
+            // Check passcode when 6 digits entered
+            if passcode_entered.len() >= 6 {
+                let vault = firmware().vault.clone();
+                let result = vault.lock().unlock_with_password(passcode_entered.as_bytes());
+                match result {
+                    Ok(_) => {
+                        log_info!("Unlock successful!");
+                        navigate_to(Screen::Home);
+                    }
+                    Err(e) => {
+                        log_info!("Unlock failed: {:?}", e);
+                        // Clear passcode on failure
+                        passcode_entered.clear();
+                    }
+                }
+            }
         }
         if item.text == "<" {
             passcode_entered.pop();

@@ -49,8 +49,6 @@ use slint::platform::software_renderer::MinimalSoftwareWindow;
 
 use crate::ui::register_main_window_callbacks;
 
-slint::include_modules!();
-
 #[cfg(feature = "minifb")]
 static BASE_STACK_REMAINING: AtomicUsize = AtomicUsize::new(8388608);
 
@@ -59,6 +57,21 @@ use spin::{Once, Mutex};
 //use crate::ui::UI_CALLBACK_CONTROLLERS;
 
 static STATE: Once<Mutex<FirmwareState>> = Once::new();
+
+// Global firmware instance - safe for single-threaded embedded use
+static mut FIRMWARE: Option<HitoFirmware> = None;
+static FIRMWARE_INIT: Once<()> = Once::new();
+
+/// Get a reference to the global firmware instance.
+/// Panics if called before firmware is initialized.
+/// 
+/// # Safety
+/// This is safe in single-threaded embedded environments.
+pub fn firmware() -> &'static HitoFirmware {
+    unsafe {
+        FIRMWARE.as_ref().expect("Firmware not initialized")
+    }
+}
 
 #[cfg(feature = "minifb")]
 pub fn current_stack_used() -> usize {
@@ -137,15 +150,13 @@ unsafe impl core::alloc::GlobalAlloc for ZephyrAllocator {
 #[global_allocator]
 static GLOBAL: ZephyrAllocator = ZephyrAllocator;
 
-fn handle_touch_events(
-    firmware: &mut HitoFirmware,
-    window: &MinimalSoftwareWindow,
-) {
-    let is_pressed = firmware.touch.lock().is_pressed();
+fn handle_touch_events(window: &MinimalSoftwareWindow) {
+    let fw = firmware();
+    let is_pressed = fw.touch.lock().is_pressed();
     
     match is_pressed {
         Some(true) => {
-            let pos = firmware.touch.lock().get_position();
+            let pos = fw.touch.lock().get_position();
             let event = slint::platform::WindowEvent::PointerPressed {
                 position: slint::LogicalPosition {
                     x: pos.0 as f32,
@@ -157,7 +168,7 @@ fn handle_touch_events(
             let _ = window.try_dispatch_event(event);
         }
         Some(false) => {
-            let pos = firmware.touch.lock().get_position();
+            let pos = fw.touch.lock().get_position();
             let event = slint::platform::WindowEvent::PointerReleased {
                 position: slint::LogicalPosition {
                     x: pos.0 as f32,
@@ -170,8 +181,8 @@ fn handle_touch_events(
         }
         None => {}
     }
-    if firmware.touch.lock().has_touch() {
-        let pos = firmware.touch.lock().get_position();
+    if fw.touch.lock().has_touch() {
+        let pos = fw.touch.lock().get_position();
         
         unsafe {
             if LAST_MOUSE_POS != pos {
@@ -211,9 +222,14 @@ pub fn now_us() -> u64 {
 /// Unified main function callable from C (for embedded target) or regular main (for desktop)
 #[no_mangle]
 pub extern "C" fn rust_main() -> ! {
-    // Initialize firmware
-    let mut firmware = HitoFirmware::new();
-    firmware.init_hardware();
+    // Initialize firmware globally (only once)
+    FIRMWARE_INIT.call_once(|| {
+        let mut fw = HitoFirmware::new();
+        fw.init_hardware();
+        unsafe {
+            FIRMWARE = Some(fw);
+        }
+    });
     
     // Create window with appropriate buffer type
     let window = MinimalSoftwareWindow::new(
@@ -236,14 +252,14 @@ pub extern "C" fn rust_main() -> ! {
 
     STATE.call_once(|| Mutex::new(FirmwareState::new()));
     // let state = FirmwareState::new();
-    firmware.indicator.lock().turn_on(LedColor::Blue);
+    firmware().indicator.lock().turn_on(LedColor::Blue);
 
     // log_info!("Starting embedded event loop");
     
     // Run platform-specific main loop
     let ui = Rc::new(MainWindow::new().unwrap());
 
-    register_main_window_callbacks(&ui, &mut firmware);
+    register_main_window_callbacks(&ui);
     
     // Initialize the global router and navigate to the initial screen (Menu)
     ui::init_global_router(ui.clone());
@@ -259,15 +275,15 @@ pub extern "C" fn rust_main() -> ! {
 
         slint::platform::update_timers_and_animations();
         
-        handle_touch_events(&mut firmware, &*window);
+        handle_touch_events(&*window);
 
         window.draw_if_needed(|renderer| {
             unsafe {
                 renderer.render_by_line(DisplayWrapper {
-                    display: &mut firmware.display,
+                    display: &mut firmware().display.clone(),
                     line_buffer: &mut LINE_BUFFER,
                 });
-              let display_arc = firmware.display.clone();
+              let display_arc = firmware().display.clone();
               unsafe {
                 if QR_CODE.is_some() {
                     let qr_data = QR_CODE.as_ref().unwrap().get_data();
@@ -279,7 +295,7 @@ pub extern "C" fn rust_main() -> ! {
             }
         });
 
-        firmware.display.lock().update();
+        firmware().display.lock().update();
     }
 }
 // ARM EABI unwinding stub for embedded targets only
