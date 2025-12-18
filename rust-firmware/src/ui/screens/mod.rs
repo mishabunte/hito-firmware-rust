@@ -7,10 +7,12 @@ mod menu_screen;
 mod home_screen;
 mod factory_reset_screen;
 mod enter_passcode_screen;
+mod lock_screen;
 
 /// Enum representing all available screens in the application
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Screen {
+    Lock,
     EnterPasscode,
     Home,
     Menu,
@@ -21,6 +23,7 @@ pub enum Screen {
 pub fn create_screen(ui: &Rc<MainWindow>, screen: Screen) {
     ui.invoke_clear_screen();
     match screen {
+        Screen::Lock => lock_screen::create_lock_screen(ui),
         Screen::EnterPasscode => enter_passcode_screen::create_enter_passcode_screen(ui), // Handled separately in lock screen
         Screen::Menu => menu_screen::create_menu_screen(ui),
         Screen::Home => home_screen::create_home_screen(ui),

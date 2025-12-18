@@ -26,9 +26,9 @@ static mut GLOBAL_ROUTER: Option<Router> = None;
 static mut PENDING_NAV: PendingNavigation = PendingNavigation::None;
 
 /// Initialize the global router (must be called once at startup)
-pub fn init_global_router(ui: Rc<MainWindow>) {
+pub fn init_global_router(ui: Rc<MainWindow>, start_screen: Screen) {
     unsafe {
-        GLOBAL_ROUTER = Some(Router::new(ui));
+        GLOBAL_ROUTER = Some(Router::new(ui, start_screen));
     }
 }
 
@@ -79,10 +79,11 @@ pub struct Router {
 
 impl Router {
     /// Create a new Router instance
-    pub fn new(ui: Rc<MainWindow>) -> Self {
+    pub fn new(ui: Rc<MainWindow>, start_screen: Screen) -> Self {
+        create_screen(&ui, start_screen);
         Self {
             ui,
-            current_screen: RefCell::new(Screen::EnterPasscode),
+            current_screen: RefCell::new(start_screen),
             history: RefCell::new(Vec::new()),
         }
     }

@@ -260,14 +260,16 @@ pub extern "C" fn rust_main() -> ! {
     let ui = Rc::new(MainWindow::new().unwrap());
 
     register_main_window_callbacks(&ui);
+
+    let start_screen = ui::screens::Screen::Menu;
     
     // Initialize the global router and navigate to the initial screen (Menu)
-    ui::init_global_router(ui.clone());
+    ui::init_global_router(ui.clone(), start_screen);
 
-    // // Original code not for testing
-    // ui.set_is_lockscreen(true);
+    // // // Original code not for testing
+    // // ui.set_is_lockscreen(true);
 
-    ui::navigate_to(ui::screens::Screen::EnterPasscode);
+    // ui::navigate_to(ui::screens::Screen::EnterPasscode);
 
     loop {
         // Process any pending navigation requests (deferred from callbacks)
