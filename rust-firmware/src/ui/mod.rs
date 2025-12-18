@@ -43,6 +43,6 @@ pub fn register_main_window_callbacks(ui: &MainWindow) {
 pub mod router;
 pub mod screens;
 
-pub use router::{Router, init_global_router, navigate_to, go_back, process_pending_navigation};
+pub use router::{Router, init_global_router, navigate_to, go_back, process_pending_navigation, current_screen};
 
 

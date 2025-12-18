@@ -9,7 +9,7 @@ use alloc::rc::Rc;
 use core::cell::{Cell, RefCell};
 
 use crate::slint_generatedMainWindow::MainWindow;
-use super::screens::{create_screen, Screen};
+use super::screens::{create_screen, Screen, cleanup_send_screen};
 
 /// Pending navigation action
 #[derive(Clone, Copy, Debug)]
@@ -67,6 +67,13 @@ pub fn process_pending_navigation() {
     }
 }
 
+/// Get the current screen
+pub fn current_screen() -> Option<Screen> {
+    unsafe {
+        GLOBAL_ROUTER.as_ref().map(|r| r.current())
+    }
+}
+
 /// Router struct that manages screen navigation and history
 pub struct Router {
     /// Reference to the main Slint window
@@ -98,6 +105,12 @@ impl Router {
     pub fn navigate(&self, screen: Screen) {
         // Push current screen to history before navigating
         let current = *self.current_screen.borrow();
+        
+        // Cleanup when leaving certain screens
+        if current == Screen::Send && screen != Screen::Send {
+            cleanup_send_screen();
+        }
+        
         if current != screen {
             self.history.borrow_mut().push(current);
         }

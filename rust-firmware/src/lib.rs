@@ -58,6 +58,12 @@ use spin::{Once, Mutex};
 
 static STATE: Once<Mutex<FirmwareState>> = Once::new();
 
+/// Get a reference to the global state.
+/// Panics if called before state is initialized.
+pub fn state() -> &'static Mutex<FirmwareState> {
+    STATE.get().expect("State not initialized")
+}
+
 // Global firmware instance - safe for single-threaded embedded use
 static mut FIRMWARE: Option<HitoFirmware> = None;
 static FIRMWARE_INIT: Once<()> = Once::new();
@@ -261,7 +267,13 @@ pub extern "C" fn rust_main() -> ! {
 
     register_main_window_callbacks(&ui);
 
-    let start_screen = ui::screens::Screen::Menu;
+    // If you want to start on a different screen on minifb, change here
+    #[cfg(feature = "minifb")]
+    let start_screen = ui::screens::Screen::Send;
+
+    // Do not touch: setting lock screen by default for embedded targets
+    #[cfg(feature = "zephyr")]
+    let start_screen = ui::screens::Screen::Lock;
     
     // Initialize the global router and navigate to the initial screen (Menu)
     ui::init_global_router(ui.clone(), start_screen);
@@ -271,9 +283,21 @@ pub extern "C" fn rust_main() -> ! {
 
     // ui::navigate_to(ui::screens::Screen::EnterPasscode);
 
+
+
     loop {
         // Process any pending navigation requests (deferred from callbacks)
         ui::process_pending_navigation();
+
+        // Handle screen-specific loop events
+        if let Some(current) = ui::current_screen() {
+            match current {
+                ui::screens::Screen::Send => {
+                    ui::screens::handle_send_screen_loop(&ui);
+                }
+                _ => {}
+            }
+        }
 
         slint::platform::update_timers_and_animations();
         
