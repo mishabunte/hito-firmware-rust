@@ -31,6 +31,15 @@ pub fn create_home_screen(ui: &Rc<MainWindow>) {
             y: 180.0,
             inverted: true,
         },
+        ScreenButton {
+            text: "RECEIVE".into(),  
+            width: 130.0, 
+            height: 40.0,
+            has_border: true, 
+            x: 20.0, 
+            y: 180.0,
+            inverted: true,
+        },
         ScreenButton { 
             text: "SEND".into(),  
             width: 130.0, 
@@ -41,6 +50,10 @@ pub fn create_home_screen(ui: &Rc<MainWindow>) {
             inverted: true,
         },
     ]));
+
+    ui.set_setting_shown(true);
+    ui.set_back_shown(false);
+
     ui.set_buttons(buttons);
     
     ui.on_pressed(move |item| {
@@ -50,6 +63,9 @@ pub fn create_home_screen(ui: &Rc<MainWindow>) {
         } else if item.text == "SEND" {
             log_info!("Navigate to SEND screen");
             // navigate_to(Screen::Send); --- IGNORE ---
+        } else if item.text == "SETTINGS" {
+            log_info!("Navigate to SETTINGS screen");
+            navigate_to(Screen::Menu);
         }
     });
 }

@@ -21,7 +21,7 @@ pub fn create_menu_screen(ui: &Rc<MainWindow>) {
     ui.set_header_title(slint::SharedString::from("MENU"));
 
     let button_x = 65.0;
-    let button_y = 35.0;
+    let button_y = 42.0;
     let button_w = 320.0 - button_x * 2.0;
     let button_h = 35.0;
 
@@ -59,7 +59,7 @@ pub fn create_menu_screen(ui: &Rc<MainWindow>) {
             width: button_w, 
             height: button_h, 
             x: button_x, 
-            y: button_y + button_h * 3.5,
+            y: button_y + button_h * 3.0,
             inverted: false, 
         },
         ScreenButton { 
@@ -68,7 +68,7 @@ pub fn create_menu_screen(ui: &Rc<MainWindow>) {
             width: button_w, 
             height: button_h, 
             x: button_x, 
-            y: button_y + button_h * 4.5,
+            y: button_y + button_h * 4.3,
             inverted: false,
         },
     ]));

@@ -170,6 +170,8 @@ pub fn create_enter_passcode_screen(ui: &Rc<MainWindow>) {
         },
     ]));
     ui.set_buttons(buttons);
+    ui.set_back_shown(false);
+    
     let ui_weak = Rc::downgrade(ui);
     
     ui.on_pressed(move |item| {
