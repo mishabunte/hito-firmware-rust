@@ -4,6 +4,7 @@ mod crypto;
 mod platform;
 mod vault;
 mod firmware_state;
+mod common;
 
 // #[cfg(any(feature = "minifb", feature = "zephyr"))]
 // slint::include_modules!();

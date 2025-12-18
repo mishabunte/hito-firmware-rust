@@ -9,7 +9,7 @@ use alloc::rc::Rc;
 use core::cell::{Cell, RefCell};
 
 use crate::slint_generatedMainWindow::MainWindow;
-use super::screens;
+use super::screens::{create_screen, Screen};
 
 /// Pending navigation action
 #[derive(Clone, Copy, Debug)]
@@ -67,17 +67,6 @@ pub fn process_pending_navigation() {
     }
 }
 
-/// Enum representing all available screens in the application
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Screen {
-    /// Main menu screen with navigation options
-    Menu,
-    /// Pair device with mobile app screen
-    PairWithApp,
-    /// Factory reset confirmation screen
-    FactoryReset,
-}
-
 /// Router struct that manages screen navigation and history
 pub struct Router {
     /// Reference to the main Slint window
@@ -93,7 +82,7 @@ impl Router {
     pub fn new(ui: Rc<MainWindow>) -> Self {
         Self {
             ui,
-            current_screen: RefCell::new(Screen::Menu),
+            current_screen: RefCell::new(Screen::EnterPasscode),
             history: RefCell::new(Vec::new()),
         }
     }
@@ -144,10 +133,6 @@ impl Router {
 
     /// Internal function to create/render a screen based on the Screen enum
     fn create_screen(&self, screen: Screen) {
-        match screen {
-            Screen::Menu => screens::create_menu_screen(&self.ui),
-            Screen::PairWithApp => screens::create_pair_with_app_screen(&self.ui),
-            Screen::FactoryReset => screens::create_factory_reset_screen(&self.ui),
-        }
+        create_screen(&self.ui, screen);
     }
 }

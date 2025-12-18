@@ -12,6 +12,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(feature = "zephyr")]
 extern crate panic_halt;
 
+pub use common::QR_CODE;
+
 mod hito_firmware;
 pub mod drivers; // TODO change to private
 pub mod crypto {
@@ -33,6 +35,7 @@ mod platform;
 mod vault;
 mod firmware_state;
 mod ui;
+mod common;
 
 // use ui::CallbackController;
 // use ui::MainCallbackController;
@@ -46,6 +49,8 @@ pub use firmware_state::DeviceInfo;
 use hito_firmware::HitoFirmware;
 use firmware_state::FirmwareState;
 use slint::platform::software_renderer::MinimalSoftwareWindow;
+
+use crate::ui::register_main_window_callbacks;
 
 #[cfg(any(feature = "minifb", feature = "zephyr"))]
 slint::include_modules!();
@@ -147,11 +152,11 @@ fn handle_touch_events(
     firmware: &mut HitoFirmware,
     window: &MinimalSoftwareWindow,
 ) {
-    let is_pressed = firmware.touch.is_pressed();
+    let is_pressed = firmware.touch.lock().is_pressed();
     
     match is_pressed {
         Some(true) => {
-            let pos = firmware.touch.get_position();
+            let pos = firmware.touch.lock().get_position();
             let event = slint::platform::WindowEvent::PointerPressed {
                 position: slint::LogicalPosition {
                     x: pos.0 as f32,
@@ -163,7 +168,7 @@ fn handle_touch_events(
             let _ = window.try_dispatch_event(event);
         }
         Some(false) => {
-            let pos = firmware.touch.get_position();
+            let pos = firmware.touch.lock().get_position();
             let event = slint::platform::WindowEvent::PointerReleased {
                 position: slint::LogicalPosition {
                     x: pos.0 as f32,
@@ -176,8 +181,8 @@ fn handle_touch_events(
         }
         None => {}
     }
-    if firmware.touch.has_touch() {
-        let pos = firmware.touch.get_position();
+    if firmware.touch.lock().has_touch() {
+        let pos = firmware.touch.lock().get_position();
         
         unsafe {
             if LAST_MOUSE_POS != pos {
@@ -193,7 +198,6 @@ fn handle_touch_events(
         }
     }
 }
-
 // Common initialization function
 fn initialize_platform(window: Rc<MinimalSoftwareWindow>) {
     unsafe {
@@ -241,48 +245,49 @@ pub extern "C" fn rust_main() -> ! {
 
     STATE.call_once(|| Mutex::new(FirmwareState::new()));
     // let state = FirmwareState::new();
-    firmware.indicator.turn_on(LedColor::Blue);
+    firmware.indicator.lock().turn_on(LedColor::Blue);
     // // log_info!("Starting embedded event loop");
     
     // Run platform-specific main loop
     let ui = Rc::new(MainWindow::new().unwrap());
+
+    register_main_window_callbacks(&ui, &mut firmware);
     
     // Initialize the global router and navigate to the initial screen (Menu)
     ui::init_global_router(ui.clone());
-    ui::navigate_to(ui::Screen::Menu);
 
-    // for cb in UI_CALLBACK_CONTROLLERS {
-    //     cb.register_main_window_callbacks(&ui, &mut firmware);
-    // }
+    // // Original code not for testing
+    // ui.set_is_lockscreen(true);
+
+    ui::navigate_to(ui::screens::Screen::EnterPasscode);
 
     loop {
         // Process any pending navigation requests (deferred from callbacks)
         ui::process_pending_navigation();
 
         slint::platform::update_timers_and_animations();
-
-        // for cb in UI_CALLBACK_CONTROLLERS {
-        //     cb.handle_loop_events(&ui, &mut firmware);
-        // }
-
+        
         handle_touch_events(&mut firmware, &*window);
 
         window.draw_if_needed(|renderer| {
             unsafe {
-                #[cfg(feature = "minifb")]
-                {
-                    let heap_bytes = get_heap_usage();
-                    let stack_bytes = current_stack_used();
-                    drivers::minifb::simulator_window_set_memory_stats(heap_bytes, stack_bytes);
-                }
                 renderer.render_by_line(DisplayWrapper {
                     display: &mut firmware.display,
                     line_buffer: &mut LINE_BUFFER,
                 });
+              let display_arc = firmware.display.clone();
+              unsafe {
+                if QR_CODE.is_some() {
+                    let qr_data = QR_CODE.as_ref().unwrap().get_data();
+                    let qr_width = QR_CODE.as_ref().unwrap().get_width() as usize;
+                    let (x, y) = QR_CODE.as_ref().unwrap().get_coords();
+                    display_arc.lock().draw_qr_from_buffer(x, y, &qr_data, qr_width);
+                }
+              }
             }
         });
 
-        firmware.display.update();
+        firmware.display.lock().update();
     }
 }
 // ARM EABI unwinding stub for embedded targets only

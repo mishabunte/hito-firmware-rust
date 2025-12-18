@@ -2,9 +2,11 @@ use super::super::Display;
 
 use crate::drivers::minifb::simulator_window::*;
 extern crate alloc;
+use crate::common::QR_CODE;
 use crate::drivers::qr_code::QrCodeWrapper;
 
 use crate::drivers::qr_code::IMAGE_MAX_WIDTH;
+use crate::log_info;
 
 #[derive(Clone)]
 pub struct DisplayImpl {
@@ -54,40 +56,7 @@ impl Display for DisplayImpl {
 
     fn update(&mut self) {
         simulator_window_update();
-        self.ili9342_lcd_draw_screen_corners();
-    }
-
-    fn draw_qr(&mut self, x: u16, y: u16, data: &str) {
-        let code = QrCodeWrapper::new(data);
-        let qr_data = code.get_data();
-        let qr_width = code.get_width() as u8;
-
-        let qr_density = IMAGE_MAX_WIDTH / qr_width as usize;
-        // Convert u8 QR data to u16 RGB565 colors
-        let image_width = qr_width as usize * qr_density;
-        let mut line_buffer = [0u16; IMAGE_MAX_WIDTH];
-        const WHITE: u16 = 0xFFFF; // RGB565 white
-        const BLACK: u16 = 0x0000; // RGB565 black
-
-        for k in 0..qr_width {
-            let start = k as usize * qr_width as usize;
-            let end = (k as usize + 1) * qr_width as usize;
-
-            // Convert u8 values (0 or 1) to u16 RGB565 colors
-            for (i, &pixel) in qr_data[start..end].iter().enumerate() {
-                for j in 0..qr_density {
-                    line_buffer[i * qr_density + j] = if pixel == 0 { WHITE } else { BLACK };
-                }
-            }
-            for y_times in 0..qr_density {
-                self.draw_line(
-                    k as u16 * qr_density as u16 + y_times as u16 + y as u16,
-                    x,
-                    x + image_width as u16,
-                    &line_buffer[0..image_width as usize]
-                );
-            }
-        }
+        //self.ili9342_lcd_draw_screen_corners();
     }
     
     fn draw_rect(&self, x: u16, y: u16, w: u16, h: u16, rgb565: u16) {
@@ -101,6 +70,7 @@ impl Display for DisplayImpl {
     }
 
     fn set_brightness(&self, brightness: u8) {
+      log_info!("Set brightness to {}", brightness);
     }
 
     fn draw_line(&mut self, y: u16, x_start: u16, x_end: u16, pixels: &[u16]) {
