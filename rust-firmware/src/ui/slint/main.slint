@@ -1,9 +1,11 @@
 import { BrightnessLogo, BrightnessBar, BrightnessController } from "Brightness.slint";
 import { BatteryController,  BatteryLevel } from "Battery.slint";
 import { TransparentButton } from "TransparentButton.slint";
+import { BaseButton } from "BaseButton.slint";
 import { Palette } from "Palette.slint";
+import { LockScreenView } from "LockScreen.slint";
 
-import "../../../res/fonts/RobotoMono-Regular.otf";
+import "../../../res/fonts/RobotoMono-Regular.ttf";
 
 export { BrightnessController, BatteryController}
 
@@ -12,44 +14,123 @@ component BackButton inherits TransparentButton {
     in-font-size: 20px;
     text-color-pressed: Palette.black;
     text-color-unpressed: Palette.blue;
-    clicked() => {
-        //Router.back();
-    }
 }
 
 export struct ScreenItem {
-    label: string,
-    value: string,
-    is_button: bool,
-    // is_image: bool,
-    // width: length,
-    // height: length,
-    // x: length,
-    // y: length,
+    text: string,
+    x: length,
+    y: length,
+    width: length,
+    height: length,
+}
+
+export struct ScreenButton {
+    text: string,
+    has-border: bool,
+    x: length,
+    y: length,
+    width: length,
+    height: length,
+    inverted: bool,
+}
+
+export struct ScreenImage {
+    source: image,
+    x: length,
+    y: length,
+    width: length,
+    height: length,
 }
 
 export component MainWindow inherits Window {
     width: 320px;
     height: 240px;
     background: white;
-    callback pressed(item: ScreenItem);
+    callback pressed(item: ScreenButton);
+    callback clear-screen();
+    callback unlock-requested();
+    callback go-back();
+
+    clear-screen => {
+      header-title = "";
+      items = [];
+      images = [];
+      buttons = [];
+    }
 
     default-font-family: "Roboto Mono";
 
     in-out property <[ScreenItem]> items;
+    in-out property <[ScreenImage]> images;
+    in-out property <[ScreenButton]> buttons;
+
+    in-out property <bool> is-lockscreen: false;
     
     for item in items: Rectangle {
-        if !item.is_button: Text { text: item.is_button ? item.label : item.label + ": " + item.value; 
-        font-size: 20px;
-        }
-        if item.is_button: TransparentButton {
-            content: item.label;
-            in-font-size: 20px;
-            clicked => {
-                root.pressed(item);
-            }
+        x: item.x;
+        y: item.y;
+        width: item.width;
+        height: item.height;
+        Text { 
+          text: item.text; 
+          font-size: 20px;
         }
     } 
+
+    for img in images: Rectangle {
+        x: img.x;
+        y: img.y;
+        width: img.width;
+        height: img.height;
+        Image {
+            source: img.source;
+            width: parent.width;
+            height: parent.height;
+        }
+    }
+
+    for btn in buttons: Rectangle {
+      x: btn.x;
+      y: btn.y;
+      width: btn.width;
+      height: btn.height;
+      if btn.has-border: BaseButton {
+          button-height: parent.height;
+          button-width: parent.width;
+          content: btn.text;
+          text-color-pressed: !btn.inverted ? Palette.black : Palette.blue;
+          text-color-unpressed: !btn.inverted ? Palette.blue : Palette.black;
+          border-color-pressed: !btn.inverted ? Palette.black : Palette.blue;
+          border-color-unpressed: !btn.inverted ? Palette.blue : Palette.black;
+          in-font-size: 20px;
+          clicked() => {
+              debug("Button clicked:", btn.text);
+              root.pressed({
+                  text: btn.text,
+                  x: btn.x,
+                  y: btn.y,
+                  width: btn.width,
+                  height: btn.height,
+              });
+          }
+      }
+      if !btn.has-border: TransparentButton {
+          in-font-size: 20px;
+          content: btn.text;
+          text-color-pressed: !btn.inverted ? Palette.black : Palette.blue;
+          text-color-unpressed: !btn.inverted ? Palette.blue : Palette.black;
+          clicked() => {
+              debug("Button clicked:", btn.text);
+              root.pressed({
+                  text: btn.text,
+                  x: btn.x,
+                  y: btn.y,
+                  width: btn.width,
+                  height: btn.height,
+              });
+          }
+      }
+    }
 
     in-out property <string> header-title;
     property <length> top_bar_padding: 8px;
@@ -75,6 +156,9 @@ export component MainWindow inherits Window {
         width: 20px;
         height: 22px;
         BackButton {
+          clicked => {
+            root.go-back();
+          }
           //visible: back-shown;
         }
       }
@@ -99,7 +183,7 @@ export component MainWindow inherits Window {
 
     brightness-bar := BrightnessBar {
       x: parent.width / 2 - self.width / 2;
-      y: 20px;
+      y: is-lockscreen ? 185px : 20px;
       visible: BrightnessController.scale-shown;
     }
 
@@ -121,6 +205,13 @@ export component MainWindow inherits Window {
                 }
             }
         }
+    }
+
+    if is-lockscreen: LockScreenView {
+      show-text: !BrightnessController.scale-shown;
+      unlock-requested => {
+        root.unlock-requested();
+      }
     }
     callback battery-level-requested() -> int;
 }

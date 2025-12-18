@@ -65,4 +65,3 @@ impl HitoFirmware {
         //self.display.fill_rect(10, 10, 100, 50, 0xF800); // Red rectangle
     }
 }
-

@@ -4,11 +4,7 @@
 slint::include_modules!();
 extern crate alloc;
 use alloc::{boxed::Box, rc::Rc};
-use slint::ModelRc;
-use slint::VecModel;
-use core::{mem::MaybeUninit};
-
-use alloc::vec;
+use core::mem::MaybeUninit;
 
 #[cfg(feature = "minifb")]
 extern crate std;
@@ -18,6 +14,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[cfg(feature = "zephyr")]
 extern crate panic_halt;
+
+pub use common::QR_CODE;
 
 mod hito_firmware;
 pub mod drivers; // TODO change to private
@@ -50,6 +48,10 @@ pub use firmware_state::DeviceInfo;
 use hito_firmware::HitoFirmware;
 use firmware_state::FirmwareState;
 use slint::platform::software_renderer::MinimalSoftwareWindow;
+
+use crate::ui::register_main_window_callbacks;
+
+slint::include_modules!();
 
 #[cfg(feature = "minifb")]
 static BASE_STACK_REMAINING: AtomicUsize = AtomicUsize::new(8388608);
@@ -187,7 +189,6 @@ fn handle_touch_events(
         }
     }
 }
-
 // Common initialization function
 fn initialize_platform(window: Rc<MinimalSoftwareWindow>) {
     unsafe {
@@ -238,36 +239,31 @@ pub extern "C" fn rust_main() -> ! {
     STATE.call_once(|| Mutex::new(FirmwareState::new()));
     // let state = FirmwareState::new();
     firmware.indicator.lock().turn_on(LedColor::Blue);
+<<<<<<< HEAD
     log_info!("Starting embedded event loop");
+=======
+    // // log_info!("Starting embedded event loop");
+>>>>>>> d8c3b522630af50ef5b218905f7180311b828eba
     
     // Run platform-specific main loop
-    let ui = MainWindow::new().unwrap();
+    let ui = Rc::new(MainWindow::new().unwrap());
 
-    let items = ModelRc::new(VecModel::from(vec![
-        ScreenItem { label: "Firmware".into(), value: "1.0.0".into(), is_button: false },
-        ScreenItem { label: "Factory Reset".into(), value: "".into(), is_button: true },
-    ]));
-    ui.on_pressed(|item| {
-        log_info!("Pressed item: {} (is_button: {})", item.label, item.is_button);
-        if item.is_button && item.label == "Factory Reset" {
-            log_info!("Factory Reset button pressed");
-            // Handle factory reset logic here
-        }
-    });
-    ui.set_items(items);
-    ui.set_header_title(slint::SharedString::from("First screen"));
+    register_main_window_callbacks(&ui, &mut firmware);
+    
+    // Initialize the global router and navigate to the initial screen (Menu)
+    ui::init_global_router(ui.clone());
 
-    // for cb in UI_CALLBACK_CONTROLLERS {
-    //     cb.register_main_window_callbacks(&ui, &mut firmware);
-    // }
+    // // Original code not for testing
+    // ui.set_is_lockscreen(true);
+
+    ui::navigate_to(ui::screens::Screen::EnterPasscode);
 
     loop {
+        // Process any pending navigation requests (deferred from callbacks)
+        ui::process_pending_navigation();
+
         slint::platform::update_timers_and_animations();
-
-        // for cb in UI_CALLBACK_CONTROLLERS {
-        //     cb.handle_loop_events(&ui, &mut firmware);
-        // }
-
+        
         handle_touch_events(&mut firmware, &*window);
 
         window.draw_if_needed(|renderer| {
