@@ -9,6 +9,11 @@ import "../../../res/fonts/RobotoMono-Regular.ttf";
 
 export { BrightnessController, BatteryController}
 
+enum Protocol {
+    Bluetooth,
+    NFC
+}
+
 component SettingsButtonLine inherits Rectangle {
   width: 27px;
   height: 2px;
@@ -99,6 +104,9 @@ export component MainWindow inherits Window {
       buttons = [];
       setting-shown = false;
       back-shown = true;
+      protocol-image-shown = false;
+      subheader-title = "";
+      current-protocol = Protocol.NFC;
     }
 
     default-font-family: "Roboto Mono";
@@ -106,6 +114,9 @@ export component MainWindow inherits Window {
     in-out property <[ScreenItem]> items;
     in-out property <[ScreenImage]> images;
     in-out property <[ScreenButton]> buttons;
+
+    in-out property <bool> protocol-image-shown: false;
+    in-out property <Protocol> current-protocol: Protocol.NFC;
 
     in-out property <bool> is-lockscreen: false;
     
@@ -118,18 +129,24 @@ export component MainWindow inherits Window {
           text: item.text; 
           font-size: 20px;
         }
-    } 
+    }
 
-    for img in images: Rectangle {
-        x: img.x;
-        y: img.y;
-        width: img.width;
-        height: img.height;
-        Image {
-            source: img.source;
-            width: parent.width;
-            height: parent.height;
-        }
+    in-out property <string> subheader-title;
+    
+    // Display logo when on Home screen
+    Image {
+      y: 70px;
+      source: @image-url("../../../res/img/hito_logo.png");
+      visible: setting-shown;
+    }
+
+    // Protocol image (NFC or Bluetooth)
+    in property <image> image-src: current-protocol == Protocol.NFC ? @image-url("../../../res/img/nfc.png") : @image-url("../../../res/img/bt_logo.png");
+    Image {
+      source: image-src;
+      horizontal-alignment: center;
+      vertical-alignment: center;
+      visible: protocol-image-shown;
     }
 
     for btn in buttons: Rectangle {
@@ -198,6 +215,15 @@ export component MainWindow inherits Window {
         horizontal-alignment: center;
         wrap: word-wrap;
         visible: !BrightnessController.scale-shown;
+    }
+
+    Text {
+      y: top_bar_padding + 27px;
+      text: subheader-title;
+      horizontal-alignment: center;
+      wrap: word-wrap;
+      visible: !BrightnessController.scale-shown;
+      font-size: 12px;
     }
 
     HorizontalLayout {
