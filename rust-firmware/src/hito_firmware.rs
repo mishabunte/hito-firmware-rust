@@ -64,29 +64,5 @@ impl HitoFirmware {
 
         //self.display.fill_rect(10, 10, 100, 50, 0xF800); // Red rectangle
     }
-
-    pub fn main_loop(&mut self) {
-        self.indicator.lock().turn_on(LedColor::Blue);
-
-        let mut x = 0xffff;
-        let mut y = 0xffff;
-
-        loop {
-            self.indicator.lock().blink(LedColor::Red, BlinkSpeed::Slow);
-            if self.touch.lock().is_pressed().unwrap_or(false) {
-
-                // clear screen
-                if x != 0xffff {
-                    self.display.lock().fill_rect(x as u16, y as u16, 20, 20, 0xffff); // Red rectangle at touch position
-                }
-
-                (x, y) = self.touch.lock().get_position();
-                self.display.lock().fill_rect(x, y, 20, 20, 0x07E0); // Green rectangle at touch position
-            }
-
-            self.display.lock().update()
-        }
-    }
-
 }
 
