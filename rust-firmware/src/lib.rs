@@ -40,8 +40,6 @@ mod firmware_state;
 mod ui;
 mod common;
 
-pub use common::QR_CODE;
-
 pub use vault::vault::{HitoVault, VaultError, VaultResult};
 pub use firmware_state::DeviceInfo;
 
@@ -239,11 +237,8 @@ pub extern "C" fn rust_main() -> ! {
     STATE.call_once(|| Mutex::new(FirmwareState::new()));
     // let state = FirmwareState::new();
     firmware.indicator.lock().turn_on(LedColor::Blue);
-<<<<<<< HEAD
-    log_info!("Starting embedded event loop");
-=======
-    // // log_info!("Starting embedded event loop");
->>>>>>> d8c3b522630af50ef5b218905f7180311b828eba
+
+    // log_info!("Starting embedded event loop");
     
     // Run platform-specific main loop
     let ui = Rc::new(MainWindow::new().unwrap());
