@@ -59,10 +59,10 @@ pub fn create_home_screen(ui: &Rc<MainWindow>) {
     ui.on_pressed(move |item| {
         if item.text == "RECEIVE" {
             log_info!("Navigate to RECEIVE screen");
-            // navigate_to(Screen::Receive); --- IGNORE ---
+            navigate_to(Screen::Receive);
         } else if item.text == "SEND" {
             log_info!("Navigate to SEND screen");
-            // navigate_to(Screen::Send); --- IGNORE ---
+            navigate_to(Screen::Send);
         } else if item.text == "SETTINGS" {
             log_info!("Navigate to SETTINGS screen");
             navigate_to(Screen::Menu);
