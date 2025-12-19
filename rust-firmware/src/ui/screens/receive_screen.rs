@@ -43,9 +43,9 @@ fn shorten_address(address: &str) -> alloc::string::String {
 pub fn create_receive_screen(ui: &Rc<MainWindow>) {
     ui.set_header_title(slint::SharedString::from("MENU"));
 
-    let address_x = 65.0;
+    let address_x = 40.0;
     let address_y = 200.0;
-    let address_w = 320.0 - address_x * 2.0;
+    let address_w = 320.0;
     let address_h = 35.0;
 
     let address = firmware().vault.lock().get_stellar_address().unwrap_or(String::from("Error retrieving address"));

@@ -199,14 +199,37 @@ pub fn create_enter_passcode_screen(ui: &Rc<MainWindow>) {
         if item.text == "<" {
             passcode_entered.pop();
         }
-        let passcode_displayed = "* ".repeat(passcode_entered.len());
+        
+        // Build passcode display like C: "* * * * * *" (centered, no trailing space)
+        let passcode_displayed = if passcode_entered.is_empty() {
+            String::new()
+        } else {
+            let mut s = String::from("*");
+            for _ in 1..passcode_entered.len() {
+                s.push_str(" *");
+            }
+            s
+        };
+        
+        // PIN display area coordinates (matching C: m_pin.r_screen)
+        let pin_area_x = char_button_x + char_button_w + char_button_w / 3.0;
+        let pin_area_y = char_button_y - char_button_h / 2.0 - 10.0;
+        let pin_area_w = 320.0 - char_button_x * 2.0 - char_button_w * 2.0 - char_button_w * 2.0 / 3.0;
+        
+        // Approximate text width: each char ~12px (adjust based on font)
+        let char_width = 12.0;
+        let text_width = passcode_displayed.len() as f32 * char_width;
+        
+        // Center text within PIN area: r.x + (r.w - w) / 2
+        let centered_x = pin_area_x + (pin_area_w - text_width) / 2.0;
+        
         let items = ModelRc::new(VecModel::from(vec![
             ScreenItem { 
-                text: passcode_displayed.clone().into(), 
-                width: 320.0 - char_button_x * 2.0 - char_button_w * 2.0 - char_button_w * 2.0 / 3.0, 
+                text: passcode_displayed.into(), 
+                width: pin_area_w, 
                 height: 25.0, 
-                x: char_button_x + char_button_w + char_button_w / 3.0, 
-                y: char_button_y - char_button_h / 2.0 - 10.0, 
+                x: centered_x, 
+                y: pin_area_y, 
             },
         ]));
         ui.set_items(items);
