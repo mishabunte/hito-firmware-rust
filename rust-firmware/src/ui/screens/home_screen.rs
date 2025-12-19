@@ -22,15 +22,6 @@ use super::Screen;
 pub fn create_home_screen(ui: &Rc<MainWindow>) {
 
     let buttons = ModelRc::new(VecModel::from(vec![
-        ScreenButton { 
-            text: "RECEIVE".into(),  
-            width: 130.0, 
-            height: 40.0,
-            has_border: true, 
-            x: 20.0, 
-            y: 180.0,
-            inverted: true,
-        },
         ScreenButton {
             text: "RECEIVE".into(),  
             width: 130.0, 

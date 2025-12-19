@@ -29,7 +29,7 @@ const X_RIGHT: f32 = 172.0;
 const Y_TOP: f32 = 55.0;
 const Y_GAP: f32 = 30.0;
 const TEXT_H: f32 = 25.0;
-const TEXT_W: f32 = 120.0;
+const TEXT_W: f32 = 140.0;
 
 // Word positions for 8 words per page (4 on left, 4 on right)
 const WORD_COORDS: [(f32, f32); 8] = [
@@ -210,13 +210,4 @@ pub fn handle_show_seed_loop(ui: &MainWindow) {
         }
     }
     // No action needed when touch is released - words stay revealed
-}
-
-/// Cleanup when leaving the screen
-pub fn cleanup_show_seed_screen() {
-    unsafe {
-        CURRENT_PAGE = 0;
-        MNEMONIC_WORDS = None;
-        REVEALED_SLOTS = 0;
-    }
 }

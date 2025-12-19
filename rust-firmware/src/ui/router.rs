@@ -9,7 +9,7 @@ use alloc::rc::Rc;
 use core::cell::{Cell, RefCell};
 
 use crate::slint_generatedMainWindow::MainWindow;
-use super::screens::{create_screen, Screen, cleanup_send_screen, cleanup_show_seed_screen};
+use super::screens::{create_screen, Screen, cleanup_send_screen};
 
 /// Pending navigation action
 #[derive(Clone, Copy, Debug)]
@@ -109,9 +109,6 @@ impl Router {
         // Cleanup when leaving certain screens
         if current == Screen::Send && screen != Screen::Send {
             cleanup_send_screen();
-        }
-        if current == Screen::ShowSeed && screen != Screen::ShowSeed {
-            cleanup_show_seed_screen();
         }
         
         if current != screen {

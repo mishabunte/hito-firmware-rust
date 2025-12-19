@@ -15,7 +15,7 @@ mod show_seed_screen;
 
 // Re-export loop handlers and cleanup functions
 pub use send_screen::{handle_send_screen_loop, cleanup_send_screen};
-pub use show_seed_screen::{handle_show_seed_loop, cleanup_show_seed_screen};
+pub use show_seed_screen::{handle_show_seed_loop};
 
 /// Enum representing all available screens in the application
 #[derive(Clone, Copy, Debug, PartialEq)]
