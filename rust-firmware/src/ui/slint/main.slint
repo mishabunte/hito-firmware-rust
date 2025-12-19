@@ -9,6 +9,100 @@ import "../../../res/fonts/RobotoMono-Regular.ttf";
 
 export { BrightnessController, BatteryController}
 
+component ScreenBorders {
+    width: 320px;
+    height: 240px;
+    // Screen corners
+    // Top left 
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: 2px;
+        height: 2px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 2px;
+        y: 0px;
+        width: 2px;
+        height: 1px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 0px;
+        y: 2px;
+        width: 1px;
+        height: 2px;
+        background: Palette.black;
+    }
+    // Top right
+    Rectangle {
+        x: 318px;
+        y: 0px;
+        width: 2px;
+        height: 2px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 316px;
+        y: 0px;
+        width: 2px;
+        height: 1px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 319px;
+        y: 2px;
+        width: 1px;
+        height: 2px;
+        background: Palette.black;
+    }
+    // Bottom right
+    Rectangle {
+        x: 318px;
+        y: 238px;
+        width: 2px;
+        height: 2px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 316px;
+        y: 239px;
+        width: 2px;
+        height: 1px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 319px;
+        y: 236px;
+        width: 1px;
+        height: 2px;
+        background: Palette.black;
+    }
+    // Bottom left
+    Rectangle {
+        x: 0px;
+        y: 238px;
+        width: 2px;
+        height: 2px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 0px;
+        y: 239px;
+        width: 3px;
+        height: 1px;
+        background: Palette.black;
+    }
+    Rectangle {
+        x: 0px;
+        y: 236px;
+        width: 1px;
+        height: 2px;
+        background: Palette.black;
+    }
+}
+
 enum Protocol {
     Bluetooth,
     NFC
@@ -52,11 +146,36 @@ export component SettingsButton {
     callback clicked();
 }
 
-component BackButton inherits TransparentButton {
-    content: "X";
-    in-font-size: 20px;
-    text-color-pressed: Palette.black;
-    text-color-unpressed: Palette.blue;
+export component BackButton {
+    in-out property <bool> pressed: false;
+    in-out property <string> content: "X";
+    in-out property <length> in-font-size: 20px;
+    in-out property <bool> border-shown: true;
+    in-out property <color> text-color-unpressed: Palette.blue;
+    in-out property <color> text-color-pressed: Palette.black;
+    Text {
+        text: content;
+        font-size: root.in-font-size;
+        color: pressed ? text-color-pressed : text-color-unpressed;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        TouchArea {
+            x: parent.x - 10px;
+            y: parent.y - 10px;
+            width: parent.width + 15px;
+            height: parent.height + 15px;
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down) {
+                    pressed = true;
+                } else if (event.kind == PointerEventKind.up) {
+                    pressed = false;
+                    root.clicked();
+                    //debug("Clicked pin", content);
+                }
+            }
+        }
+    }
+    callback clicked();
 }
 
 export struct ScreenItem {
@@ -90,6 +209,7 @@ export component MainWindow inherits Window {
     height: 240px;
     background: white;
     callback pressed(item: ScreenButton);
+    callback press(item: ScreenButton);
     callback clear-screen();
     callback unlock-requested();
     callback go-back();
@@ -109,6 +229,8 @@ export component MainWindow inherits Window {
       current-protocol = Protocol.NFC;
     }
 
+    ScreenBorders {}
+
     default-font-family: "Roboto Mono";
 
     in-out property <[ScreenItem]> items;
@@ -120,15 +242,13 @@ export component MainWindow inherits Window {
 
     in-out property <bool> is-lockscreen: false;
     
-    for item in items: Rectangle {
-        x: item.x;
-        y: item.y;
-        width: item.width;
-        height: item.height;
-        Text { 
-          text: item.text; 
-          font-size: 20px;
-        }
+    for item in items: Text {
+      x: item.x;
+      y: item.y;
+      width: item.width;
+      height: item.height;
+      text: item.text;
+      font-size: 20px;
     }
 
     in-out property <string> subheader-title;
