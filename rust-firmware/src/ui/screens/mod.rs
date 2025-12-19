@@ -11,9 +11,11 @@ mod lock_screen;
 mod receive_screen;
 mod send_screen;
 mod send_stellar_screen;
+mod show_seed_screen;
 
-// Re-export loop handlers
+// Re-export loop handlers and cleanup functions
 pub use send_screen::{handle_send_screen_loop, cleanup_send_screen};
+pub use show_seed_screen::{handle_show_seed_loop, cleanup_show_seed_screen};
 
 /// Enum representing all available screens in the application
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -27,20 +29,28 @@ pub enum Screen {
     Receive,
     Send,
     SendStellar,
+    ShowSeed,
 }
 
 fn clear_qr_buffer() {
-    if let Some(ref mut qr) = unsafe { crate::common::QR_CODE.as_mut() } {
+    if let Some(ref mut _qr) = unsafe { crate::common::QR_CODE.as_mut() } {
         unsafe {
           QR_CODE = None;
         }
     }
 }
 
-pub fn create_screen(ui: &Rc<MainWindow>, screen: Screen) {
+fn clear_screen_data(ui: &Rc<MainWindow>) {
     ui.invoke_clear_screen();
     clear_qr_buffer();
+    ui.on_press(|_| {});
+    ui.on_pressed(|_| {});
+}
+
+pub fn create_screen(ui: &Rc<MainWindow>, screen: Screen) {
+    clear_screen_data(ui);
     match screen {
+        Screen::ShowSeed => show_seed_screen::create_show_seed_screen(ui),
         Screen::SendStellar => send_stellar_screen::create_send_stellar_screen(ui),
         Screen::Send => send_screen::create_send_screen(ui),
         Screen::Lock => lock_screen::create_lock_screen(ui),

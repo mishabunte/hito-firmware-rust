@@ -295,6 +295,9 @@ pub extern "C" fn rust_main() -> ! {
                 ui::screens::Screen::Send => {
                     ui::screens::handle_send_screen_loop(&ui);
                 }
+                ui::screens::Screen::ShowSeed => {
+                    ui::screens::handle_show_seed_loop(&ui);
+                }
                 _ => {}
             }
         }
