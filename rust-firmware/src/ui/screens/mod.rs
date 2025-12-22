@@ -1,7 +1,8 @@
 extern crate alloc;
+
 use alloc::rc::Rc;
 
-use crate::{QR_CODE, slint_generatedMainWindow::MainWindow};
+use crate::{QR_CODE, slint_generatedMainWindow::MainWindow, ui::{navigate_to, screens::enter_passcode_screen::{create_set_passcode_screen, create_confirm_passcode_screen}}};
 mod pair_with_the_app_screen;
 mod menu_screen;
 mod home_screen;
@@ -12,6 +13,7 @@ mod receive_screen;
 mod send_screen;
 mod send_stellar_screen;
 mod show_seed_screen;
+use alloc::string::{String, ToString};
 
 // Re-export loop handlers and cleanup functions
 pub use send_screen::{handle_send_screen_loop, cleanup_send_screen};
@@ -33,6 +35,10 @@ pub enum Screen {
     Send,
     SendStellar,
     ShowSeed,
+    ChangePasscodePasscode,
+    ChangePasscodeNew,
+    ChangePasscodeConfirm,
+    ChangePasscodeSet,
 }
 
 fn clear_qr_buffer() {
@@ -58,7 +64,7 @@ pub fn create_screen(ui: &Rc<MainWindow>, screen: Screen) {
         Screen::SendStellar => send_stellar_screen::create_send_stellar_screen(ui),
         Screen::Send => send_screen::create_send_screen(ui),
         Screen::Lock => lock_screen::create_lock_screen(ui),
-        Screen::EnterPasscode => enter_passcode_screen::create_enter_passcode_screen(ui, Screen::Home), // Handled separately in lock screen
+        Screen::EnterPasscode => enter_passcode_screen::create_enter_passcode_screen(ui, Screen::Home),
         Screen::Menu => menu_screen::create_menu_screen(ui),
         Screen::Home => home_screen::create_home_screen(ui),
         Screen::PairWithApp => pair_with_the_app_screen::create_pair_with_app_screen(ui),
@@ -67,5 +73,9 @@ pub fn create_screen(ui: &Rc<MainWindow>, screen: Screen) {
         Screen::FactoryResetPasscode => enter_passcode_screen::create_enter_passcode_screen(ui, Screen::FactoryResetErase),
         Screen::FactoryResetErase => 
         factory_reset_screen::create_erase_screen(ui),
+        Screen::ChangePasscodePasscode => enter_passcode_screen::create_enter_passcode_screen(ui, Screen::ChangePasscodeNew),
+        Screen::ChangePasscodeNew => create_set_passcode_screen(ui),
+        Screen::ChangePasscodeSet => navigate_to(Screen::Home),
+        Screen::ChangePasscodeConfirm => create_confirm_passcode_screen(ui),
     }
 }

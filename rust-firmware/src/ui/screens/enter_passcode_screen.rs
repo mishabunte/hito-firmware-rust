@@ -4,22 +4,37 @@
 //! Each function sets up the UI items, header, and callbacks for its respective screen.
 
 extern crate alloc;
-use core::ops::Sub;
 
 use alloc::string::String;
-
 use alloc::vec;
 use alloc::rc::Rc;
 
-use slint::ModelRc;
-use slint::VecModel;
+use slint::{ModelRc, VecModel};
 
-use crate::slint_generatedMainWindow::{MainWindow, ScreenItem, ScreenButton, ScreenImage};
+use crate::slint_generatedMainWindow::{MainWindow, ScreenItem, ScreenButton};
 use crate::log_info;
-use crate::ui::router::{navigate_to, go_back};
+use crate::ui::router::navigate_to;
 use crate::firmware;
 
 use super::Screen;
+
+/// Static storage for pending passcode during change passcode flow
+/// Used to pass passcode from set screen to confirm screen
+static mut PENDING_PASSCODE: Option<String> = None;
+
+/// Set the pending passcode (called when navigating to confirm screen)
+pub fn set_pending_passcode(passcode: String) {
+    unsafe {
+        PENDING_PASSCODE = Some(passcode);
+    }
+}
+
+/// Get and clear the pending passcode
+fn take_pending_passcode() -> Option<String> {
+    unsafe {
+        PENDING_PASSCODE.take()
+    }
+}
 
 #[cfg(feature = "zephyr")]
 pub fn shuffle_digits(mut arr: [u8; 10]) -> [u8; 10] {
@@ -55,185 +70,163 @@ pub fn shuffle_digits(mut arr: [u8; 10]) -> [u8; 10] {
     arr
 }
 
-/// Create the "Enter Passcode" screen
-pub fn create_enter_passcode_screen(ui: &Rc<MainWindow>, success_screen: Screen) {
-    let char_button_x = 10.0;
-    let char_button_y = 115.0;
+const CHAR_BUTTON_X: f32 = 10.0;
+const CHAR_BUTTON_Y: f32 = 115.0;
+const CHAR_BUTTON_W: f32 = 60.0;
+const CHAR_BUTTON_H: f32 = 60.0;
+const COLS: usize = 5;
+const PASSCODE_LENGTH: usize = 6;
 
-    let char_button_w = 60.0;
-    let char_button_h = 60.0;
-
-    ui.set_header_title(slint::SharedString::from("Enter Passcode"));
-
+fn show_keyboard(ui: &Rc<MainWindow>) {
     let arr = [b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9'];
     let shuffled = shuffle_digits(arr);
 
-    let mut passcode_entered: String = String::new();
+    let mut buttons: vec::Vec<ScreenButton> = shuffled
+        .iter()
+        .enumerate()
+        .map(|(i, &digit)| {
+            let row = i / COLS;
+            let col = i % COLS;
+            ScreenButton {
+                text: (digit as char).into(),
+                width: CHAR_BUTTON_W,
+                height: CHAR_BUTTON_H,
+                has_border: false,
+                x: CHAR_BUTTON_X + CHAR_BUTTON_W * col as f32,
+                y: CHAR_BUTTON_Y + CHAR_BUTTON_H * row as f32,
+                inverted: true,
+            }
+        })
+        .collect();
 
-    let buttons = ModelRc::new(VecModel::from(vec![
-        ScreenButton { 
-            text: (shuffled[0] as char).to_ascii_lowercase().into(),  
-            width: char_button_w, 
-            height: char_button_h,
-            has_border: false, 
-            x: char_button_x, 
-            y: char_button_y,
-            inverted: true,
-        },
-        ScreenButton { 
-            text: (shuffled[1] as char).to_ascii_lowercase().into(),  
-            width: char_button_w, 
-            height: char_button_h,
-            has_border: false, 
-            x: char_button_x + char_button_w, 
-            y: char_button_y,
-            inverted: true,
-        },
-        ScreenButton { 
-            text: (shuffled[2] as char).to_ascii_lowercase().into(),  
-            width: char_button_w, 
-            height: char_button_h,
-            has_border: false, 
-            x: char_button_x + char_button_w * 2.0, 
-            y: char_button_y,
-            inverted: true,
-        },
-        ScreenButton { 
-            text: (shuffled[3] as char).to_ascii_lowercase().into(),  
-            width: char_button_w, 
-            height: char_button_h,
-            has_border: false, 
-            x: char_button_x + char_button_w * 3.0, 
-            y: char_button_y,
-            inverted: true,
-        },
-        ScreenButton { 
-            text: (shuffled[4] as char).to_ascii_lowercase().into(),  
-            width: char_button_w, 
-            height: char_button_h,
-            has_border: false, 
-            x: char_button_x + char_button_w * 4.0, 
-            y: char_button_y,
-            inverted: true,
-        },
-        ScreenButton { 
-            text: (shuffled[5] as char).to_ascii_lowercase().into(),  
-            width: char_button_w, 
-            height: char_button_h,
-            has_border: false, 
-            x: char_button_x, 
-            y: char_button_y + char_button_h,
-            inverted: true,
-        },
-        ScreenButton { 
-            text: (shuffled[6] as char).to_ascii_lowercase().into(),  
-            width: char_button_w, 
-            height: char_button_h,
-            has_border: false, 
-            x: char_button_x + char_button_w, 
-            y: char_button_y + char_button_h,
-            inverted: true,
-        },
-        ScreenButton { 
-            text: (shuffled[7] as char).to_ascii_lowercase().into(),  
-            width: char_button_w, 
-            height: char_button_h,
-            has_border: false, 
-            x: char_button_x + char_button_w * 2.0, 
-            y: char_button_y + char_button_h,
-            inverted: true,
-        },
-        ScreenButton { 
-            text: (shuffled[8] as char).to_ascii_lowercase().into(),  
-            width: char_button_w, 
-            height: char_button_h,
-            has_border: false, 
-            x: char_button_x + char_button_w * 3.0, 
-            y: char_button_y + char_button_h,
-            inverted: true,
-        },
-        ScreenButton { 
-            text: (shuffled[9] as char).to_ascii_lowercase().into(),  
-            width: char_button_w, 
-            height: char_button_h,
-            has_border: false, 
-            x: char_button_x + char_button_w * 4.0, 
-            y: char_button_y + char_button_h,
-            inverted: true,
-        },
-        ScreenButton { 
-            text: "<".into(),  
-            width: char_button_w, 
-            height: char_button_h,
-            has_border: false, 
-            x: char_button_x + char_button_w * 4.0 - char_button_w / 3.0, 
-            y: char_button_y - char_button_h,
-            inverted: true,
-        },
-    ]));
-    ui.set_buttons(buttons);
+    // Add backspace button
+    buttons.push(ScreenButton {
+        text: "<".into(),
+        width: CHAR_BUTTON_W,
+        height: CHAR_BUTTON_H,
+        has_border: false,
+        x: CHAR_BUTTON_X + CHAR_BUTTON_W * 4.0 - CHAR_BUTTON_W / 3.0,
+        y: CHAR_BUTTON_Y - CHAR_BUTTON_H,
+        inverted: true,
+    });
+
+    ui.set_buttons(ModelRc::new(VecModel::from(buttons)));
     ui.set_back_shown(false);
+}
+
+/// Build passcode display string: "* * * * * *" (space-separated asterisks)
+fn build_passcode_display(len: usize) -> String {
+    if len == 0 {
+        return String::new();
+    }
+    let mut s = String::with_capacity(len * 2);
+    s.push('*');
+    for _ in 1..len {
+        s.push_str(" *");
+    }
+    s
+}
+
+fn display_passcode(ui: &Rc<MainWindow>, passcode_len: usize) {
+    let pin_area_x = CHAR_BUTTON_X + CHAR_BUTTON_W + CHAR_BUTTON_W / 3.0;
+    let pin_area_y = CHAR_BUTTON_Y - CHAR_BUTTON_H / 2.0 - 10.0;
+    let pin_area_w = 320.0 - CHAR_BUTTON_X * 2.0 - CHAR_BUTTON_W * 2.0 - CHAR_BUTTON_W * 2.0 / 3.0;
+
+    let passcode_displayed = build_passcode_display(passcode_len);
     
+    // Approximate text width: each char ~12px
+    let text_width = passcode_displayed.len() as f32 * 12.0;
+    let centered_x = pin_area_x + (pin_area_w - text_width) / 2.0;
+
+    ui.set_items(ModelRc::new(VecModel::from(vec![
+        ScreenItem {
+            text: passcode_displayed.into(),
+            width: pin_area_w,
+            height: 25.0,
+            x: centered_x,
+            y: pin_area_y,
+        },
+    ])));
+}
+
+/// Action to perform when passcode reaches required length
+enum PasscodeAction {
+    /// Unlock vault and navigate to success screen
+    Unlock(Screen),
+    /// Store passcode and navigate to confirmation screen
+    SetNew,
+    /// Confirm passcode matches expected value
+    Confirm(String),
+}
+
+/// Generic passcode screen setup - reduces duplication across all passcode screens
+fn setup_passcode_screen(ui: &Rc<MainWindow>, title: &str, action: PasscodeAction) {
+    ui.set_header_title(slint::SharedString::from(title));
+    show_keyboard(ui);
+
+    let mut passcode_entered = String::new();
     let ui_weak = Rc::downgrade(ui);
-    
+
     ui.on_pressed(move |item| {
         let Some(ui) = ui_weak.upgrade() else { return };
+
+        // Handle digit input
         if item.text.parse::<u8>().is_ok() {
-            passcode_entered.push_str(&item.text.to_ascii_lowercase());
-            
-            // Check passcode when 6 digits entered
-            if passcode_entered.len() >= 6 {
-                let vault = firmware().vault.clone();
-                let result = vault.lock().unlock_with_password(passcode_entered.as_bytes());
-                match result {
-                    Ok(_) => {
-                        log_info!("Unlock successful!");
-                        navigate_to(success_screen);
+            passcode_entered.push_str(&item.text);
+
+            if passcode_entered.len() >= PASSCODE_LENGTH {
+                match &action {
+                    PasscodeAction::Unlock(success_screen) => {
+                        let mut vault = firmware().vault.lock();
+                        match vault.unlock_with_password(passcode_entered.as_bytes()) {
+                            Ok(_) => {
+                                log_info!("Unlock successful!");
+                                navigate_to(success_screen.clone());
+                            }
+                            Err(e) => {
+                                log_info!("Unlock failed: {:?}", e);
+                                passcode_entered.clear();
+                            }
+                        }
                     }
-                    Err(e) => {
-                        log_info!("Unlock failed: {:?}", e);
-                        // Clear passcode on failure
-                        passcode_entered.clear();
+                    PasscodeAction::SetNew => {
+                        set_pending_passcode(passcode_entered.clone());
+                        navigate_to(Screen::ChangePasscodeConfirm);
+                    }
+                    PasscodeAction::Confirm(expected) => {
+                        if &passcode_entered == expected {
+                            log_info!("Set passcode successful!");
+                            let mut vault = firmware().vault.lock();
+                            let _ = vault.set_passcode(passcode_entered.as_bytes());
+                            navigate_to(Screen::ChangePasscodeSet);
+                        } else {
+                            log_info!("Set passcode failed: confirmation does not match");
+                            passcode_entered.clear();
+                        }
                     }
                 }
             }
         }
+
+        // Handle backspace
         if item.text == "<" {
             passcode_entered.pop();
         }
-        
-        // Build passcode display like C: "* * * * * *" (centered, no trailing space)
-        let passcode_displayed = if passcode_entered.is_empty() {
-            String::new()
-        } else {
-            let mut s = String::from("*");
-            for _ in 1..passcode_entered.len() {
-                s.push_str(" *");
-            }
-            s
-        };
-        
-        // PIN display area coordinates (matching C: m_pin.r_screen)
-        let pin_area_x = char_button_x + char_button_w + char_button_w / 3.0;
-        let pin_area_y = char_button_y - char_button_h / 2.0 - 10.0;
-        let pin_area_w = 320.0 - char_button_x * 2.0 - char_button_w * 2.0 - char_button_w * 2.0 / 3.0;
-        
-        // Approximate text width: each char ~12px (adjust based on font)
-        let char_width = 12.0;
-        let text_width = passcode_displayed.len() as f32 * char_width;
-        
-        // Center text within PIN area: r.x + (r.w - w) / 2
-        let centered_x = pin_area_x + (pin_area_w - text_width) / 2.0;
-        
-        let items = ModelRc::new(VecModel::from(vec![
-            ScreenItem { 
-                text: passcode_displayed.into(), 
-                width: pin_area_w, 
-                height: 25.0, 
-                x: centered_x, 
-                y: pin_area_y, 
-            },
-        ]));
-        ui.set_items(items);
+
+        display_passcode(&ui, passcode_entered.len());
     });
+}
+
+pub fn create_confirm_passcode_screen(ui: &Rc<MainWindow>) {
+    let expected = take_pending_passcode().unwrap_or_default();
+    setup_passcode_screen(ui, "Confirm Passcode", PasscodeAction::Confirm(expected));
+}
+
+pub fn create_set_passcode_screen(ui: &Rc<MainWindow>) {
+    setup_passcode_screen(ui, "Set Passcode", PasscodeAction::SetNew);
+}
+
+/// Create the "Enter Passcode" screen
+pub fn create_enter_passcode_screen(ui: &Rc<MainWindow>, success_screen: Screen) {
+    setup_passcode_screen(ui, "Enter Passcode", PasscodeAction::Unlock(success_screen));
 }

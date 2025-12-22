@@ -97,7 +97,7 @@ pub fn create_menu_screen(ui: &Rc<MainWindow>) {
             }
             "Change passcode" => {
                 log_info!("Change passcode button pressed");
-                // TODO: Navigate to ChangePasscode screen when implemented
+                navigate_to(Screen::ChangePasscodePasscode);
             }
             _ => {}
         }
