@@ -14,6 +14,8 @@ use crate::slint_generatedMainWindow::{MainWindow, ScreenItem, ScreenButton, Scr
 use crate::log_info;
 use crate::ui::router::{navigate_to, go_back};
 
+use crate::drivers::Battery;
+
 use super::Screen;
 use crate::ui::screens::generic_question_screen::create_generic_question_screen;
 use crate::ui::screens::enter_passcode_screen::create_enter_passcode_screen;
@@ -48,6 +50,7 @@ pub fn create_erase_screen(ui: &Rc<MainWindow>) {
           log_info!("Factory Reset confirmed - performing factory reset");
           if firmware().vault.lock().erase(true, true) {
             log_info!("Factory Reset: Vault erased successfully");
+            firmware().battery.lock().reboot();
             // TODO: Restart device
           } else {
             log_info!("Factory Reset: Vault erase failed");
