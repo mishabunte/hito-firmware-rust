@@ -48,6 +48,7 @@ fn clear_screen_data(ui: &Rc<MainWindow>) {
     clear_qr_buffer();
     ui.on_press(|_| {});
     ui.on_pressed(|_| {});
+    ui.set_is_lockscreen(false);
 }
 
 pub fn create_screen(ui: &Rc<MainWindow>, screen: Screen) {

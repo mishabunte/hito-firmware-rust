@@ -267,19 +267,19 @@ pub extern "C" fn rust_main() -> ! {
 
     register_main_window_callbacks(&ui);
 
-    // If you want to start on a different screen on minifb, change here
-    #[cfg(feature = "minifb")]
-    let start_screen = ui::screens::Screen::ShowSeed;
-
-    // Do not touch: setting lock screen by default for embedded targets
-    #[cfg(feature = "zephyr")]
     let start_screen = ui::screens::Screen::Lock;
-    
-    // Initialize the global router and navigate to the initial screen (Menu)
     ui::init_global_router(ui.clone(), start_screen);
 
+    // If you want to start on a different screen on minifb, change here
+    #[cfg(feature = "minifb")]
+    {
+      let first_screen = ui::screens::Screen::FactoryReset;
+      ui::navigate_to(first_screen);
+    }
+    
+    // Initialize the global router and navigate to the initial screen (Menu)
+
     // // // Original code not for testing
-    // // ui.set_is_lockscreen(true);
 
     // ui::navigate_to(ui::screens::Screen::EnterPasscode);
 
