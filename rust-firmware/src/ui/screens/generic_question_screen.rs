@@ -29,7 +29,8 @@ pub fn create_generic_question_screen(ui: &Rc<MainWindow>, question: &str, confi
     let cancel_y = 190.0;
     let confirm_x = 170.0;
     let confirm_y = 190.0;
-
+    
+    ui.set_center_text(true);
     // parse question into lines if too long, \\ is line break
     let question_lines: Vec<&str> = question.split("\\\\").collect();
 

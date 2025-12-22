@@ -227,6 +227,7 @@ export component MainWindow inherits Window {
       protocol-image-shown = false;
       subheader-title = "";
       current-protocol = Protocol.NFC;
+      center-text = false;
     }
 
     ScreenBorders {}
@@ -240,16 +241,21 @@ export component MainWindow inherits Window {
     in-out property <bool> protocol-image-shown: false;
     in-out property <Protocol> current-protocol: Protocol.NFC;
 
+    in-out property <bool> center-text: false;
+
     in-out property <bool> is-lockscreen: false;
     
-    for item in items: Text {
+    for item in items: Rectangle {
+      Text {
       x: item.x;
       y: item.y;
       width: item.width;
       height: item.height;
       text: item.text;
       font-size: 20px;
+      horizontal-alignment: root.center-text ? center : left;
     }
+  }
 
     in-out property <string> subheader-title;
     

@@ -269,7 +269,7 @@ pub extern "C" fn rust_main() -> ! {
 
     // If you want to start on a different screen on minifb, change here
     #[cfg(feature = "minifb")]
-    let start_screen = ui::screens::Screen::Send;
+    let start_screen = ui::screens::Screen::ShowSeed;
 
     // Do not touch: setting lock screen by default for embedded targets
     #[cfg(feature = "zephyr")]
