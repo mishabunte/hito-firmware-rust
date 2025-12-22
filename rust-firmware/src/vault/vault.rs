@@ -1215,9 +1215,10 @@ impl HitoVault {
               core::mem::size_of::<HitoSealBlock>()
             )
           };
-          
+
           if !success {
-            unsafe { ffi::hito_power_reboot(); }
+            log_info!("Failed to update seal block during vault erase");
+            return false;
           }
         }
       }
