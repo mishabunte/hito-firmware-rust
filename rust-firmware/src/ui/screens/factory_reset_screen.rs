@@ -15,71 +15,48 @@ use crate::log_info;
 use crate::ui::router::{navigate_to, go_back};
 
 use super::Screen;
+use crate::ui::screens::generic_question_screen::create_generic_question_screen;
+use crate::ui::screens::enter_passcode_screen::create_enter_passcode_screen;
+
+use crate::firmware;
+use crate::vault;
 
 /// Create the "Factory Reset" confirmation screen
 pub fn create_factory_reset_screen(ui: &Rc<MainWindow>) {
-    let button_x = 65.0;
-    let button_y = 80.0;
-    let button_w = 320.0 - button_x * 2.0;
-    let button_h = 35.0;
-
-    let items = ModelRc::new(VecModel::from(vec![
-        ScreenItem { 
-            text: "Are you sure?".into(), 
-            width: button_w, 
-            height: button_h, 
-            x: button_x, 
-            y: 50.0 
+    create_generic_question_screen(
+        ui,
+        "You are about to erase \\\\ all data on the device. \\\\ Are you sure you \\\\ want to proceed?",
+        "Continue",
+        "Cancel",
+        || {
+          navigate_to(Screen::FactoryResetPasscode)
         },
-        ScreenItem { 
-            text: "This will erase all data!".into(), 
-            width: button_w, 
-            height: 20.0, 
-            x: button_x, 
-            y: 75.0 
-        },
-    ]));
-
-    let buttons = ModelRc::new(VecModel::from(vec![
-        ScreenButton { 
-            text: "Confirm Reset".into(),  
-            width: button_w, 
-            height: button_h,
-            has_border: false, 
-            x: button_x, 
-            y: button_y + button_h * 2.0,
-            inverted: false,
-        },
-        ScreenButton { 
-            text: "Cancel".into(), 
-            width: button_w, 
-            height: button_h, 
-            has_border: true, 
-            x: button_x, 
-            y: button_y + button_h * 3.5,
-            inverted: false,
-        },
-    ]));
-    
-    ui.set_items(items);
-    ui.set_buttons(buttons);
-    ui.set_header_title(slint::SharedString::from("FACTORY RESET"));
-    
-    ui.on_pressed(|item| {
-        log_info!("FactoryReset: Pressed item: {}", item.text);
-        
-        match item.text.as_str() {
-            "Confirm Reset" => {
-                log_info!("Confirm Reset button pressed - perform factory reset");
-                // TODO: Perform actual factory reset logic
-                // After reset, navigate back to menu
-                go_back();
-            }
-            "Cancel" => {
-                log_info!("Cancel button pressed - navigating back to Menu");
-                go_back();
-            }
-            _ => {}
+        || {
+          go_back()
         }
-    });
+    );
+}
+
+pub fn create_erase_screen(ui: &Rc<MainWindow>) {
+    create_generic_question_screen(
+        ui,
+        "Enter your passcode to \\\\ confirm factory reset.",
+        "Confirm",
+        "Cancel",
+        || {
+          // Perform factory reset
+          log_info!("Factory Reset confirmed - performing factory reset");
+          if firmware().vault.lock().erase(true, true) {
+            log_info!("Factory Reset: Vault erased successfully");
+            // TODO: Restart device
+          } else {
+            log_info!("Factory Reset: Vault erase failed");
+            // Navigate back to menu
+            navigate_to(Screen::Menu);
+          }
+        },
+        || {
+          navigate_to(Screen::Menu);
+        }
+    );
 }
