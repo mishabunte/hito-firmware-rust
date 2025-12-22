@@ -4,13 +4,9 @@
 //! Each function sets up the UI items, header, and callbacks for its respective screen.
 
 extern crate alloc;
-use alloc::vec;
 use alloc::rc::Rc;
 
-use slint::ModelRc;
-use slint::VecModel;
-
-use crate::slint_generatedMainWindow::{MainWindow, ScreenItem, ScreenButton, ScreenImage};
+use crate::slint_generatedMainWindow::MainWindow;
 use crate::log_info;
 use crate::ui::router::{navigate_to, go_back};
 
@@ -18,10 +14,8 @@ use crate::drivers::Battery;
 
 use super::Screen;
 use crate::ui::screens::generic_question_screen::create_generic_question_screen;
-use crate::ui::screens::enter_passcode_screen::create_enter_passcode_screen;
 
 use crate::firmware;
-use crate::vault;
 
 /// Create the "Factory Reset" confirmation screen
 pub fn create_factory_reset_screen(ui: &Rc<MainWindow>) {
