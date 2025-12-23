@@ -15,12 +15,18 @@ mod send_stellar_screen;
 mod show_seed_screen;
 mod enter_seed_screen;
 use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+use alloc::vec;
+use slint::ModelRc;
+use slint::VecModel;
+use crate::slint_generatedMainWindow::ScreenItem;
 
 // Re-export loop handlers and cleanup functions
 pub use send_screen::{handle_send_screen_loop, cleanup_send_screen};
 pub use show_seed_screen::{handle_show_seed_loop};
 pub use enter_seed_screen::{handle_enter_seed_loop, cleanup_enter_seed_screen, init_seed_check};
 mod generic_question_screen;
+mod generic_alert_screen;
 
 /// Enum representing all available screens in the application
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -41,8 +47,6 @@ pub enum Screen {
     ShowSeedBackup,
     EnterSeed,
     SeedCheck,
-    SeedCheckFailed,
-    SeedCheckSuccess,
     WalletSetup,
     EncryptingSeed,
     GenerateSeed,
@@ -51,6 +55,45 @@ pub enum Screen {
     ChangePasscodeConfirm,
     ChangePasscodeSet,
 }
+
+pub fn show_alert(ui: &Rc<MainWindow>, alert: &str) {
+    clear_screen_data(ui);
+    let button_x = 0.0;
+    let button_y = 62.0;
+    let button_gap = 28.0;
+    let button_w = 130.0;
+    let button_h = 40.0;
+
+    let cancel_x = 20.0;
+    let cancel_y = 190.0;
+    let confirm_x = 170.0;
+    let confirm_y = 190.0;
+    
+    ui.set_center_text(true);
+    // parse question into lines if too long, \\ is line break
+    let alert_lines: Vec<&str> = alert.split("\\\\").collect();
+
+    let lines = alert_lines.len();
+
+    // Create screen items based on number of lines
+    let mut items_vec = vec![];
+    for (i, line) in alert_lines.iter().enumerate() {
+        items_vec.push(ScreenItem { 
+            text: (*line).into(), 
+            width: 320.0,
+            height: 25.0,
+            x: button_x, 
+            // add a 10.0 gap between 2. and 3. line
+            y: if i > 1 { button_y + (i as f32) * button_gap + 10.0 } else { button_y + (i as f32) * button_gap },
+        });
+    }
+    
+    let items = ModelRc::new(VecModel::from(items_vec));
+    
+    ui.set_items(items);
+    ui.set_header_title(slint::SharedString::from("ALERT"));
+}
+
 
 fn clear_qr_buffer() {
     if let Some(ref mut _qr) = unsafe { crate::common::QR_CODE.as_mut() } {
@@ -74,8 +117,6 @@ pub fn create_screen(ui: &Rc<MainWindow>, screen: Screen) {
         Screen::WalletSetup => enter_seed_screen::create_wallet_setup_screen(ui),
         Screen::EnterSeed => enter_seed_screen::create_enter_seed_screen(ui, false),
         Screen::SeedCheck => enter_seed_screen::create_enter_seed_screen(ui, true),
-        Screen::SeedCheckFailed => enter_seed_screen::create_seed_check_failed_screen(ui),
-        Screen::SeedCheckSuccess => enter_seed_screen::create_seed_check_success_screen(ui),
         Screen::GenerateSeed => enter_seed_screen::create_generate_seed_screen(ui),
         Screen::ShowSeed => show_seed_screen::create_show_seed_screen(ui, false),
         Screen::ShowSeedBackup => show_seed_screen::create_show_seed_screen(ui, true),

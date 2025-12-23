@@ -16,6 +16,7 @@ use crate::log_info;
 use crate::state;
 use crate::ui::router::{navigate_to, go_back};
 
+use crate::ui::screens::show_alert;
 use crate::ui::screens::generic_question_screen::create_generic_question_screen;
 
 use super::Screen;
@@ -494,7 +495,7 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                         navigate_to(Screen::EncryptingSeed);
                     } else {
                         log_info!("Seed check failed!");
-                        navigate_to(Screen::SeedCheckFailed);
+                        show_alert(&ui, "Seed check failed! \\\\ Please try again.");
                     }
                 } else {
                     navigate_to(Screen::EncryptingSeed);
@@ -719,13 +720,12 @@ pub fn create_wallet_setup_screen(ui: &Rc<MainWindow>) {
   ui.on_pressed(move |item| {
       match item.text.as_str() {
           "Generate new seed" => {
-            navigate_to(Screen::GenerateSeed);
-            // if let Ok(()) = vault_arc.lock().generate_mnemonic() {
-            //     log_info!("Navigate to GENERATE SEED screen");
-            //     navigate_to(Screen::GenerateSeed);
-            // } else {
-            //     log_info!("Error generating new mnemonic seed");
-            // }
+            if let Ok(()) = vault_arc.lock().generate_mnemonic() {
+                log_info!("Navigate to GENERATE SEED screen");
+                navigate_to(Screen::GenerateSeed);
+            } else {
+                log_info!("Error generating new mnemonic seed");
+            }
           },
           "Import seed 12 words" => {
               log_info!("Navigate to IMPORT SEED 12 WORDS screen");
@@ -764,18 +764,19 @@ pub fn create_generate_seed_screen(ui: &Rc<MainWindow>) {
                 .split_whitespace()
                 .map(|w| bip39_index_by_word(w).unwrap_or(0))
                 .collect();
-            let seed_len = vault.get_mnemonic_len();
-            
-            log_info!("Generated seed for verification, length: {}", seed_len);
-            
-            // Generate random word indices to verify (no duplicates)
-            let indices = generate_random_word_indices(seed_len);
-            log_info!("Verifying seed words at indices: {:?}", indices);
-            
-            // Initialize seed check mode with the expected seed
-            init_seed_check(&seed, indices);
-            
-            navigate_to(Screen::SeedCheck);
+            if let Ok(seed_len) = vault.get_mnemonic_len() {
+              log_info!("Generated seed for verification, length: {}", seed_len);
+              
+              // Generate random word indices to verify (no duplicates)
+              let indices = generate_random_word_indices(seed_len);
+              log_info!("Verifying seed words at indices: {:?}", indices);
+              
+              // Initialize seed check mode with the expected seed
+              init_seed_check(&seed, indices);
+              
+              navigate_to(Screen::SeedCheck);
+            }
+          
         },
         || {
             navigate_to(Screen::ShowSeedBackup);
@@ -817,38 +818,4 @@ pub fn create_encrypting_seed_screen(ui: &Rc<MainWindow>) {
             log_info!("Starting seed encryption...");
         }
     });
-}
-
-/// Create the seed check failed screen
-pub fn create_seed_check_failed_screen(ui: &Rc<MainWindow>) {
-    create_generic_question_screen(
-        ui,
-        "ALERT",
-        "The words you entered \\\\ do not match \\\\ your seed phrase",
-        "Try again",
-        "Show seed",
-        || {
-            // Reset and try seed check again
-            unsafe { SEED_ENTERED.clear(); }
-            navigate_to(Screen::SeedCheck);
-        },
-        || {
-            navigate_to(Screen::ShowSeedBackup);
-        }
-    );
-}
-
-/// Create the seed check success screen
-pub fn create_seed_check_success_screen(ui: &Rc<MainWindow>) {
-    create_generic_question_screen(
-        ui,
-        "VERIFICATION SUCCESS",
-        "Great! Your seed \\\\ phrase has been \\\\ verified successfully",
-        "Continue",
-        "",
-        || {
-            navigate_to(Screen::EncryptingSeed);
-        },
-        || {}
-    );
 }

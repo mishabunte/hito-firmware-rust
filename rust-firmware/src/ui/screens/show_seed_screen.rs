@@ -18,6 +18,7 @@ use crate::log_info;
 use crate::firmware;
 use crate::drivers::Touch;
 use crate::ui::navigate_to;
+use crate::ui::screens::show_alert;
 
 static mut BACKUP_MODE: bool = false;
 
@@ -110,8 +111,11 @@ pub fn create_show_seed_screen(ui: &Rc<MainWindow>, backup_mode: bool) {
     }
     
     let (mnemonic_len, mnemonic_result) = mnemonic_result;
-    let total_pages = mnemonic_len / WORDS_PER_PAGE + 
-        if mnemonic_len % WORDS_PER_PAGE > 0 { 1 } else { 0 };
+    let total_pages = if let Ok(len) = mnemonic_len {
+        len / WORDS_PER_PAGE + if len % WORDS_PER_PAGE > 0 { 1 } else { 0 }
+    } else {
+        0
+    };
 
     ui.set_header_title(slint::SharedString::from(format!("SEED, page 1/{}", total_pages)));
 
@@ -167,16 +171,7 @@ pub fn create_show_seed_screen(ui: &Rc<MainWindow>, backup_mode: bool) {
             }
         });
     } else {
-        let items = ModelRc::new(VecModel::from(vec![
-            ScreenItem {
-                text: "Error retrieving seed phrase".into(),
-                width: 300.0,
-                height: 40.0,
-                x: 10.0,
-                y: 100.0,
-            },
-        ]));
-        ui.set_items(items);
+      show_alert(ui, "Failed to retrieve \\\\seed phrase \\\\Please try again");
     }
 }
 
