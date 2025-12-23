@@ -52,7 +52,7 @@ pub fn create_generic_question_screen(ui: &Rc<MainWindow>, header_title: &str, q
         items_vec.push(ScreenItem { 
             text: (*line).into(), 
             width: 320.0,
-            height: 20.0, 
+            height: 25.0,
             x: button_x, 
             // add a 10.0 gap between 2. and 3. line
             y: if i > 1 { button_y + (i as f32) * button_gap + 10.0 } else { button_y + (i as f32) * button_gap },

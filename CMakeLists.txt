@@ -62,6 +62,7 @@ set(DRIVER_SOURCES
   ${ZEPHYR_DRIVERS_DIR}/hito_battery.c
   ${ZEPHYR_DRIVERS_DIR}/hito_nfc.c
   ${ZEPHYR_DRIVERS_DIR}/hito_ble.c
+  ${ZEPHYR_DRIVERS_DIR}/hito_power.c
 )
 
 # Main application sources

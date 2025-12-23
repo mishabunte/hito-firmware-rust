@@ -74,6 +74,12 @@ pub fn current_screen() -> Option<Screen> {
     }
 }
 
+pub fn previous_screen() -> Option<Screen> {
+    unsafe {
+        GLOBAL_ROUTER.as_ref().and_then(|r| r.previous())
+    }
+}
+
 /// Router struct that manages screen navigation and history
 pub struct Router {
     /// Reference to the main Slint window
@@ -126,8 +132,17 @@ impl Router {
     /// 
     /// Returns true if navigation was successful, false if history is empty
     pub fn go_back(&self) -> bool {
-        if let Some(previous_screen) = self.history.borrow_mut().pop() {
-            *self.current_screen.borrow_mut() = previous_screen;
+        let previous = {
+            let mut hist = self.history.borrow_mut();
+            hist.pop()
+        };
+
+        if let Some(previous_screen) = previous {
+            {
+                let mut cur = self.current_screen.borrow_mut();
+                *cur = previous_screen;
+            }
+
             self.create_screen(previous_screen);
             true
         } else {
@@ -138,6 +153,11 @@ impl Router {
     /// Get the current screen
     pub fn current(&self) -> Screen {
         *self.current_screen.borrow()
+    }
+
+    /// Get the previous screen from history without navigating
+    pub fn previous(&self) -> Option<Screen> {
+        self.history.borrow().last().cloned()
     }
 
     /// Clear the navigation history

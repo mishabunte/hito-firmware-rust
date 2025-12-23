@@ -99,6 +99,7 @@ extern "C" {
 
     // Battery functions
     pub fn hito_battery_level() -> i32;
+    pub fn hito_power_reboot() -> bool;
 
     // Logging functions - raw FFI
     pub fn printk(fmt: *const core::ffi::c_char, ...);
