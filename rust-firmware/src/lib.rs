@@ -278,9 +278,6 @@ pub extern "C" fn rust_main() -> ! {
     // Initialize the global router and navigate to the initial screen (Menu)
     ui::init_global_router(ui.clone(), start_screen);
 
-    // // // Original code not for testing
-    // // ui.set_is_lockscreen(true);
-
     // ui::navigate_to(ui::screens::Screen::EnterPasscode);
 
 
@@ -297,6 +294,9 @@ pub extern "C" fn rust_main() -> ! {
                 }
                 ui::screens::Screen::ShowSeed => {
                     ui::screens::handle_show_seed_loop(&ui);
+                }
+                ui::screens::Screen::EnterSeed => {
+                    ui::screens::handle_enter_seed_loop(&ui);
                 }
                 _ => {}
             }
