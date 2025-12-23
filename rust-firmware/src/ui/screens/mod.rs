@@ -19,7 +19,7 @@ use alloc::string::{String, ToString};
 // Re-export loop handlers and cleanup functions
 pub use send_screen::{handle_send_screen_loop, cleanup_send_screen};
 pub use show_seed_screen::{handle_show_seed_loop};
-pub use enter_seed_screen::{handle_enter_seed_loop, cleanup_enter_seed_screen};
+pub use enter_seed_screen::{handle_enter_seed_loop, cleanup_enter_seed_screen, init_seed_check};
 mod generic_question_screen;
 
 /// Enum representing all available screens in the application
@@ -40,6 +40,9 @@ pub enum Screen {
     ShowSeed,
     ShowSeedBackup,
     EnterSeed,
+    SeedCheck,
+    SeedCheckFailed,
+    SeedCheckSuccess,
     WalletSetup,
     EncryptingSeed,
     GenerateSeed,
@@ -69,7 +72,10 @@ pub fn create_screen(ui: &Rc<MainWindow>, screen: Screen) {
     clear_screen_data(ui);
     match screen {
         Screen::WalletSetup => enter_seed_screen::create_wallet_setup_screen(ui),
-        Screen::EnterSeed => enter_seed_screen::create_enter_seed_screen(ui),
+        Screen::EnterSeed => enter_seed_screen::create_enter_seed_screen(ui, false),
+        Screen::SeedCheck => enter_seed_screen::create_enter_seed_screen(ui, true),
+        Screen::SeedCheckFailed => enter_seed_screen::create_seed_check_failed_screen(ui),
+        Screen::SeedCheckSuccess => enter_seed_screen::create_seed_check_success_screen(ui),
         Screen::GenerateSeed => enter_seed_screen::create_generate_seed_screen(ui),
         Screen::ShowSeed => show_seed_screen::create_show_seed_screen(ui, false),
         Screen::ShowSeedBackup => show_seed_screen::create_show_seed_screen(ui, true),

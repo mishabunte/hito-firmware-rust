@@ -971,6 +971,50 @@ impl HitoVault {
     Ok(())
   }
 
+  pub fn generate_mnemonic(&mut self) -> VaultResult<()> {
+    let entropy_len = 32;
+    // log_info!("Generating new mnemonic with entropy length: {}", entropy_len);
+    let entropy_enum = match entropy_len {
+      16 => entropy_len_t::ENTROPY_LEN_16,
+      24 => entropy_len_t::ENTROPY_LEN_24,
+      32 => entropy_len_t::ENTROPY_LEN_32,
+      _ => return Err(VaultError::InvalidKeyLength),
+    };
+    
+    // Generate random entropy
+    let entropy_result = unsafe {
+      let mut entropy_buf = [0u8; 32];
+      let rc = crypto::ffi::crypt0_rng(entropy_buf.as_mut_ptr(), entropy_len as usize);
+      if !rc {
+        return Err(VaultError::CryptoError);
+      }
+      self.entropy[..entropy_len].copy_from_slice(&entropy_buf[..entropy_len]);
+      self.entropy_len = entropy_enum;
+      // log_info!("Generated random entropy: {:?}", &self.entropy[..entropy_len]);
+    };
+    
+    // Save mnemonic
+    self.save_mnemonic()?;
+    
+    // Generate seed from entropy
+    let seed_result = unsafe {
+      let mut seed_buf = [0u8; 64];
+      let rc = crypto::ffi::crypt0_bip39_entropy_to_seed_en(
+        self.entropy.as_ptr(),
+        self.entropy_len as u16,
+        seed_buf.as_mut_ptr(),
+        64
+      );
+      if rc != crypto::ffi::CRYPT0_OK {
+        return Err(VaultError::CryptoError);
+      }
+      self.seed.copy_from_slice(&seed_buf);
+      // log_info!("Generated seed from entropy: {:?}", &self.seed[..64]);
+    };
+    
+    Ok(())
+  }
+
   fn save_stellar(&mut self) -> VaultResult<()> {
     // log_info!("Saving Stellar secret key");
     let wallet = StellarWallet::from_seed(self.seed);

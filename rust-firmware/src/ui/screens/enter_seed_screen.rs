@@ -27,7 +27,9 @@ use alloc::string::String;
 
 use crate::firmware;
 use crate::vault;
+use crate::crypto;
 
+const SEED_CHECK_WORDS_AMOUNT: usize = 3;
 
 const ABC_X: f32 = 0.0;
 const ABC_Y: f32 = 80.0;
@@ -84,6 +86,11 @@ const ABC_LOCATIONS: [(f32, f32); 8] = [
 static mut ENTER_SEED_MODE: EnterSeedMode = EnterSeedMode::LetterSeq;
 static mut MODE_CHANGE_TIME: u64 = 0;
 static mut CURRENT_WORD_INDEX: usize = 0;
+static mut SEED_CHECK_MODE: bool = false;
+// For seed check mode: indices of words to verify (e.g., [2, 6, 14] for words 3, 7, 15)
+static mut SEED_CHECK_INDICES: [usize; 3] = [0, 0, 0];
+// For seed check mode: the expected seed to compare against
+static mut EXPECTED_SEED: Vec<u16> = Vec::new();
 
 use crate::crypto::ffi::{crypt0_bip39_english, CRYPT0_BIP39_MNEMONIC_ENGLISH_MAXWORDS, crypt0_bip39_mnemonic_to_entropy, crypt0_bip39_entropy_to_seed_en};
 
@@ -221,37 +228,6 @@ fn create_nav_buttons(current_index: usize, seed_len: usize, entered_seed_len: u
             inverted: true,
         });
     }
-
-    
-    // // Next word or Done button
-    // if current_index < seed_words.len() {
-    //     log_info!("Now we have {} words entered, current index: {}, seed_len {}", seed_words.len(), current_index, seed_len);
-    //     // We have a word at this position already, show next navigation
-    //     if current_index < seed_words.len() {
-    //         // There's a next word
-    //         buttons.push(ScreenButton {
-    //             text: "Next word".into(),
-    //             width: NAV_BUTTON_W,
-    //             height: NAV_BUTTON_H,
-    //             x: NEXT_BUTTON_X,
-    //             y: NAV_BUTTON_Y,
-    //             has_border: true,
-    //             inverted: true,
-    //         });
-    //     } else if seed_words.len() >= seed_len {
-    //         // All words entered, show Done
-    //         log_info!("All seed words entered, showing Done button");
-    //         buttons.push(ScreenButton {
-    //             text: "Done".into(),
-    //             width: NAV_BUTTON_W,
-    //             height: NAV_BUTTON_H,
-    //             x: NEXT_BUTTON_X,
-    //             y: NAV_BUTTON_Y,
-    //             has_border: true,
-    //             inverted: true,
-    //         });
-    //     }
-    // }
     
     buttons
 }
@@ -324,6 +300,7 @@ fn reset_enter_seed_state() {
         ENTER_SEED_MODE = EnterSeedMode::LetterSeq;
         MODE_CHANGE_TIME = 0;
         CURRENT_WORD_INDEX = 0;
+        SEED_CHECK_MODE = false;
     }
 }
 
@@ -364,20 +341,109 @@ pub fn cleanup_enter_seed_screen() {
     reset_enter_seed_state();
 }
 
-/// Create the "Enter Seed" screen
-pub fn create_enter_seed_screen(ui: &Rc<MainWindow>) {
+/// Get the header title based on mode
+fn get_header_title(word_index: usize, seed_len: usize, seed_check: bool) -> slint::SharedString {
+    if seed_check {
+        // In seed check mode, show which word number we're asking for
+        let actual_word_num = unsafe { SEED_CHECK_INDICES[word_index] + 1 };
+        log_info!("Seed check mode: requesting word index {} (word number {})", word_index, actual_word_num);
+        format!("TYPE WORD {}", actual_word_num)
+    } else {
+        format!("SEED, word {}/{}", word_index + 1, seed_len)
+    }
+}
+
+/// Initialize seed check mode with specific word indices to verify
+pub fn init_seed_check(expected_seed: &[u16], indices: [usize; 3]) {
+    unsafe {
+        SEED_CHECK_MODE = true;
+        SEED_CHECK_INDICES = indices;
+        EXPECTED_SEED = expected_seed.to_vec();
+        SEED_ENTERED.clear();
+    }
+}
+
+/// Generate random word indices for seed verification (like C's word_ids_init)
+/// Uses crypt0_rng to generate random indices, ensuring no duplicates
+fn generate_random_word_indices(seed_len: usize) -> [usize; SEED_CHECK_WORDS_AMOUNT] {
+    let mut indices = [0usize; SEED_CHECK_WORDS_AMOUNT];
+    let mut random_bytes = [0u8; SEED_CHECK_WORDS_AMOUNT];
+    
+    loop {
+        // Generate random bytes
+        unsafe {
+            crypto::ffi::crypt0_rng(random_bytes.as_mut_ptr(), SEED_CHECK_WORDS_AMOUNT);
+        }
+        
+        // Convert to word indices (0 to seed_len-1 range)
+        let mut has_duplicates = false;
+        for i in 0..SEED_CHECK_WORDS_AMOUNT {
+            indices[i] = (random_bytes[i] as usize) % seed_len;
+            
+            // Check for duplicates with previous indices
+            if i > 0 {
+                for j in 0..i {
+                    if indices[i] == indices[j] {
+                        has_duplicates = true;
+                        break;
+                    }
+                }
+            }
+            if has_duplicates {
+                break;
+            }
+        }
+        
+        if !has_duplicates {
+            break;
+        }
+    }
+    
+    indices
+}
+
+/// Verify the entered words against the expected seed
+fn verify_seed_check() -> bool {
+    unsafe {
+        if SEED_ENTERED.len() != 3 {
+            return false;
+        }
+        for (i, &check_idx) in SEED_CHECK_INDICES.iter().enumerate() {
+            if check_idx >= EXPECTED_SEED.len() {
+                return false;
+            }
+            if SEED_ENTERED.get(i) != EXPECTED_SEED.get(check_idx) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+/// Create the "Enter Seed" screen (also used for seed check mode)
+pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
     // Reset state
     reset_enter_seed_state();
     
-    let seed_len = state().lock().get_seed_length().unwrap_or(24);
-    let seed_words = unsafe {SEED_ENTERED.as_slice()};
-    let current_word_index = seed_words.len(); // Start at the next word to enter
+    unsafe {
+        SEED_CHECK_MODE = seed_check;
+        if !seed_check {
+            // Clear entered seed for fresh import
+            SEED_ENTERED.clear();
+        }
+        // Note: For seed check mode, init_seed_check should have been called 
+        // before navigating to this screen (e.g., from create_generate_seed_screen)
+    }
+    
+    let seed_len = if seed_check { 3 } else { state().lock().get_seed_length().unwrap_or(24) };
+    let seed_words = unsafe { SEED_ENTERED.as_slice() };
+    let current_word_index = 0; // Start at the next word to enter
     
     unsafe {
         CURRENT_WORD_INDEX = current_word_index;
     }
 
-    ui.set_header_title(format!("SEED, word {}/{}", current_word_index + 1, seed_len));
+    ui.set_header_title(get_header_title(current_word_index, seed_len, seed_check));
 
     ui.set_center_text(true);
     ui.set_buttons(create_abc_buttons_with_nav(current_word_index, seed_len, &seed_words));
@@ -413,15 +479,26 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>) {
 
     ui.on_pressed(move |item| {
         if let Some(ui) = ui_weak.upgrade() {
-            let seed_len = state().lock().get_seed_length().unwrap_or(24);
-            let seed_words = unsafe {SEED_ENTERED.as_slice()};
+            let is_seed_check = unsafe { SEED_CHECK_MODE };
+            let seed_len = if is_seed_check { 3 } else { state().lock().get_seed_length().unwrap_or(24) };
+            let seed_words = unsafe { SEED_ENTERED.as_slice() };
             let idx = *current_index_rc.borrow();
             
             // Handle Done button
             if item.text == "Done" {
                 log_info!("Done pressed - all seed words entered");
-                // TODO: Navigate to verification or next step
-                navigate_to(Screen::EncryptingSeed);
+                if is_seed_check {
+                    // Verify the entered words
+                    if verify_seed_check() {
+                        log_info!("Seed check passed!");
+                        navigate_to(Screen::EncryptingSeed);
+                    } else {
+                        log_info!("Seed check failed!");
+                        navigate_to(Screen::SeedCheckFailed);
+                    }
+                } else {
+                    navigate_to(Screen::EncryptingSeed);
+                }
                 return;
             }
             
@@ -442,8 +519,8 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>) {
                     }
                     set_word_display(&ui, &word_entered_rc);
                     
-                    ui.set_header_title(format!("SEED, word {}/{}", new_idx + 1, seed_len));
-                    let updated_words = unsafe {SEED_ENTERED.as_slice()};
+                    ui.set_header_title(get_header_title(new_idx, seed_len, is_seed_check));
+                    let updated_words = unsafe { SEED_ENTERED.as_slice() };
                     ui.set_buttons(create_abc_buttons_with_nav(new_idx, seed_len, &updated_words));
                     set_mode(EnterSeedMode::LetterSeq);
                 }
@@ -467,8 +544,8 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>) {
                     }
                     set_word_display(&ui, &word_entered_rc);
                     
-                    ui.set_header_title(format!("SEED, word {}/{}", new_idx + 1, seed_len));
-                    let updated_words = unsafe {SEED_ENTERED.as_slice()};
+                    ui.set_header_title(get_header_title(new_idx, seed_len, is_seed_check));
+                    let updated_words = unsafe { SEED_ENTERED.as_slice() };
                     ui.set_buttons(create_abc_buttons_with_nav(new_idx, seed_len, updated_words));
                     set_mode(EnterSeedMode::LetterSeq);
                 }
@@ -523,7 +600,7 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>) {
                         }
                         set_word_display(&ui, &word_entered_rc);
                         
-                        ui.set_header_title(format!("SEED, word {}/{}", seed_len, seed_len));
+                        ui.set_header_title(get_header_title(seed_len - 1, seed_len, is_seed_check));
                         ui.set_buttons(create_abc_buttons_with_nav(seed_len - 1, seed_len, &seed_words));
                         set_mode(EnterSeedMode::LetterSeq);
                         return;
@@ -542,7 +619,7 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>) {
                     }
                     set_word_display(&ui, &word_entered_rc);
 
-                    ui.set_header_title(format!("SEED, word {}/{}", next_index + 1, seed_len));
+                    ui.set_header_title(get_header_title(next_index, seed_len, is_seed_check));
                     ui.set_buttons(create_abc_buttons_with_nav(next_index, seed_len, &seed_words));
                     set_mode(EnterSeedMode::LetterSeq);
                 }
@@ -638,10 +715,17 @@ pub fn create_wallet_setup_screen(ui: &Rc<MainWindow>) {
       },
   ]));
   ui.set_buttons(buttons);
+  let vault_arc = firmware().vault.clone();
   ui.on_pressed(move |item| {
       match item.text.as_str() {
           "Generate new seed" => {
             navigate_to(Screen::GenerateSeed);
+            // if let Ok(()) = vault_arc.lock().generate_mnemonic() {
+            //     log_info!("Navigate to GENERATE SEED screen");
+            //     navigate_to(Screen::GenerateSeed);
+            // } else {
+            //     log_info!("Error generating new mnemonic seed");
+            // }
           },
           "Import seed 12 words" => {
               log_info!("Navigate to IMPORT SEED 12 WORDS screen");
@@ -671,10 +755,30 @@ pub fn create_generate_seed_screen(ui: &Rc<MainWindow>) {
         "Continue",
         "Show seed",
         || {
-          navigate_to(Screen::EnterSeed)
+            let vault_arc = firmware().vault.clone();
+            let vault = vault_arc.lock();
+            
+            // Get the actual mnemonic from vault and convert to word indices
+            let mnemonic = vault.get_mnemonic().unwrap_or_default();
+            let seed: Vec<u16> = mnemonic
+                .split_whitespace()
+                .map(|w| bip39_index_by_word(w).unwrap_or(0))
+                .collect();
+            let seed_len = vault.get_mnemonic_len();
+            
+            log_info!("Generated seed for verification, length: {}", seed_len);
+            
+            // Generate random word indices to verify (no duplicates)
+            let indices = generate_random_word_indices(seed_len);
+            log_info!("Verifying seed words at indices: {:?}", indices);
+            
+            // Initialize seed check mode with the expected seed
+            init_seed_check(&seed, indices);
+            
+            navigate_to(Screen::SeedCheck);
         },
         || {
-          navigate_to(Screen::ShowSeedBackup);
+            navigate_to(Screen::ShowSeedBackup);
         }
     );
 }
@@ -713,4 +817,38 @@ pub fn create_encrypting_seed_screen(ui: &Rc<MainWindow>) {
             log_info!("Starting seed encryption...");
         }
     });
+}
+
+/// Create the seed check failed screen
+pub fn create_seed_check_failed_screen(ui: &Rc<MainWindow>) {
+    create_generic_question_screen(
+        ui,
+        "ALERT",
+        "The words you entered \\\\ do not match \\\\ your seed phrase",
+        "Try again",
+        "Show seed",
+        || {
+            // Reset and try seed check again
+            unsafe { SEED_ENTERED.clear(); }
+            navigate_to(Screen::SeedCheck);
+        },
+        || {
+            navigate_to(Screen::ShowSeedBackup);
+        }
+    );
+}
+
+/// Create the seed check success screen
+pub fn create_seed_check_success_screen(ui: &Rc<MainWindow>) {
+    create_generic_question_screen(
+        ui,
+        "VERIFICATION SUCCESS",
+        "Great! Your seed \\\\ phrase has been \\\\ verified successfully",
+        "Continue",
+        "",
+        || {
+            navigate_to(Screen::EncryptingSeed);
+        },
+        || {}
+    );
 }
