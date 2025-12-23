@@ -65,6 +65,14 @@ pub fn create_enter_passcode_screen(ui: &Rc<MainWindow>, success_screen: Screen)
 
     ui.set_header_title(slint::SharedString::from("Enter Passcode"));
 
+    let back_shown = if success_screen == Screen::Home {
+        false
+    } else {
+        true
+    };
+
+    ui.set_back_shown(back_shown);
+
     let arr = [b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9'];
     let shuffled = shuffle_digits(arr);
 
@@ -172,7 +180,6 @@ pub fn create_enter_passcode_screen(ui: &Rc<MainWindow>, success_screen: Screen)
         },
     ]));
     ui.set_buttons(buttons);
-    ui.set_back_shown(false);
     
     let ui_weak = Rc::downgrade(ui);
     
