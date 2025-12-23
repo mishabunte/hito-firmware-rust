@@ -48,13 +48,12 @@ impl HitoFirmware {
         self.indicator.lock().init();
         self.touch.lock().init();
         self.vault.lock().init();
-        #[cfg(feature = "minifb")]
-        {
-          let mut vault_lock = self.vault.lock();
-            //vault_lock.set_entropy(hex_to_bytes("ffbff7feffdffbff7feffdffbff7feff").unwrap().as_slice(), 16);
-            vault_lock.set_passcode(TEST_PASSCODE).expect("Failed to set passcode");
-            vault_lock.unlock_with_password(TEST_PASSCODE).expect("Failed to unlock vault");
-        }
+        // #[cfg(feature = "minifb")]
+        // {
+        //   let mut vault_lock = self.vault.lock();
+        //     vault_lock.set_passcode(TEST_PASSCODE).expect("Failed to set passcode");
+        //     vault_lock.unlock_with_password(TEST_PASSCODE).expect("Failed to unlock vault");
+        // }
 
         #[cfg(feature = "zephyr")]
         logging::log_info("Hardware initialization complete");
