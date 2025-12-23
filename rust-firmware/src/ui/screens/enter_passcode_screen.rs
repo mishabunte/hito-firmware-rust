@@ -209,8 +209,12 @@ fn setup_passcode_screen(ui: &Rc<MainWindow>, title: &str, action: PasscodeActio
                         if &passcode_entered == expected {
                             log_info!("Set passcode successful!");
                             let mut vault = firmware().vault.lock();
-                            let _ = vault.set_passcode(passcode_entered.as_bytes());
-                            navigate_to(Screen::ChangePasscodeSet);
+                            if vault.is_empty() {
+                              navigate_to(Screen::WalletSetup);
+                            } else {
+                              let _ = vault.set_passcode(passcode_entered.as_bytes());
+                              navigate_to(Screen::ChangePasscodeSet);
+                            }
                         } else {
                             log_info!("Set passcode failed: confirmation does not match");
                             passcode_entered.clear();
@@ -240,5 +244,11 @@ pub fn create_set_passcode_screen(ui: &Rc<MainWindow>) {
 
 /// Create the "Enter Passcode" screen
 pub fn create_enter_passcode_screen(ui: &Rc<MainWindow>, success_screen: Screen) {
+    let vault_arc = firmware().vault.clone();
+    let vault = vault_arc.lock();
+    if vault.is_empty() {
+      create_set_passcode_screen(ui);
+      return;
+    }
     setup_passcode_screen(ui, "Enter Passcode", PasscodeAction::Unlock(success_screen));
 }
