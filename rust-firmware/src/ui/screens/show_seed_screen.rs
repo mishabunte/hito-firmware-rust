@@ -17,6 +17,9 @@ use crate::slint_generatedMainWindow::{MainWindow, ScreenItem, ScreenButton};
 use crate::log_info;
 use crate::firmware;
 use crate::drivers::Touch;
+use crate::ui::navigate_to;
+
+static mut BACKUP_MODE: bool = false;
 
 use super::Screen;
 
@@ -63,6 +66,8 @@ fn generate_page_items(page_index: usize, mnemonic: &[String], revealed_slots: u
                 let is_revealed = (revealed_slots & (1 << slot)) != 0;
                 let text = if is_revealed {
                     format_word_number(word_index, &mnemonic[word_index])
+                } else if unsafe { BACKUP_MODE } {
+                    format_word_number(word_index, &mnemonic[word_index])
                 } else {
                     MASKED_WORD.into()
                 };
@@ -86,7 +91,7 @@ fn generate_page_items(page_index: usize, mnemonic: &[String], revealed_slots: u
     ))
 }
 
-pub fn create_show_seed_screen(ui: &Rc<MainWindow>) {
+pub fn create_show_seed_screen(ui: &Rc<MainWindow>, backup_mode: bool) {
     unsafe {
         CURRENT_PAGE = 0;
         REVEALED_SLOTS = 0;
@@ -99,12 +104,16 @@ pub fn create_show_seed_screen(ui: &Rc<MainWindow>) {
         let mnemonic = vault.get_mnemonic();
         (len, mnemonic)
     };
+
+    unsafe {
+        BACKUP_MODE = backup_mode;
+    }
     
     let (mnemonic_len, mnemonic_result) = mnemonic_result;
     let total_pages = mnemonic_len / WORDS_PER_PAGE + 
         if mnemonic_len % WORDS_PER_PAGE > 0 { 1 } else { 0 };
 
-    ui.set_header_title(slint::SharedString::from(format!("SEED, PAGE 1/{}", total_pages)));
+    ui.set_header_title(slint::SharedString::from(format!("SEED, page 1/{}", total_pages)));
 
     if let Ok(mnemonic) = mnemonic_result {
         let mnemonic_array: Vec<String> = mnemonic.split_whitespace().map(String::from).collect();

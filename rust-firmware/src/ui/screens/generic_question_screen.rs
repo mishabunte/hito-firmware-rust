@@ -18,7 +18,7 @@ use crate::ui::router::{navigate_to, go_back};
 
 use super::Screen;
 
-pub fn create_generic_question_screen(ui: &Rc<MainWindow>, question: &str, confirm_text: &str, cancel_text: &str, on_confirm: impl Fn() + 'static, on_cancel: impl Fn() + 'static) {
+pub fn create_generic_question_screen(ui: &Rc<MainWindow>, header_title: &str, question: &str, confirm_text: &str, cancel_text: &str, on_confirm: impl Fn() + 'static, on_cancel: impl Fn() + 'static) {
     let button_x = 0.0;
     let button_y = 62.0;
     let button_gap = 28.0;
@@ -84,7 +84,7 @@ pub fn create_generic_question_screen(ui: &Rc<MainWindow>, question: &str, confi
     
     ui.set_items(items);
     ui.set_buttons(buttons);
-    ui.set_header_title(slint::SharedString::from("FACTORY RESET"));
+    ui.set_header_title(slint::SharedString::from(header_title));
     
     let confirm_text = confirm_text.to_string();
     let cancel_text = cancel_text.to_string();

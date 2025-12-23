@@ -21,6 +21,7 @@ use crate::firmware;
 pub fn create_factory_reset_screen(ui: &Rc<MainWindow>) {
     create_generic_question_screen(
         ui,
+        "FACTORY RESET",
         "You are about to erase \\\\ all data on the device. \\\\ Are you sure you \\\\ want to proceed?",
         "Continue",
         "Cancel",
@@ -36,6 +37,7 @@ pub fn create_factory_reset_screen(ui: &Rc<MainWindow>) {
 pub fn create_erase_screen(ui: &Rc<MainWindow>) {
     create_generic_question_screen(
         ui,
+        "FACTORY RESET",
         "Enter your passcode to \\\\ confirm factory reset.",
         "Confirm",
         "Cancel",

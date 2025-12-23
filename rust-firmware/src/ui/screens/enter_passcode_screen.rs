@@ -14,6 +14,7 @@ use slint::{ModelRc, VecModel};
 use crate::slint_generatedMainWindow::{MainWindow, ScreenItem, ScreenButton};
 use crate::log_info;
 use crate::ui::router::navigate_to;
+use crate::ui::router::previous_screen;
 use crate::firmware;
 
 use super::Screen;
@@ -163,6 +164,17 @@ enum PasscodeAction {
 fn setup_passcode_screen(ui: &Rc<MainWindow>, title: &str, action: PasscodeAction) {
     ui.set_header_title(slint::SharedString::from(title));
     show_keyboard(ui);
+
+    let back_shown = if let Some(previous) = previous_screen() {
+        match previous {
+            Screen::Lock => false,
+            _ => true,
+        }
+    } else {
+        false
+    };
+
+    ui.set_back_shown(back_shown);
 
     let mut passcode_entered = String::new();
     let ui_weak = Rc::downgrade(ui);

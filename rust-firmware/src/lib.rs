@@ -271,11 +271,11 @@ pub extern "C" fn rust_main() -> ! {
     ui::init_global_router(ui.clone(), start_screen);
 
     // If you want to start on a different screen on minifb, change here
-    // #[cfg(feature = "minifb")]
-    // {
-    //   let first_screen = ui::screens::Screen::Menu;
-    //   ui::navigate_to(first_screen);
-    // }
+    #[cfg(feature = "minifb")]
+    {
+      let first_screen = ui::screens::Screen::WalletSetup;
+      ui::navigate_to(first_screen);
+    }
     
     // Initialize the global router and navigate to the initial screen (Menu)
 
@@ -297,6 +297,9 @@ pub extern "C" fn rust_main() -> ! {
                 }
                 ui::screens::Screen::ShowSeed => {
                     ui::screens::handle_show_seed_loop(&ui);
+                }
+                ui::screens::Screen::EnterSeed => {
+                    ui::screens::handle_enter_seed_loop(&ui);
                 }
                 _ => {}
             }

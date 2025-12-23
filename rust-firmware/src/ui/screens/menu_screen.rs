@@ -89,7 +89,7 @@ pub fn create_menu_screen(ui: &Rc<MainWindow>) {
             }
             "Show seed phrase" => {
                 log_info!("Show seed phrase button pressed");
-                navigate_to(Screen::ShowSeed);
+                navigate_to(Screen::ShowSeedPasscode);
             }
             "Device info" => {
                 log_info!("Device info button pressed");

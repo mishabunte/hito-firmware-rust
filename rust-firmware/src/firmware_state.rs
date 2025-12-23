@@ -49,6 +49,7 @@ pub struct FirmwareState {
   protocol_requested: Cell<bool>,
   parsed_tx: RefCell<Option<ParsedTransaction>>,
   stellar_address: RefCell<Option<String>>,
+  seed_length: RefCell<Option<usize>>,
 }
 
 impl FirmwareState {
@@ -64,6 +65,7 @@ impl FirmwareState {
           protocol_requested: Cell::new(false),
           parsed_tx: RefCell::new(None),  
           stellar_address: RefCell::new(None),
+          seed_length: RefCell::new(Some(12)),
       }
   }
   pub fn set_brightness(&self, v: u8)                 { self.brightness.set(Some(v)); }
@@ -80,6 +82,13 @@ impl FirmwareState {
   pub fn derive_key_finished(&self) {
       self.derive_key_requested.set(false);
       self.pin.borrow_mut().clear();
+  }
+
+  pub fn set_seed_length(&self, length: usize) {
+      self.seed_length.borrow_mut().replace(length);
+  }
+  pub fn get_seed_length(&self) -> Option<usize> {
+      self.seed_length.borrow().clone()
   }
 
   pub fn set_stellar_address(&self, address: String) {
