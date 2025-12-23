@@ -18,7 +18,7 @@ use crate::ui::router::{navigate_to, go_back};
 
 use super::Screen;
 
-pub fn create_generic_question_screen(ui: &Rc<MainWindow>, header_title: &str, question: &str, confirm_text: &str, cancel_text: &str, on_confirm: impl Fn() + 'static, on_cancel: impl Fn() + 'static) {
+pub fn create_generic_question_screen(ui: &Rc<MainWindow>, header_title: &str, question: &str, confirm_text: &str, cancel_text: Option<&str>, on_confirm: impl Fn() + 'static, on_cancel: impl Fn() + 'static) {
     let button_x = 0.0;
     let button_y = 62.0;
     let button_gap = 28.0;
@@ -61,7 +61,8 @@ pub fn create_generic_question_screen(ui: &Rc<MainWindow>, header_title: &str, q
     
     let items = ModelRc::new(VecModel::from(items_vec));
 
-    let buttons = ModelRc::new(VecModel::from(vec![
+    let buttons = if let Some(cancel_text) = cancel_text {
+        ModelRc::new(VecModel::from(vec![
         ScreenButton { 
             text: confirm_text.into(),  
             width: button_w, 
@@ -80,14 +81,27 @@ pub fn create_generic_question_screen(ui: &Rc<MainWindow>, header_title: &str, q
             y: cancel_y,
             inverted: false,
         },
-    ]));
+      ]))
+    } else {
+        ModelRc::new(VecModel::from(vec![
+        ScreenButton { 
+            text: confirm_text.into(),  
+            width: button_w, 
+            height: button_h,
+            has_border: false, 
+            x: 100.0, 
+            y: confirm_y,
+            inverted: false,
+        },
+      ]))
+    };
     
     ui.set_items(items);
     ui.set_buttons(buttons);
     ui.set_header_title(slint::SharedString::from(header_title));
     
     let confirm_text = confirm_text.to_string();
-    let cancel_text = cancel_text.to_string();
+    let cancel_text = cancel_text.map(|s| s.to_string());
     
     ui.on_pressed(move |item| {
         log_info!("GenericQuestion: Pressed item: {}", item.text);
@@ -96,9 +110,11 @@ pub fn create_generic_question_screen(ui: &Rc<MainWindow>, header_title: &str, q
         if text == confirm_text {
             log_info!("Confirm button pressed");
             on_confirm();
-        } else if text == cancel_text {
-            log_info!("Cancel button pressed");
-            on_cancel();
+        } else if let Some(button_text) = &cancel_text {
+          if text == button_text {
+              log_info!("Cancel button pressed");
+              on_cancel();
+          }
         }
     });
 }

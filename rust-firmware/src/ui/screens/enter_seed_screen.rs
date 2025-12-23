@@ -753,7 +753,7 @@ pub fn create_generate_seed_screen(ui: &Rc<MainWindow>) {
         "SEED BACKUP",
         "Make sure to backup \\\\ your seed phrase \\\\ We'll verify \\\\ a few words next",
         "Continue",
-        "Show seed",
+        Some("Show seed"),
         || {
             let vault_arc = firmware().vault.clone();
             let vault = vault_arc.lock();

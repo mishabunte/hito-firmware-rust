@@ -24,7 +24,7 @@ pub fn create_factory_reset_screen(ui: &Rc<MainWindow>) {
         "FACTORY RESET",
         "You are about to erase \\\\ all data on the device. \\\\ Are you sure you \\\\ want to proceed?",
         "Continue",
-        "Cancel",
+        Some("Cancel"),
         || {
           navigate_to(Screen::FactoryResetPasscode)
         },
@@ -40,7 +40,7 @@ pub fn create_erase_screen(ui: &Rc<MainWindow>) {
         "FACTORY RESET",
         "Enter your passcode to \\\\ confirm factory reset.",
         "Confirm",
-        "Cancel",
+        Some("Cancel"),
         || {
           // Perform factory reset
           log_info!("Factory Reset confirmed - performing factory reset");

@@ -1391,6 +1391,24 @@ impl HitoVault {
     
   }
 
+  fn set_entropy(&mut self, entropy: &[u8], entropy_len: usize) {
+    let entropy_len = match entropy_len {
+      16 => entropy_len_t::ENTROPY_LEN_16,
+      24 => entropy_len_t::ENTROPY_LEN_24,
+      32 => entropy_len_t::ENTROPY_LEN_32,
+      _ => entropy_len_t::ENTROPY_LEN_32, // Default to 32 if invalid
+    };
+    let data = HitoVaultData {
+      entropy: entropy.try_into().unwrap_or([0u8; 32]),
+      entropy_len: entropy_len,
+      seed: [0u8; 64],
+      mnemonic: [0u8; 215],
+      network_data: None,
+    };
+
+    self.data = Some(data);
+  }
+
   /// Flash write implementation - handles both Zephyr flash and simulation memory copy
   fn write_flash(
     offset: *const VaultEncryptedBlock,

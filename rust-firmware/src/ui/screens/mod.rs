@@ -2,7 +2,7 @@ extern crate alloc;
 
 use alloc::rc::Rc;
 
-use crate::{QR_CODE, slint_generatedMainWindow::MainWindow, ui::{navigate_to, screens::enter_passcode_screen::{create_set_passcode_screen, create_confirm_passcode_screen}}};
+use crate::{QR_CODE, slint_generatedMainWindow::MainWindow, ui::{navigate_to, screens::enter_passcode_screen::{create_confirm_passcode_screen, create_finalize_passcode_change_screen, create_set_passcode_screen}}};
 mod pair_with_the_app_screen;
 mod menu_screen;
 mod home_screen;
@@ -50,10 +50,10 @@ pub enum Screen {
     WalletSetup,
     EncryptingSeed,
     GenerateSeed,
-    ChangePasscodePasscode,
-    ChangePasscodeNew,
+    EnterCurrentPasscode,
+    SetNewPasscode,
     ChangePasscodeConfirm,
-    ChangePasscodeSet,
+    FinalizePasscodeChange,
 }
 
 pub fn show_alert(ui: &Rc<MainWindow>, alert: &str) {
@@ -134,9 +134,9 @@ pub fn create_screen(ui: &Rc<MainWindow>, screen: Screen) {
         Screen::FactoryResetPasscode => enter_passcode_screen::create_enter_passcode_screen(ui, Screen::FactoryResetErase),
         Screen::FactoryResetErase => 
         factory_reset_screen::create_erase_screen(ui),
-        Screen::ChangePasscodePasscode => enter_passcode_screen::create_enter_passcode_screen(ui, Screen::ChangePasscodeNew),
-        Screen::ChangePasscodeNew => create_set_passcode_screen(ui),
-        Screen::ChangePasscodeSet => navigate_to(Screen::Home),
+        Screen::EnterCurrentPasscode => enter_passcode_screen::create_enter_passcode_screen(ui, Screen::SetNewPasscode),
+        Screen::SetNewPasscode => create_set_passcode_screen(ui),
+        Screen::FinalizePasscodeChange => create_finalize_passcode_change_screen(ui),
         Screen::ChangePasscodeConfirm => create_confirm_passcode_screen(ui),
     }
 }

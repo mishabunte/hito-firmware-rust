@@ -11,11 +11,14 @@ use alloc::rc::Rc;
 
 use slint::{ModelRc, VecModel};
 
+use crate::drivers::Battery;
 use crate::slint_generatedMainWindow::{MainWindow, ScreenItem, ScreenButton};
 use crate::log_info;
 use crate::ui::router::navigate_to;
 use crate::ui::router::previous_screen;
 use crate::firmware;
+use crate::ui::screens::generic_question_screen::create_generic_question_screen;
+
 
 use super::Screen;
 
@@ -213,7 +216,7 @@ fn setup_passcode_screen(ui: &Rc<MainWindow>, title: &str, action: PasscodeActio
                               navigate_to(Screen::WalletSetup);
                             } else {
                               let _ = vault.set_passcode(passcode_entered.as_bytes());
-                              navigate_to(Screen::ChangePasscodeSet);
+                              navigate_to(Screen::FinalizePasscodeChange);
                             }
                         } else {
                             log_info!("Set passcode failed: confirmation does not match");
@@ -244,11 +247,9 @@ pub fn create_set_passcode_screen(ui: &Rc<MainWindow>) {
 
 /// Create the "Enter Passcode" screen
 pub fn create_enter_passcode_screen(ui: &Rc<MainWindow>, success_screen: Screen) {
-    let vault_arc = firmware().vault.clone();
-    let vault = vault_arc.lock();
-    if vault.is_empty() {
-      create_set_passcode_screen(ui);
-      return;
-    }
     setup_passcode_screen(ui, "Enter Passcode", PasscodeAction::Unlock(success_screen));
+}
+
+pub fn create_finalize_passcode_change_screen(ui: &Rc<MainWindow>) {
+    create_generic_question_screen(ui, "ALL SET", "Reboot the device \\\\ to start using it", "Reboot", None, || {firmware().battery.lock().reboot()}, || {});
 }

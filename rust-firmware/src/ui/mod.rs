@@ -31,6 +31,10 @@ pub fn register_main_window_callbacks(ui: &MainWindow) {
       ui.on_unlock_requested(move || {
           if let Some(ui) = ui_weak.upgrade() {
               ui.set_is_lockscreen(false);
+              if firmware().vault.lock().is_empty() {
+                navigate_to(screens::Screen::SetNewPasscode);
+                return;
+              }
               navigate_to(screens::Screen::EnterPasscode);
           }
       });
