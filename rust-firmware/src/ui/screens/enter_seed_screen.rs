@@ -93,44 +93,9 @@ static mut SEED_CHECK_INDICES: [usize; 3] = [0, 0, 0];
 // For seed check mode: the expected seed to compare against
 static mut EXPECTED_SEED: Vec<u16> = Vec::new();
 
-use crate::crypto::ffi::{crypt0_bip39_english, CRYPT0_BIP39_MNEMONIC_ENGLISH_MAXWORDS, crypt0_bip39_mnemonic_to_entropy, crypt0_bip39_entropy_to_seed_en};
+use crate::crypto::ffi::{crypt0_bip39_english, CRYPT0_BIP39_MNEMONIC_ENGLISH_MAXWORDS};
 
-fn bip39_word_by_index(index: u16) -> Option<&'static str> {
-    let idx = index as usize;
-    let max = CRYPT0_BIP39_MNEMONIC_ENGLISH_MAXWORDS as usize;
-    if idx >= max {
-        return None;
-    }
-
-    let ptr = unsafe { crypt0_bip39_english[idx] };
-    if ptr.is_null() {
-        return None;
-    }
-
-    unsafe { CStr::from_ptr(ptr) }.to_str().ok()
-}
-
-fn bip39_index_by_word(word: &str) -> Option<u16> {
-    let word_lc = word.to_ascii_lowercase();
-    let word_bytes = word_lc.as_bytes();
-
-    let max = CRYPT0_BIP39_MNEMONIC_ENGLISH_MAXWORDS as usize;
-
-    for i in 0..max {
-        let ptr = unsafe { crypt0_bip39_english[i] };
-        if ptr.is_null() {
-            break;
-        }
-
-        let w = unsafe { CStr::from_ptr(ptr) }.to_bytes();
-
-        if w == word_bytes {
-            return Some(i as u16);
-        }
-    }
-
-    None
-}
+use crate::crypto::crypt0::{ bip39_index_by_word, bip39_word_by_index };
 
 
 pub fn find_bip39_matches(prefix: &str) -> Option<Vec<u16>> {

@@ -1,5 +1,6 @@
 use super::ffi;
 use core::ffi::c_char;
+use core::ffi::CStr;
 extern crate alloc;
 use alloc::{string::String, vec::Vec};
 use crate::log_info;
@@ -116,4 +117,131 @@ pub fn crypt0_ed25519_derive_secret_index(
     } else {
         Ok(hash)
     }
+}
+
+/// Get a BIP39 word by its index (0-2047)
+pub fn bip39_word_by_index(index: u16) -> Option<&'static str> {
+    let idx = index as usize;
+    let max = ffi::CRYPT0_BIP39_MNEMONIC_ENGLISH_MAXWORDS as usize;
+    if idx >= max {
+        return None;
+    }
+
+    let ptr = unsafe { ffi::crypt0_bip39_english[idx] };
+    if ptr.is_null() {
+        return None;
+    }
+
+    unsafe { CStr::from_ptr(ptr) }.to_str().ok()
+}
+
+/// Get the BIP39 index for a word (case-insensitive)
+pub fn bip39_index_by_word(word: &str) -> Option<u16> {
+    let word_lc = word.to_ascii_lowercase();
+    let word_bytes = word_lc.as_bytes();
+
+    let max = ffi::CRYPT0_BIP39_MNEMONIC_ENGLISH_MAXWORDS as usize;
+
+    for i in 0..max {
+        let ptr = unsafe { ffi::crypt0_bip39_english[i] };
+        if ptr.is_null() {
+            break;
+        }
+
+        let w = unsafe { CStr::from_ptr(ptr) }.to_bytes();
+
+        if w == word_bytes {
+            return Some(i as u16);
+        }
+    }
+
+    None
+}
+
+/// Convert a mnemonic phrase (space-separated words) to an array of word indices
+pub fn mnemonic_to_indices(mnemonic: &str) -> Option<Vec<u16>> {
+    mnemonic
+        .split_whitespace()
+        .map(|word| bip39_index_by_word(word))
+        .collect()
+}
+
+/// Convert a mnemonic phrase to entropy bytes
+/// Returns (entropy, entropy_len) where entropy_len is 16, 24, or 32
+pub fn mnemonic_to_entropy(mnemonic: &str) -> Result<([u8; 32], usize), CryptoError> {
+    let indices = mnemonic_to_indices(mnemonic).ok_or(CryptoError::InvalidSeed)?;
+    let word_count = indices.len();
+    
+    let entropy_len = match word_count {
+        12 => 16,
+        18 => 24,
+        24 => 32,
+        _ => return Err(CryptoError::InvalidSeed),
+    };
+    
+    let mut entropy = [0u8; 32];
+    
+    let result = unsafe {
+        ffi::crypt0_bip39_mnemonic_to_entropy(
+            indices.as_ptr(),
+            word_count as u16,
+            entropy.as_mut_ptr(),
+            entropy_len as u16,
+        )
+    };
+    
+    if !result {
+        return Err(CryptoError::CryptoError);
+    }
+    
+    Ok((entropy, entropy_len))
+}
+
+/// Convert entropy bytes to a mnemonic phrase (as bytes)
+/// Returns a 215-byte buffer containing the null-terminated mnemonic string
+pub fn entropy_to_mnemonic(entropy: &[u8], entropy_len: usize) -> Result<[u8; 215], CryptoError> {
+    let mut mnemonic_buf = [0u8; 215];
+    let rc = unsafe {
+        ffi::crypt0_bip39_entropy_to_mnemonic_en(
+            entropy.as_ptr(),
+            entropy_len as u8,
+            mnemonic_buf.as_mut_ptr(),
+            mnemonic_buf.len()
+        )
+    };
+    if rc < ffi::CRYPT0_OK {
+        return Err(CryptoError::CryptoError);
+    }
+    Ok(mnemonic_buf)
+}
+
+/// Generate a BIP39 seed from entropy
+/// Returns a 64-byte seed derived from the entropy
+pub fn entropy_to_seed(entropy: &[u8], entropy_len: usize) -> Result<[u8; 64], CryptoError> {
+    let mut seed_buf = [0u8; 64];
+    let rc = unsafe {
+        ffi::crypt0_bip39_entropy_to_seed_en(
+            entropy.as_ptr(),
+            entropy_len as u16,
+            seed_buf.as_mut_ptr(),
+            64
+        )
+    };
+    if rc != ffi::CRYPT0_OK {
+        return Err(CryptoError::CryptoError);
+    }
+    Ok(seed_buf)
+}
+
+/// Generate random entropy bytes
+/// Returns a 32-byte buffer with random entropy (only entropy_len bytes are meaningful)
+pub fn generate_entropy(entropy_len: usize) -> Result<[u8; 32], CryptoError> {
+    let mut entropy_buf = [0u8; 32];
+    let rc = unsafe {
+        ffi::crypt0_rng(entropy_buf.as_mut_ptr(), entropy_len)
+    };
+    if !rc {
+        return Err(CryptoError::CryptoError);
+    }
+    Ok(entropy_buf)
 }
