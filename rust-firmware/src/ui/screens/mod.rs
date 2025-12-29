@@ -26,7 +26,7 @@ pub use send_screen::{handle_send_screen_loop, cleanup_send_screen};
 pub use show_seed_screen::{handle_show_seed_loop};
 pub use enter_seed_screen::{handle_enter_seed_loop, cleanup_enter_seed_screen, init_seed_check};
 mod generic_question_screen;
-mod generic_alert_screen;
+mod device_info_screen;
 
 static mut ERROR_MESSAGE: Option<String> = None;
 
@@ -57,6 +57,7 @@ pub enum Screen {
     ChangePasscodeConfirm,
     FinalizePasscodeChange,
     Alert,
+    DeviceInfo,
 }
 
 pub fn show_alert(alert: &str) {
@@ -149,6 +150,7 @@ pub fn create_screen(ui: &Rc<MainWindow>, screen: Screen) {
         Screen::FactoryResetPasscode => enter_passcode_screen::create_enter_passcode_screen(ui, Screen::FactoryResetErase),
         Screen::FactoryResetErase => 
         factory_reset_screen::create_erase_screen(ui),
+        Screen::DeviceInfo => device_info_screen::create_device_info_screen(ui),
         Screen::EnterCurrentPasscode => enter_passcode_screen::create_enter_passcode_screen(ui, Screen::SetNewPasscode),
         Screen::SetNewPasscode => create_set_passcode_screen(ui),
         Screen::FinalizePasscodeChange => create_finalize_passcode_change_screen(ui),

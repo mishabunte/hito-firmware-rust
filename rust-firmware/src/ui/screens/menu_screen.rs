@@ -93,7 +93,7 @@ pub fn create_menu_screen(ui: &Rc<MainWindow>) {
             }
             "Device info" => {
                 log_info!("Device info button pressed");
-                // TODO: Navigate to DeviceInfo screen when implemented
+                navigate_to(Screen::DeviceInfo);
             }
             "Change passcode" => {
                 log_info!("Change passcode button pressed");
