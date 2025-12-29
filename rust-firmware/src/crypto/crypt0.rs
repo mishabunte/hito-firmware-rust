@@ -138,7 +138,9 @@ pub fn bip39_word_by_index(index: u16) -> Option<&'static str> {
 /// Get the BIP39 index for a word (case-insensitive)
 pub fn bip39_index_by_word(word: &str) -> Option<u16> {
     let word_lc = word.to_ascii_lowercase();
-    let word_bytes = word_lc.as_bytes();
+    // Trim trailing null bytes (from fixed-size buffers) and whitespace
+    let word_trimmed = word_lc.trim_end_matches('\0').trim();
+    let word_bytes = word_trimmed.as_bytes();
 
     let max = ffi::CRYPT0_BIP39_MNEMONIC_ENGLISH_MAXWORDS as usize;
 
@@ -159,18 +161,27 @@ pub fn bip39_index_by_word(word: &str) -> Option<u16> {
 }
 
 /// Convert a mnemonic phrase (space-separated words) to an array of word indices
-pub fn mnemonic_to_indices(mnemonic: &str) -> Option<Vec<u16>> {
-    mnemonic
-        .split_whitespace()
-        .map(|word| bip39_index_by_word(word))
-        .collect()
+pub fn mnemonic_to_indices(mnemonic: &str) -> Result<Vec<u16>, CryptoError> {
+    let mut indices = Vec::new();
+    
+    for word in mnemonic.split_whitespace() {
+        match bip39_index_by_word(word) {
+            Some(idx) => indices.push(idx),
+            None => {
+                log_info!("mnemonic_to_indices: invalid word '{}' not found in BIP39 wordlist", word);
+                return Err(CryptoError::InvalidSeed);
+            }
+        }
+    }
+
+    Ok(indices)
 }
 
 /// Convert a mnemonic phrase to entropy bytes
 /// Returns (entropy, entropy_len) where entropy_len is 16, 24, or 32
 pub fn mnemonic_to_entropy(mnemonic: &str) -> Result<([u8; 32], usize), CryptoError> {
-    let indices = mnemonic_to_indices(mnemonic).ok_or(CryptoError::InvalidSeed)?;
-    mnemonic_indices_to_entropy(indices)
+    let indices_unwrapped = mnemonic_to_indices(mnemonic)?;
+    mnemonic_indices_to_entropy(indices_unwrapped)
 }
 
 /// Convert mnemonic indices to entropy bytes
@@ -178,6 +189,9 @@ pub fn mnemonic_to_entropy(mnemonic: &str) -> Result<([u8; 32], usize), CryptoEr
 pub fn mnemonic_indices_to_entropy(indices: Vec<u16>) -> Result<([u8; 32], usize), CryptoError> {
     let word_count = indices.len();
     log_info!("indices: {:?}", indices);
+
+    let phrase = indices.iter().map(|i| bip39_word_by_index(*i).unwrap_or("???")).collect::<Vec<&str>>().join(" ");
+    log_info!("mnemonic phrase: {}", phrase);
     
     let entropy_len = match word_count {
         12 => 16,

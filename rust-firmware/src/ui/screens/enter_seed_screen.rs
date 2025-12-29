@@ -333,11 +333,12 @@ pub fn init_seed_check(expected_seed: &[u16], indices: [usize; 3]) {
 fn on_encrypt_clicked(seed_check_mode: bool) {
   let mnemonic = if seed_check_mode {
     unsafe {
+      log_info!("EXPECTED_SEED: {:?}", EXPECTED_SEED);
       EXPECTED_SEED.as_slice()   
     }
   } else {
     unsafe {
-      log_info!("EXPECTED_SEED: {:?}", EXPECTED_SEED);
+      log_info!("SEED_ENTERED: {:?}", SEED_ENTERED);
       SEED_ENTERED.as_slice()
     }
   };
@@ -776,11 +777,22 @@ pub fn create_generate_seed_screen(ui: &Rc<MainWindow>) {
             let vault = vault_arc.lock();
             
             // Get the actual mnemonic from vault and convert to word indices
-            let mnemonic = vault.get_mnemonic().unwrap_or_default();
-            let seed: Vec<u16> = mnemonic
-                .split_whitespace()
-                .map(|w| bip39_index_by_word(w).unwrap_or(0))
-                .collect();
+            let mnemonic = vault.get_mnemonic();
+            let mnemonic = if let Ok(mnemonic) = &mnemonic {
+                log_info!("Generated mnemonic: {}", mnemonic);
+                mnemonic.clone()
+            } else {
+                log_info!("Error retrieving generated mnemonic");
+                return;
+            };
+            let array = mnemonic_to_indices(&mnemonic);
+
+            if array.is_err() {
+                show_alert("Error converting \\\\mnemonic to indices \\\\ for verification");
+                return;
+            }
+            let array = array.unwrap();
+
             if let Ok(seed_len) = vault.get_mnemonic_len() {
               log_info!("Generated seed for verification, length: {}", seed_len);
               
@@ -789,7 +801,7 @@ pub fn create_generate_seed_screen(ui: &Rc<MainWindow>) {
               log_info!("Verifying seed words at indices: {:?}", indices);
               
               // Initialize seed check mode with the expected seed
-              init_seed_check(&seed, indices);
+              init_seed_check(&array, indices);
               
               navigate_to(Screen::SeedCheck);
             }

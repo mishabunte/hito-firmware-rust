@@ -47,7 +47,6 @@ pub fn create_erase_screen(ui: &Rc<MainWindow>) {
           if firmware().vault.lock().erase(true, true) {
             log_info!("Factory Reset: Vault erased successfully");
             firmware().battery.lock().reboot();
-            // TODO: Restart device
           } else {
             log_info!("Factory Reset: Vault erase failed");
             // Navigate back to menu

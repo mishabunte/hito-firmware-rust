@@ -1561,7 +1561,7 @@ impl HitoVault {
 
     // Lock the vault
     self.vault_is_unlocked = false;
-    self.data = None; // Clear sensitive data
+    self.data = None;
     true
   }
 
