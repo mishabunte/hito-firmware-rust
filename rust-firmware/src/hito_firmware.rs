@@ -47,7 +47,7 @@ impl HitoFirmware {
         self.display.lock().init();
         self.indicator.lock().init();
         self.touch.lock().init();
-        self.vault.lock().init();
+        //self.vault.lock().init();
         // #[cfg(feature = "minifb")]
         // {
         //   let mut vault_lock = self.vault.lock();

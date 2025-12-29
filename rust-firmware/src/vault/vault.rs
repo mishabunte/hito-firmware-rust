@@ -1,9 +1,11 @@
 use core::cell::Cell;
+use core::ffi::CStr;
 use core::ptr;
 use core::slice;
 use crate::crypto;
-use crate::crypto::crypt0::bytes_to_hex;
-use crate::crypto::crypt0::hex_to_bytes;
+use crate::crypto::crypt0::{bytes_to_hex, hex_to_bytes, entropy_to_mnemonic, entropy_to_seed, generate_entropy};
+use crate::crypto::ffi::CRYPT0_BIP39_MNEMONIC_ENGLISH_MAXWORDS;
+use crate::crypto::ffi::crypt0_bip39_english;
 use crate::crypto::libcrypt0pro::stellar::StellarKeypair;
 use crate::log_info;
 use crate::now_us;
@@ -15,29 +17,54 @@ use crate::vault::VaultEncryptedBlock;
 use crate::vault::bootloader_version::*;
 use crate::vault::firmware_version::HitoFirmwareVersion;
 use crate::firmware_state::DeviceInfo;
+use alloc::string::String;
+use alloc::vec::Vec;
 
 use crate::crypto::libcrypt0pro::stellar::StellarWallet;
 
 type NowFn = fn() -> u64;
 
 #[cfg(feature = "minifb")]
-use std::process::Command;
-#[cfg(feature = "minifb")]
-use std::sync::Once;
+use std::{process::Command, fs::{self, File}, io::{Read, Write}, path::PathBuf, sync::atomic::{AtomicBool, Ordering}};
 #[cfg(feature = "minifb")]
 use sha2::{Sha256, Digest};
 #[cfg(feature = "minifb")]
-static INIT_HARDWARE_ID: Once = Once::new();
+use dirs;
+
+#[cfg(feature = "minifb")]
+static HARDWARE_ID_INITIALIZED: AtomicBool = AtomicBool::new(false);
 #[cfg(feature = "minifb")]
 static mut HARDWARE_ID: [u8; 128] = [0; 128];
 #[cfg(feature = "minifb")]
-static INIT_HUK: Once = Once::new();
+static HUK_INITIALIZED: AtomicBool = AtomicBool::new(false);
 #[cfg(feature = "minifb")]
 static mut HUK_WRITTEN: bool = false;
 #[cfg(feature = "minifb")]
-use std::thread;
+static VAULT_STORAGE_INITIALIZED: AtomicBool = AtomicBool::new(false);
+
+// File paths for persistent vault storage
 #[cfg(feature = "minifb")]
-use std::time::Duration;
+const VAULT_MAIN_FILE: &str = "hito_vault_main.bin";
+#[cfg(feature = "minifb")]
+const VAULT_BACKUP_FILE: &str = "hito_vault_backup.bin";
+#[cfg(feature = "minifb")]
+const VAULT_RAM_FILE: &str = "hito_vault_ram.bin";
+
+// Test-specific file paths
+#[cfg(feature = "minifb")]
+#[cfg(test)]
+const VAULT_TEST_MAIN_FILE: &str = "hito_vault_test_main.bin";
+#[cfg(feature = "minifb")]
+#[cfg(test)]
+const VAULT_TEST_BACKUP_FILE: &str = "hito_vault_test_backup.bin";
+#[cfg(feature = "minifb")]
+#[cfg(test)]
+const VAULT_TEST_RAM_FILE: &str = "hito_vault_test_ram.bin";
+
+// Flag to indicate we're running in test mode
+#[cfg(feature = "minifb")]
+#[cfg(test)]
+static TEST_MODE: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
@@ -65,7 +92,7 @@ const HITO_VAULT_STEPS_COUNT_FACTORY_SETUP: u32 = 5;
 const VAULT_PAGE_SIZE_BLOCKS: usize = 4096 / core::mem::size_of::<VaultEncryptedBlock>();
 
 #[cfg(feature = "zephyr")]
-const CONFIG_SRAM_BASE_ADDRESS: usize = 0x20000000; // Typical ARM Cortex-M SRAM base
+const CONFIG_SRAM_BASE_ADDRESS: usize = 0x20000000;
 
 #[cfg(feature = "zephyr")]
 const VAULT_RAM_PAGE: *const VaultEncryptedBlock = (CONFIG_SRAM_BASE_ADDRESS + 0x6f800) as *const VaultEncryptedBlock;
@@ -115,6 +142,172 @@ const VAULT_BACKUP_PAGE: *const VaultEncryptedBlock = unsafe { VAULT_BACKUP_STOR
 #[cfg(feature = "minifb")]
 const VAULT_RAM_PAGE: *const VaultEncryptedBlock = unsafe { VAULT_RAM_STORAGE.as_ptr() };
 
+/// Get the directory path for vault storage files
+#[cfg(feature = "minifb")]
+fn get_vault_storage_dir() -> PathBuf {
+    // Use home directory or current directory as fallback
+    dirs::data_local_dir()
+        .or_else(|| dirs::home_dir())
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("hito_wallet")
+}
+
+/// Ensure the vault storage directory exists
+#[cfg(feature = "minifb")]
+fn ensure_vault_storage_dir() -> std::io::Result<PathBuf> {
+    let dir = get_vault_storage_dir();
+    fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+/// Load vault storage from file into the static array
+#[cfg(feature = "minifb")]
+fn load_vault_from_file(filename: &str, storage: &mut [VaultEncryptedBlock; VAULT_PAGE_SIZE_BLOCKS]) {
+    let path = get_vault_storage_dir().join(filename);
+    if let Ok(mut file) = File::open(&path) {
+        let storage_bytes = unsafe {
+            core::slice::from_raw_parts_mut(
+                storage.as_mut_ptr() as *mut u8,
+                core::mem::size_of::<[VaultEncryptedBlock; VAULT_PAGE_SIZE_BLOCKS]>()
+            )
+        };
+        if let Err(e) = file.read_exact(storage_bytes) {
+            log_info!("Warning: Could not read vault file {}: {}", filename, e);
+        } else {
+            log_info!("Loaded vault storage from {}", path.display());
+        }
+    } else {
+        log_info!("No existing vault file at {}, using empty storage", path.display());
+    }
+}
+
+/// Save vault storage to file from the static array
+#[cfg(feature = "minifb")]
+fn save_vault_to_file(filename: &str, storage: &[VaultEncryptedBlock; VAULT_PAGE_SIZE_BLOCKS]) -> bool {
+    match ensure_vault_storage_dir() {
+        Ok(dir) => {
+            let path = dir.join(filename);
+            match File::create(&path) {
+                Ok(mut file) => {
+                    let storage_bytes = unsafe {
+                        core::slice::from_raw_parts(
+                            storage.as_ptr() as *const u8,
+                            core::mem::size_of::<[VaultEncryptedBlock; VAULT_PAGE_SIZE_BLOCKS]>()
+                        )
+                    };
+                    match file.write_all(storage_bytes) {
+                        Ok(_) => {
+                            log_info!("Saved vault storage to {}", path.display());
+                            true
+                        }
+                        Err(e) => {
+                            log_info!("Error writing vault file {}: {}", filename, e);
+                            false
+                        }
+                    }
+                }
+                Err(e) => {
+                    log_info!("Error creating vault file {}: {}", filename, e);
+                    false
+                }
+            }
+        }
+        Err(e) => {
+            log_info!("Error creating vault storage directory: {}", e);
+            false
+        }
+    }
+}
+
+/// Initialize vault storage from persistent files (called once on startup)
+#[cfg(feature = "minifb")]
+fn init_vault_storage_from_files() {
+    // Use compare_exchange to ensure only one thread initializes
+    if VAULT_STORAGE_INITIALIZED.compare_exchange(
+        false,
+        true,
+        Ordering::SeqCst,
+        Ordering::SeqCst
+    ).is_ok() {
+        unsafe {
+            load_vault_from_file(get_vault_main_file(), &mut VAULT_MAIN_STORAGE);
+            load_vault_from_file(get_vault_backup_file(), &mut VAULT_BACKUP_STORAGE);
+            load_vault_from_file(get_vault_ram_file(), &mut VAULT_RAM_STORAGE);
+        }
+    }
+}
+
+/// Reset vault storage initialization flag (for testing purposes)
+#[cfg(feature = "minifb")]
+#[cfg(test)]
+fn reset_vault_storage_init() {
+    VAULT_STORAGE_INITIALIZED.store(false, Ordering::SeqCst);
+    TEST_MODE.store(true, Ordering::SeqCst);
+}
+
+/// Get the appropriate vault file name based on test mode
+#[cfg(feature = "minifb")]
+fn get_vault_main_file() -> &'static str {
+    #[cfg(test)]
+    {
+        if TEST_MODE.load(Ordering::SeqCst) {
+            return VAULT_TEST_MAIN_FILE;
+        }
+    }
+    VAULT_MAIN_FILE
+}
+
+#[cfg(feature = "minifb")]
+fn get_vault_backup_file() -> &'static str {
+    #[cfg(test)]
+    {
+        if TEST_MODE.load(Ordering::SeqCst) {
+            return VAULT_TEST_BACKUP_FILE;
+        }
+    }
+    VAULT_BACKUP_FILE
+}
+
+#[cfg(feature = "minifb")]
+fn get_vault_ram_file() -> &'static str {
+    #[cfg(test)]
+    {
+        if TEST_MODE.load(Ordering::SeqCst) {
+            return VAULT_TEST_RAM_FILE;
+        }
+    }
+    VAULT_RAM_FILE
+}
+
+/// Save all vault storage to persistent files
+#[cfg(feature = "minifb")]
+fn save_all_vault_storage() -> bool {
+    unsafe {
+        let main_ok = save_vault_to_file(get_vault_main_file(), &VAULT_MAIN_STORAGE);
+        let backup_ok = save_vault_to_file(get_vault_backup_file(), &VAULT_BACKUP_STORAGE);
+        let ram_ok = save_vault_to_file(get_vault_ram_file(), &VAULT_RAM_STORAGE);
+        main_ok && backup_ok && ram_ok
+    }
+}
+
+/// Save only the main and backup vault storage (not RAM)
+#[cfg(feature = "minifb")]
+fn save_flash_vault_storage() -> bool {
+    unsafe {
+        let main_ok = save_vault_to_file(get_vault_main_file(), &VAULT_MAIN_STORAGE);
+        let backup_ok = save_vault_to_file(get_vault_backup_file(), &VAULT_BACKUP_STORAGE);
+        main_ok && backup_ok
+    }
+}
+
+/// Save only the RAM vault storage
+#[cfg(feature = "minifb")]
+fn save_ram_vault_storage() -> bool {
+    unsafe {
+        save_vault_to_file(get_vault_ram_file(), &VAULT_RAM_STORAGE)
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum VaultError {
     EmptyVault,
@@ -128,9 +321,6 @@ pub enum VaultError {
 }
 
 pub type VaultResult<T> = Result<T, VaultError>;
-use alloc::rc::Rc;
-
-use core::cmp::min;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum UnlockPhase {
@@ -335,8 +525,14 @@ pub struct HitoVault {
 
 #[cfg(feature = "minifb")]
 fn get_hardware_id() -> VaultResult<[u8; 128]> {
-  unsafe {
-    INIT_HARDWARE_ID.call_once(|| {
+  // Use compare_exchange to ensure only one thread initializes
+  if HARDWARE_ID_INITIALIZED.compare_exchange(
+      false,
+      true,
+      Ordering::SeqCst,
+      Ordering::SeqCst
+  ).is_ok() {
+    unsafe {
       #[cfg(target_os = "macos")]
       let cmd_output = Command::new("sh")
         .arg("-c")
@@ -356,10 +552,10 @@ fn get_hardware_id() -> VaultResult<[u8; 128]> {
         let copy_len = core::cmp::min(id_bytes.len(), 128);
         HARDWARE_ID[..copy_len].copy_from_slice(&id_bytes[..copy_len]);
       }
-    });
-    
-    Ok(HARDWARE_ID)
+    }
   }
+  
+  unsafe { Ok(HARDWARE_ID) }
 }
 
 fn derive_hardware_key(salt: &[u8]) -> VaultResult<[u8; 32]> {
@@ -434,10 +630,24 @@ impl HitoVault {
     self.data.as_ref().ok_or(VaultError::VaultLocked)
   }
 
-  pub fn init(&mut self) {
+  pub fn init(&mut self, entropy: &[u8; 32], entropy_len: usize, new_pass: &[u8]) -> VaultResult<()> {
     if !self.initialized {
+      #[cfg(feature = "minifb")]
+      {
+        // Load vault storage from persistent files
+        init_vault_storage_from_files();
+      }
       Self::rust_hw_unique_key_is_written_impl();
+
+      let seed = entropy_to_seed(entropy, entropy_len).map_err(|_| VaultError::CryptoError)?;
+
+      self.save(entropy, entropy_len, &seed, new_pass)?;
+
       self.initialized = true;
+
+      Ok(())
+    } else {
+      Err(VaultError::VaultLocked)
     }
   }
   /// Safely find the last valid block in the vault
@@ -455,7 +665,7 @@ impl HitoVault {
           return Err(VaultError::EmptyVault);
         }
         // Return the previous block (last valid one)
-        // log_info!("Found last valid vault block at index {}", i - 1);
+        log_info!("Found last valid vault block at index {}", i - 1);
         return Ok(&vault_slice[i - 1]);
       }
     }
@@ -568,7 +778,7 @@ impl HitoVault {
     block.magic = match entropy_len {
       entropy_len_t::ENTROPY_LEN_16 => HITO_VAULT_HEADER_MAGIC_12_WORDS_V1,
       entropy_len_t::ENTROPY_LEN_24 => HITO_VAULT_HEADER_MAGIC_18_WORDS_V1,
-      _ => HITO_VAULT_HEADER_MAGIC_24_WORDS_V1,
+      entropy_len_t::ENTROPY_LEN_32 => HITO_VAULT_HEADER_MAGIC_24_WORDS_V1,
     };
 
     // Validate step count based on reset count
@@ -637,6 +847,12 @@ impl HitoVault {
           block.magic = 0xffffffff;
         }
       }
+    }
+    
+    #[cfg(feature = "minifb")]
+    {
+      // Persist cleared RAM storage to file
+      save_ram_vault_storage();
     }
   }
 
@@ -930,11 +1146,11 @@ impl HitoVault {
   }
 
   /// Save vault data with new passcode
-  fn vault_save(
-    &self,
-    entropy: &[u8],
+  fn save(
+    &mut self,
+    entropy: &[u8; 32],
     entropy_len: usize,
-    seed: &[u8],
+    seed: &[u8; 64],
     new_pass: &[u8]
   ) -> VaultResult<()> {
     let mut block_flash = VaultEncryptedBlock {
@@ -973,57 +1189,17 @@ impl HitoVault {
     // Save both blocks using our Rust implementation
     self.vault_save_block(&block_flash, Some(&block_ram))?;
 
-    Ok(())
-  }
-
-  fn mnemonic_from_entropy(entropy: &[u8], entropy_len: usize) -> VaultResult<[u8; 215]> {
-    // log_info!("Saving mnemonic");
-    //let data = self.data.as_mut().ok_or(VaultError::VaultLocked)?;
-    unsafe {
-      let mut mnemonic_buf = [0u8; 215];
-      let len = mnemonic_buf.len();
-      let rc = crypto::ffi::crypt0_bip39_entropy_to_mnemonic_en(
-        entropy.as_ptr(),
-        entropy_len as u8,
-        mnemonic_buf.as_mut_ptr(),
-        mnemonic_buf.len()
-      );  
-      // log_info!("Converted entropy to mnemonic, len : {}", rc);
-      if rc < crypto::ffi::CRYPT0_OK {
-        return Err(VaultError::CryptoError);
-      }
-      Ok(mnemonic_buf)
-      // log_info!("Mnemonic saved: {:?}", &data.mnemonic[..len]);
-    }
-  }
-
-  fn seed_from_entropy(entropy: &[u8], entropy_len: usize) -> VaultResult<([u8; 64])> {
-    unsafe {
-      let mut seed_buf = [0u8; 64];
-      let rc = crypto::ffi::crypt0_bip39_entropy_to_seed_en(
-        entropy.as_ptr(),
-        entropy_len as u16,
-        seed_buf.as_mut_ptr(),
-        64
-      );
-      if rc != crypto::ffi::CRYPT0_OK {
-        return Err(VaultError::CryptoError);
-      }
-      Ok(seed_buf)
-      // log_info!("Generated seed from entropy: {:?}", &data.seed[..64]);
-    }
-  }
-
-  fn generate_entropy(entropy_len: usize) -> VaultResult<[u8; 32]> {
-    let entropy = unsafe {
-      let mut entropy_buf = [0u8; 32];
-      let rc = crypto::ffi::crypt0_rng(entropy_buf.as_mut_ptr(), entropy_len as usize);
-      if !rc {
-        return Err(VaultError::CryptoError);
-      }
-      entropy_buf
+    let vault_data: HitoVaultData = HitoVaultData {
+      entropy: *entropy,
+      entropy_len: entropy_enum,
+      seed: *seed,
+      mnemonic: entropy_to_mnemonic(entropy, entropy_len).map_err(|_| VaultError::CryptoError)?,
+      network_data: None,
     };
-    Ok(entropy)
+
+    self.data = Some(vault_data);
+
+    Ok(())
   }
 
   pub fn generate_mnemonic(&mut self) -> VaultResult<()> {
@@ -1037,17 +1213,16 @@ impl HitoVault {
     };
     
     // Generate random entropy
-    let entropy = Self::generate_entropy(entropy_len)?;
-    log_info!("Generated entropy: {:?}", &entropy[..entropy_len]);
+    let entropy = generate_entropy(entropy_len).map_err(|_| VaultError::CryptoError)?;
+    //log_info!("Generated entropy: {:?}", &entropy[..entropy_len]);
     
     // Save mnemonic
-    let mnemonic = Self::mnemonic_from_entropy(&entropy, entropy_len)?;
-    log_info!("Generated mnemonic: {:?}", core::str::from_utf8(&mnemonic).unwrap_or("Invalid UTF-8"));
+    let mnemonic = entropy_to_mnemonic(&entropy, entropy_len).map_err(|_| VaultError::CryptoError)?;
+    //log_info!("Generated mnemonic: {:?}", core::str::from_utf8(&mnemonic).unwrap_or("Invalid UTF-8"));
     
     // Generate seed from entropy
-    let seed = Self::seed_from_entropy(&entropy, entropy_len)?;
-    log_info!("Generated seed from entropy: {:?}", &seed[..64]);
-
+    let seed = entropy_to_seed(&entropy, entropy_len).map_err(|_| VaultError::CryptoError)?;
+    //log_info!("Generated seed from entropy: {:?}", &seed[..64]);
     self.data = Some(HitoVaultData {
       entropy: entropy,
       entropy_len: entropy_enum,
@@ -1167,7 +1342,7 @@ impl HitoVault {
     let entropy_len = data.entropy_len as usize;
     let seed_copy = data.seed;
     
-    self.vault_save(
+    self.save(
       &entropy_copy,
       entropy_len,
       &seed_copy,
@@ -1226,20 +1401,23 @@ impl HitoVault {
     };
     
     let entropy_len = entropy_len_enum as usize;
+
+    log_info!("Parsed entropy length: {}, block_magic: {}", entropy_len, block_magic);
+
     if entropy_len == 0 || entropy_len > 32 {
         return Err(VaultError::InvalidKeyLength);
     }
 
     // Extract entropy and seed from decrypted data
     let mut entropy = [0u8; 32];
-    entropy[..entropy_len].copy_from_slice(&decrypted[..entropy_len]);
+    entropy[..32].copy_from_slice(&decrypted[..32]);
     
     let mut seed = [0u8; 64];
-    seed.copy_from_slice(&decrypted[entropy_len..(entropy_len + 64)]);
+    seed.copy_from_slice(&decrypted[32..(32 + 64)]);
     
-    log_info!("Vault decrypted successfully, decrypted: {:?}, entropy_len: {}", &decrypted[..(entropy_len + 64)], entropy_len);
+    log_info!("Vault decrypted successfully, decrypted: {:?}, entropy_len: {}", &decrypted[..(32 + 64)], entropy_len);
 
-    let mnemonic = Self::mnemonic_from_entropy(&entropy, entropy_len)?;
+    let mnemonic = entropy_to_mnemonic(&entropy, entropy_len).map_err(|_| VaultError::CryptoError)?;
 
     // Construct the complete HitoVaultData
     let vault_data = HitoVaultData {
@@ -1279,14 +1457,20 @@ impl HitoVault {
 
   #[cfg(feature = "minifb")]
   fn hw_unique_key_is_written_sim() -> bool {
-    unsafe {
-      INIT_HUK.call_once(|| {
+    // Use compare_exchange to ensure only one thread initializes
+    if HUK_INITIALIZED.compare_exchange(
+        false,
+        true,
+        Ordering::SeqCst,
+        Ordering::SeqCst
+    ).is_ok() {
+      unsafe {
         // In simulation, we simulate the HUK as being written
         // This mimics the behavior of the real hardware
         HUK_WRITTEN = true;
-      });
-      HUK_WRITTEN
+      }
     }
+    unsafe { HUK_WRITTEN }
   }
 
   #[cfg(feature = "minifb")]
@@ -1365,11 +1549,13 @@ impl HitoVault {
         unsafe {
           ptr::write_bytes(VAULT_MAIN_PAGE as *mut u8, 0xff, VAULT_PAGE_SIZE_BYTES);
         }
+        save_vault_to_file(get_vault_main_file(), unsafe { &VAULT_MAIN_STORAGE });
       }
       if backup {
         unsafe {
           ptr::write_bytes(VAULT_BACKUP_PAGE as *mut u8, 0xff, VAULT_PAGE_SIZE_BYTES);
         }
+        save_vault_to_file(get_vault_backup_file(), unsafe { &VAULT_BACKUP_STORAGE });
       }
     }
 
@@ -1386,28 +1572,37 @@ impl HitoVault {
   ) -> bool {
     unsafe {
       core::ptr::copy_nonoverlapping(data as *const u8, offset as *mut u8, len);
-      true
     }
     
+    #[cfg(feature = "minifb")]
+    {
+      // Persist RAM storage to file
+      save_ram_vault_storage()
+    }
+    
+    #[cfg(not(feature = "minifb"))]
+    {
+      true
+    }
   }
 
-  fn set_entropy(&mut self, entropy: &[u8], entropy_len: usize) {
-    let entropy_len = match entropy_len {
-      16 => entropy_len_t::ENTROPY_LEN_16,
-      24 => entropy_len_t::ENTROPY_LEN_24,
-      32 => entropy_len_t::ENTROPY_LEN_32,
-      _ => entropy_len_t::ENTROPY_LEN_32, // Default to 32 if invalid
-    };
-    let data = HitoVaultData {
-      entropy: entropy.try_into().unwrap_or([0u8; 32]),
-      entropy_len: entropy_len,
-      seed: [0u8; 64],
-      mnemonic: [0u8; 215],
-      network_data: None,
-    };
+  // fn set_entropy(&mut self, entropy: &[u8], entropy_len: usize) {
+  //   let entropy_len = match entropy_len {
+  //     16 => entropy_len_t::ENTROPY_LEN_16,
+  //     24 => entropy_len_t::ENTROPY_LEN_24,
+  //     32 => entropy_len_t::ENTROPY_LEN_32,
+  //     _ => entropy_len_t::ENTROPY_LEN_32, // Default to 32 if invalid
+  //   };
+  //   let data = HitoVaultData {
+  //     entropy: entropy.try_into().unwrap(),
+  //     entropy_len: entropy_len,
+  //     seed: [0u8; 64],
+  //     mnemonic: [0u8; 215],
+  //     network_data: None,
+  //   };
 
-    self.data = Some(data);
-  }
+  //   self.data = Some(data);
+  // }
 
   /// Flash write implementation - handles both Zephyr flash and simulation memory copy
   fn write_flash(
@@ -1425,11 +1620,12 @@ impl HitoVault {
     
     #[cfg(feature = "minifb")]
     {
-      // For simulation, just copy memory
+      // For simulation, copy memory and persist to file
       unsafe {
         core::ptr::copy_nonoverlapping(data as *const u8, offset as *mut u8, len);
-        true
       }
+      // Persist to files after write
+      save_flash_vault_storage()
     }
   }
 }
@@ -1437,30 +1633,73 @@ impl HitoVault {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto::crypt0::mnemonic_to_entropy;
+
+    const TEST_MNEMONIC: &str = "zero zero zero zero zero zero zero zero zero zero zero zoo";
+
+    /// Helper function to get entropy from the test mnemonic
+    fn get_test_entropy() -> ([u8; 32], usize) {
+        mnemonic_to_entropy(TEST_MNEMONIC).expect("Failed to convert test mnemonic to entropy")
+    }
+
+    /// Helper function to clear vault storage before each test
+    fn reset_vault_for_test() {
+        // Reset the initialization flag so storage can be reloaded
+        reset_vault_storage_init();
+        
+        // Delete existing test vault files so they don't get loaded in next iteration
+        let storage_dir = get_vault_storage_dir();
+        let _ = fs::remove_file(storage_dir.join(VAULT_TEST_MAIN_FILE));
+        let _ = fs::remove_file(storage_dir.join(VAULT_TEST_BACKUP_FILE));
+        let _ = fs::remove_file(storage_dir.join(VAULT_TEST_RAM_FILE));
+        
+        // Create an empty block template (simulates erased flash with 0xff)
+        let empty_block = VaultEncryptedBlock {
+            magic: 0xffffffff,
+            steps_count: 0,
+            encrypted: [0xff; 96],
+            nonce: [0xff; NONCE_LEN],
+            auth_data: [0xff; AAD_LEN],
+            tag: [0xff; TAG_LEN],
+            crc16_ccitt: 0xffff,
+        };
+        
+        // Clear all vault storage to empty state
+        unsafe {
+            for block in VAULT_MAIN_STORAGE.iter_mut() {
+                *block = empty_block;
+            }
+            for block in VAULT_BACKUP_STORAGE.iter_mut() {
+                *block = empty_block;
+            }
+            for block in VAULT_RAM_STORAGE.iter_mut() {
+                *block = empty_block;
+            }
+        }
+    }
 
     #[test]
     fn test_vault_create_set_passcode_and_unlock() {
+        reset_vault_for_test();
+        
         let mut vault = HitoVault::new();
-        vault.init();
+        let passcode = b"test_password_123";
 
-        // Set up initial entropy and seed
-        let entropy = [0x12u8; 32];
-        let passcode = "test_password_123".as_bytes();
+        let (entropy, entropy_len) = get_test_entropy();
 
-        // Set entropy and seed
-        vault.set_entropy(&entropy, 32);
+        log_info!("Passcode is {:?}", passcode);
 
-        // Set passcode on empty vault
-        assert!(vault.set_passcode(passcode).is_ok());
+        // Initialize vault with entropy and passcode
+        assert!(vault.init(&entropy, entropy_len, passcode).is_ok());
         
         let seed = vault.data.as_ref().unwrap().seed;
 
         // Create new vault instance and unlock with the same passcode
         let mut vault2 = HitoVault::new();
-        vault2.init();
 
         // Unlock with the passcode
-        let passcode = b"test_password_123";
+        log_info!("Passcode is {:?}", passcode);
+
         assert!(vault2.unlock_with_password(passcode).is_ok());
 
         // Verify vault is unlocked
@@ -1468,24 +1707,24 @@ mod tests {
 
         // Verify entropy and seed match
         let data2 = vault2.data.as_ref().unwrap();
-        assert_eq!(data2.entropy[..32], entropy);
+        assert_eq!(data2.entropy[..entropy_len], entropy[..entropy_len]);
         assert_eq!(data2.seed, seed);
     }
 
     #[test]
     fn test_vault_unlock_with_wrong_passcode() {
+        reset_vault_for_test();
+        
         let mut vault = HitoVault::new();
-        vault.init();
 
-        let entropy = [0xAAu8; 32];
+        let (entropy, entropy_len) = get_test_entropy();
         let correct_passcode = b"correct_password";
         let wrong_passcode = b"wrong_password!!";
 
-        vault.set_entropy(&entropy, 32);
-        assert!(vault.set_passcode(correct_passcode).is_ok());
+        // Initialize vault with entropy and correct passcode
+        assert!(vault.init(&entropy, entropy_len, correct_passcode).is_ok());
 
         let mut vault2 = HitoVault::new();
-        vault2.init();
 
         // Try to unlock with wrong passcode
         let result = vault2.unlock_with_password(wrong_passcode);
@@ -1495,6 +1734,8 @@ mod tests {
 
     #[test]
     fn test_vault_empty_raises_error() {
+        reset_vault_for_test();
+        
         let vault = HitoVault::new();
         assert!(vault.is_empty());
         assert!(vault.last_block().is_err());
@@ -1502,8 +1743,9 @@ mod tests {
 
     #[test]
     fn test_vault_unlock_empty_vault_fails() {
+        reset_vault_for_test();
+        
         let mut vault = HitoVault::new();
-        vault.init();
 
         let result = vault.unlock_with_password(b"any_password");
         assert!(result.is_err());
@@ -1512,57 +1754,56 @@ mod tests {
 
     #[test]
     fn test_vault_multiple_passcode_changes() {
+        reset_vault_for_test();
+        
         let mut vault = HitoVault::new();
-        vault.init();
 
-        let entropy = [0xCCu8; 32];
+        let (entropy, entropy_len) = get_test_entropy();
         let passcode1 = b"first_password";
         let passcode2 = b"second_password";
 
-        vault.set_entropy(&entropy, 32);
-        assert!(vault.set_passcode(passcode1).is_ok());
+        // Initialize vault with entropy and first passcode
+        assert!(vault.init(&entropy, entropy_len, passcode1).is_ok());
 
         // Change passcode
         vault.vault_is_unlocked = true; // Simulate unlocked state for passcode change
         assert!(vault.set_passcode(passcode2).is_ok());
 
-        assert!(vault.unlock_with_password(passcode2).is_ok());
-        assert!(vault.is_unlocked());
+        let mut vault2 = HitoVault::new();
+        assert!(vault2.unlock_with_password(passcode2).is_ok());
+        assert!(vault2.is_unlocked());
     }
 
     #[test]
     fn test_vault_different_entropy_lengths() {
-        for entropy_len in &[16, 24, 32] {
-            let mut vault = HitoVault::new();
-            vault.init();
+        // Test with 12-word mnemonic
+        reset_vault_for_test();
+        
+        let (entropy, entropy_len) = get_test_entropy(); // 12 words = 16 bytes
+        let passcode = b"test_pass";
 
-            let entropy: [u8; 32] = [0xEEu8; 32];
-            let passcode = b"test_pass";
+        let mut vault = HitoVault::new();
+        // Initialize vault with entropy and passcode
+        assert!(vault.init(&entropy, entropy_len, passcode).is_ok());
 
-            vault.set_entropy(&entropy, *entropy_len);
-            assert!(vault.set_passcode(passcode).is_ok());
-
-            let mut vault2 = HitoVault::new();
-            vault2.init();
-            assert!(vault2.unlock_with_password(passcode).is_ok());
-            assert_eq!(vault2.data.as_ref().unwrap().entropy_len as usize, *entropy_len);
-        }
+        let mut vault2 = HitoVault::new();
+        assert!(vault2.unlock_with_password(passcode).is_ok());
+        assert_eq!(vault2.data.as_ref().unwrap().entropy_len as usize, entropy_len);
     }
 
     #[test]
     fn test_vault_passcode_length_validation() {
+        reset_vault_for_test();
+        
         let mut vault = HitoVault::new();
-        vault.init();
 
-        let entropy = [0x99u8; 32];
-
-        vault.set_entropy(&entropy, 32);
+        let (entropy, entropy_len) = get_test_entropy();
 
         // Valid passcode lengths (1-32 bytes)
-        assert!(vault.set_passcode(b"a").is_ok());
+        // Initialize vault with entropy and single-char passcode
+        assert!(vault.init(&entropy, entropy_len, b"a").is_ok());
         
         let mut vault2 = HitoVault::new();
-        vault2.init();
         assert!(vault2.unlock_with_password(b"a").is_ok());
     }
 }
