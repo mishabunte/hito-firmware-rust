@@ -171,7 +171,7 @@ pub fn create_show_seed_screen(ui: &Rc<MainWindow>, backup_mode: bool) {
             }
         });
     } else {
-      show_alert(ui, "Failed to retrieve \\\\seed phrase \\\\Please try again");
+      show_alert("\\\\Failed to retrieve \\\\seed phrase \\\\Please try again");
     }
 }
 

@@ -495,7 +495,7 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                         navigate_to(Screen::EncryptingSeed);
                     } else {
                         log_info!("Seed check failed!");
-                        show_alert(&ui, "Seed check failed! \\\\ Please try again.");
+                        show_alert("\\\\Seed check failed! \\\\ Please try again.");
                     }
                 } else {
                     navigate_to(Screen::EncryptingSeed);

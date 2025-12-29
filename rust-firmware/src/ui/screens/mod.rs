@@ -28,6 +28,8 @@ pub use enter_seed_screen::{handle_enter_seed_loop, cleanup_enter_seed_screen, i
 mod generic_question_screen;
 mod generic_alert_screen;
 
+static mut ERROR_MESSAGE: Option<String> = None;
+
 /// Enum representing all available screens in the application
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Screen {
@@ -54,10 +56,17 @@ pub enum Screen {
     SetNewPasscode,
     ChangePasscodeConfirm,
     FinalizePasscodeChange,
+    Alert,
 }
 
-pub fn show_alert(ui: &Rc<MainWindow>, alert: &str) {
-    clear_screen_data(ui);
+pub fn show_alert(alert: &str) {
+  unsafe {
+      ERROR_MESSAGE = Some(alert.to_string());
+  }
+  navigate_to(Screen::Alert); // Ensure we are on a known screen before showing alert
+}
+
+pub fn create_alert_screen(ui: &Rc<MainWindow>, alert: &str) {
     let button_x = 0.0;
     let button_y = 62.0;
     let button_gap = 28.0;
@@ -126,6 +135,12 @@ pub fn create_screen(ui: &Rc<MainWindow>, screen: Screen) {
         Screen::EnterPasscode => enter_passcode_screen::create_enter_passcode_screen(ui, Screen::Home),
         Screen::Menu => menu_screen::create_menu_screen(ui),
         Screen::Home => home_screen::create_home_screen(ui),
+        Screen::Alert => {
+            let alert_message = unsafe {
+                ERROR_MESSAGE.take().unwrap_or_else(|| "Unknown error".to_string())
+            };
+            create_alert_screen(ui, &alert_message);
+        },
         Screen::PairWithApp => pair_with_the_app_screen::create_pair_with_app_screen(ui),
         Screen::FactoryReset => factory_reset_screen::create_factory_reset_screen(ui),
         Screen::Receive => receive_screen::create_receive_screen(ui),
