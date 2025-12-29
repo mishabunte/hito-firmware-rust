@@ -170,7 +170,14 @@ pub fn mnemonic_to_indices(mnemonic: &str) -> Option<Vec<u16>> {
 /// Returns (entropy, entropy_len) where entropy_len is 16, 24, or 32
 pub fn mnemonic_to_entropy(mnemonic: &str) -> Result<([u8; 32], usize), CryptoError> {
     let indices = mnemonic_to_indices(mnemonic).ok_or(CryptoError::InvalidSeed)?;
+    mnemonic_indices_to_entropy(indices)
+}
+
+/// Convert mnemonic indices to entropy bytes
+/// Returns (entropy, entropy_len) where entropy_len is 16, 24, or 32
+pub fn mnemonic_indices_to_entropy(indices: Vec<u16>) -> Result<([u8; 32], usize), CryptoError> {
     let word_count = indices.len();
+    log_info!("indices: {:?}", indices);
     
     let entropy_len = match word_count {
         12 => 16,
@@ -189,6 +196,8 @@ pub fn mnemonic_to_entropy(mnemonic: &str) -> Result<([u8; 32], usize), CryptoEr
             entropy_len as u16,
         )
     };
+
+    log_info!("mnemonic_to_entropy result: {}", result);
     
     if !result {
         return Err(CryptoError::CryptoError);

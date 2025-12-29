@@ -279,8 +279,6 @@ pub extern "C" fn rust_main() -> ! {
     
     // Initialize the global router and navigate to the initial screen (Menu)
 
-    // // // Original code not for testing
-
     // ui::navigate_to(ui::screens::Screen::EnterPasscode);
 
 

@@ -13,7 +13,7 @@ use slint::{ModelRc, VecModel};
 
 use crate::drivers::Battery;
 use crate::slint_generatedMainWindow::{MainWindow, ScreenItem, ScreenButton};
-use crate::log_info;
+use crate::{log_info, state};
 use crate::ui::router::navigate_to;
 use crate::ui::router::previous_screen;
 use crate::firmware;
@@ -213,6 +213,7 @@ fn setup_passcode_screen(ui: &Rc<MainWindow>, title: &str, action: PasscodeActio
                             log_info!("Set passcode successful!");
                             let mut vault = firmware().vault.lock();
                             if vault.is_empty() {
+                              let _ = state().lock().set_pin(passcode_entered.clone());
                               navigate_to(Screen::WalletSetup);
                             } else {
                               let _ = vault.set_passcode(passcode_entered.as_bytes());

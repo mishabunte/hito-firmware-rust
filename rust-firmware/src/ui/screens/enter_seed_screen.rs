@@ -11,6 +11,7 @@ use slint::ModelRc;
 use slint::VecModel;
 use core::cell::RefCell;
 
+use crate::crypto::crypt0::mnemonic_to_indices;
 use crate::slint_generatedMainWindow::{MainWindow, ScreenItem, ScreenButton, ScreenImage};
 use crate::log_info;
 use crate::state;
@@ -327,6 +328,38 @@ pub fn init_seed_check(expected_seed: &[u16], indices: [usize; 3]) {
         EXPECTED_SEED = expected_seed.to_vec();
         SEED_ENTERED.clear();
     }
+}
+
+fn on_encrypt_clicked(seed_check_mode: bool) {
+  let mnemonic = if seed_check_mode {
+    unsafe {
+      EXPECTED_SEED.as_slice()   
+    }
+  } else {
+    unsafe {
+      log_info!("EXPECTED_SEED: {:?}", EXPECTED_SEED);
+      SEED_ENTERED.as_slice()
+    }
+  };
+  let vault_arc = firmware().vault.clone();
+  let mut vault = vault_arc.lock();
+  
+  // Generate entropy from mnemonic indices
+  if let Ok((entropy, entropy_len)) = crypto::crypt0::mnemonic_indices_to_entropy(mnemonic.to_vec()) {
+    let pass = state().lock().get_pin();
+    match vault.init(&entropy, entropy_len, pass.as_bytes()) {
+        Ok(()) => {
+            log_info!("Vault initialized and seed encrypted successfully.");
+            navigate_to(Screen::Lock);
+        },
+        Err(e) => {
+            log_info!("Error initializing vault: {:?}", e);
+            show_alert("\\\\Error encrypting seed. \\\\ Please try again.");
+        }
+    }
+  } else {
+    show_alert("\\\\Error converting\\\\ Mnemonic to entropy. \\\\ Please try again.");
+  }
 }
 
 /// Generate random word indices for seed verification (like C's word_ids_init)
@@ -679,6 +712,16 @@ pub fn create_wallet_setup_screen(ui: &Rc<MainWindow>) {
           y: seed_12_y + y_gap * 2.0,
           inverted: false,
       },
+      #[cfg(feature = "minifb")]
+      ScreenButton { 
+          text: "zero zoo".into(),  
+          width: 240.0, 
+          height: 40.0,
+          has_border: false, 
+          x: 40.0, 
+          y: seed_12_y + y_gap * 3.0,
+          inverted: false,
+      },
   ]));
   ui.set_buttons(buttons);
   let vault_arc = firmware().vault.clone();
@@ -706,6 +749,15 @@ pub fn create_wallet_setup_screen(ui: &Rc<MainWindow>) {
               log_info!("Navigate to IMPORT SEED 24 WORDS screen");
               state().lock().set_seed_length(24);
               navigate_to(Screen::EnterSeed);
+          },
+          "zero zoo" => {
+              state().lock().set_seed_length(12);
+              unsafe {
+                  SEED_CHECK_MODE = false;
+                  let mnemonic = "zero zero zero zero zero zero zero zero zero zero zero zoo";
+                  SEED_ENTERED = mnemonic_to_indices(mnemonic).unwrap();
+              }
+              navigate_to(Screen::EncryptingSeed);
           },
           _ => {},
       }
@@ -762,7 +814,6 @@ pub fn create_encrypting_seed_screen(ui: &Rc<MainWindow>) {
         },
     ]));
     ui.set_items(items);
-    let vault_arc = firmware().vault.clone();
 
     let buttons = ModelRc::new(VecModel::from(vec![
       ScreenButton {
@@ -781,6 +832,8 @@ pub fn create_encrypting_seed_screen(ui: &Rc<MainWindow>) {
     ui.on_pressed(move |item| {
         if item.text == "Encrypt" {
             log_info!("Starting seed encryption...");
+            let seed_check_mode = unsafe { SEED_CHECK_MODE };
+            on_encrypt_clicked(seed_check_mode);
         }
     });
 }

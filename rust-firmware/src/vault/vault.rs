@@ -612,6 +612,11 @@ fn derive_hardware_key(salt: &[u8]) -> VaultResult<[u8; 32]> {
 
 impl HitoVault {
   pub fn new() -> Self {
+    #[cfg(feature = "minifb")]
+    {
+      // Load vault storage from persistent files
+      init_vault_storage_from_files();
+    }
     Self {
           initialized: false,
           vault_is_unlocked: false,
@@ -632,11 +637,6 @@ impl HitoVault {
 
   pub fn init(&mut self, entropy: &[u8; 32], entropy_len: usize, new_pass: &[u8]) -> VaultResult<()> {
     if !self.initialized {
-      #[cfg(feature = "minifb")]
-      {
-        // Load vault storage from persistent files
-        init_vault_storage_from_files();
-      }
       Self::rust_hw_unique_key_is_written_impl();
 
       let seed = entropy_to_seed(entropy, entropy_len).map_err(|_| VaultError::CryptoError)?;

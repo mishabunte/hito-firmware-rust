@@ -125,4 +125,5 @@ impl FirmwareState {
   // --- consumed in the main loop ---
   pub fn take_brightness(&self) -> Option<u8>         { self.brightness.take() }
   pub fn get_pin(&self) -> String                     { self.pin.borrow().clone() }
+  pub fn set_pin(&self, pin: String)              { *self.pin.borrow_mut() = pin; }
 }
