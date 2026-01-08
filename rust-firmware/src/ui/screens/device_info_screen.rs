@@ -43,7 +43,7 @@ pub fn create_device_info_screen(ui: &Rc<MainWindow>) {
             n if n < 0 => "Factory reset no data".into(),
             0 => "Factory setup".into(),
             n if n > 30 => "Factory reset 30 plus".into(),
-            n => format!("Factory reset {} times", n),
+            n => format!("Factory reset {} times", n-1),
         };
 
         let items = ModelRc::new(VecModel::from(vec![
