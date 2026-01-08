@@ -7,15 +7,15 @@ pub trait Display {
     fn draw_rect(&self, x: u16, y: u16, w: u16, h: u16, color: u16);
     fn fill_rect(&mut self, x: u16, y: u16, w: u16, h: u16, color: u16);
     fn draw_line(&mut self, y: u16, x_start: u16, x_end: u16, pixels: &[u16]);
-      fn draw_qr(&mut self, x: u16, y: u16, data: &str) {
-        unsafe {
-          let code = QR_CODE.as_ref().unwrap();
-          let qr_data = code.get_data();
-          let qr_width = code.get_width() as u8;
+    fn draw_qr(&mut self, x: u16, y: u16, data: &str) {
+      unsafe {
+        let code = QR_CODE.as_ref().unwrap();
+        let qr_data = code.get_data();
+        let qr_width = code.get_width() as u8;
 
-          self.draw_qr_from_buffer(x, y, qr_data, qr_width as usize);
-        }
+        self.draw_qr_from_buffer(x, y, qr_data, qr_width as usize);
       }
+    }
 
     fn draw_qr_from_buffer(&mut self, x: u16, y: u16, buffer: &[u8], qr_width: usize) {
 

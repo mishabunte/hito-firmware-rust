@@ -11,6 +11,10 @@ static mut QR_CODE_OUT_BUFFER: [u8; Version::MAX.buffer_len()] = [0u8; Version::
 static mut QR_CODE_TEMP_BUFFER: [u8; Version::MAX.buffer_len()] = [0u8; Version::MAX.buffer_len()];
 static mut QR_CODE_WIDTH: usize = Version::MAX.buffer_len();
 
+const Y_OFFSET: u16 = 40;
+const SCREEN_WIDTH: u16 = 320;
+const SCREEN_HEIGHT: u16 = 240;
+
 fn qr_code_to_u8_vec(qrcode: &QrCode) -> Vec<u8> {
     let mut data = Vec::with_capacity(qrcode.size() as usize * qrcode.size() as usize);
     for y in 0..qrcode.size() {
@@ -47,6 +51,14 @@ impl QrCodeWrapper {
     pub fn set_coords(&mut self, x: u16, y: u16) {
         self.x = x;
         self.y = y;
+    }
+
+    pub fn set_centered_coords(&mut self) {
+      let qr_density = IMAGE_MAX_WIDTH / self.width as usize;
+      // Convert u8 QR data to u16 RGB565 colors
+      let image_width = self.width as usize * qr_density;
+      self.x = (SCREEN_WIDTH - image_width as u16) / 2;
+      self.y = (SCREEN_HEIGHT - Y_OFFSET / 4 - image_width as u16) / 2;
     }
 
     pub fn set_data(&mut self, data: &str) {
