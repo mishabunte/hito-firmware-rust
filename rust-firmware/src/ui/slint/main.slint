@@ -216,15 +216,18 @@ export component MainWindow inherits Window {
 
     in-out property <bool> setting-shown: true;
     in-out property <bool> back-shown: true;
+    in-out property <bool> text-wrapping: false;
 
     clear-screen => {
       header-title = "";
       items = [];
       images = [];
       buttons = [];
+      small-text-items = [];
       setting-shown = false;
       back-shown = true;
       protocol-image-shown = false;
+      text-wrapping = false;
       subheader-title = "";
       current-protocol = Protocol.NFC;
       center-text = false;
@@ -235,6 +238,7 @@ export component MainWindow inherits Window {
     default-font-family: "Roboto Mono";
 
     in-out property <[ScreenItem]> items;
+    in-out property <[ScreenItem]> small-text-items;
     in-out property <[ScreenImage]> images;
     in-out property <[ScreenButton]> buttons;
 
@@ -247,15 +251,29 @@ export component MainWindow inherits Window {
     
     for item in items: Rectangle {
       Text {
-      x: item.x;
-      y: item.y;
-      width: item.width;
-      height: item.height;
-      text: item.text;
-      font-size: 20px;
-      horizontal-alignment: root.center-text ? center : left;
+        x: item.x;
+        y: item.y;
+        width: item.width;
+        height: item.height;
+        text: item.text;
+        font-size: 20px;
+        horizontal-alignment: root.center-text ? center : left;
+        wrap: root.text-wrapping ? word-wrap : no-wrap;
+      }
     }
-  }
+
+    for item in small-text-items: Rectangle {
+      Text {
+        x: item.x;
+        y: item.y;
+        width: item.width;
+        height: item.height;
+        text: item.text;
+        font-size: 12px;
+        horizontal-alignment: root.center-text ? center : left;
+        wrap: root.text-wrapping ? word-wrap : no-wrap;
+      }
+    }
 
     in-out property <string> subheader-title;
     
