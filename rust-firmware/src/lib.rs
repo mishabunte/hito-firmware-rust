@@ -29,8 +29,10 @@ pub mod crypto {
             
             mod transaction_parser;
             mod transaction_serializer;
+            mod transaction_signer;
             pub use transaction_parser::*;
             pub use transaction_serializer::*;
+            pub use transaction_signer::*;
         }
     }
 }

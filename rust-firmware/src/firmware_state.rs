@@ -2,7 +2,7 @@ use core::cell::{Cell, RefCell};
 extern crate alloc;
 use alloc::string::String;
 use crate::log_info;
-use crate::crypto::libcrypt0pro::stellar::ParsedTransaction;
+use crate::crypto::libcrypt0pro::stellar::{TransactionEnvelope};
 
 pub struct DeviceInfo {
     pub firmware_version: String,
@@ -47,7 +47,7 @@ pub struct FirmwareState {
   qr_data_requested: Cell<bool>,
   scale_shown_changed: Cell<bool>,
   protocol_requested: Cell<bool>,
-  parsed_tx: RefCell<Option<ParsedTransaction>>,
+  parsed_tx: RefCell<Option<TransactionEnvelope>>,
   stellar_address: RefCell<Option<String>>,
   seed_length: RefCell<Option<usize>>,
 }
@@ -106,10 +106,10 @@ impl FirmwareState {
   pub fn clear_protocol_change_requested(&self) {
       self.protocol_requested.set(false);
   }
-  pub fn get_parsed_tx(&self) -> Option<ParsedTransaction> {
+  pub fn get_parsed_tx(&self) -> Option<TransactionEnvelope> {
       self.parsed_tx.borrow().clone()
   }
-  pub fn set_parsed_tx(&self, parsed_tx: ParsedTransaction) {
+  pub fn set_parsed_tx(&self, parsed_tx: TransactionEnvelope) {
     self.parsed_tx.borrow_mut().replace(parsed_tx);
   }
   pub fn mark_scale_shown_changed(&self)          { self.scale_shown_changed.set(true); }

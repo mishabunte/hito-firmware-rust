@@ -14,12 +14,16 @@ use alloc::string::String;
 use slint::ModelRc;
 use slint::VecModel;
 
+use crate::crypto::libcrypt0pro::stellar::OperationDetails;
+use crate::crypto::libcrypt0pro::stellar::ParsedMuxedAccount;
+use crate::crypto::libcrypt0pro::stellar::TransactionEnvelope;
 use crate::slint_generatedMainWindow::Protocol;
 use crate::slint_generatedMainWindow::{MainWindow, ScreenButton, ScreenItem};
 use crate::log_info;
 use crate::ui::router::{navigate_to, go_back};
 use crate::firmware;
 use crate::state;
+use crate::ui::screens::show_alert;
 
 use slint::{ComponentHandle, ToSharedString};
 
@@ -81,160 +85,119 @@ fn shorten_address(address: &str) -> String {
 }
 
 /// Handle a Stellar transaction - parse, validate, store in state, and navigate to SendStellar screen
-fn handle_stellar_transaction(tx_data: &str, ui: &MainWindow) {
+fn handle_stellar_transaction(payload: &str, ui: &MainWindow) {
     use crate::crypto::crypt0::hex_to_bytes;
 
     let vault_arc = firmware().vault.clone();
     let vault = vault_arc.lock();
+
+    let payload_split = payload
+        .split_once(':');
+    if payload_split.is_none() {
+        show_alert("\\\\Invalid payload\\\\prefix");
+        return;
+    }
+    let (network_hash, tx_data) = payload_split.unwrap();
+    if network_hash.len() != 64 {
+        show_alert("\\\\Invalid payload\\\\prefix");
+        return;
+    }
     
-    match StellarTransactionParser::parse_transaction(tx_data) {
-        Ok(parsed_tx) => {
+    match StellarTransactionParser::parse_transaction(tx_data, network_hash) {
+        Ok(envelope) => {
             let s = state().lock();
-            
-            // Validate source account matches our wallet
-            let pk_vec = hex_to_bytes(&parsed_tx.source_account).expect("invalid hex for source_account");
-            let pk: [u8; 32] = pk_vec
-                .as_slice()
-                .try_into()
-                .expect("pubkey length != 32");
-            let address = StellarWallet::encode_stellar_address(&pk).expect("failed to encode stellar address");
-            log_info!("Address: {}", address);
-            
-            if let Ok(our_address) = vault.get_stellar_address() {
-                if address != our_address {
+
+            match &envelope {
+              TransactionEnvelope::Transaction(parsed_tx) => {
+                let address = parsed_tx.source_account.clone();
+                log_info!("Address: {}", address);
+                
+                if let Ok(our_address) = vault.get_stellar_address() {
+                    if address != our_address {
+                        drop(s);
+                        show_alert("Wallet is not paired");
+                        return;
+                    }
+                } else {
                     drop(s);
-                    show_error(ui, "Wallet is not paired");
+                    show_alert("No wallet configured");
                     return;
                 }
-            } else {
-                log_info!("Address: {}", s.get_stellar_address().unwrap_or("None".into()));
-                drop(s);
-                show_error(ui, "No wallet configured");
-                return;
-            }
 
-            // Validate network
-            let network_hash_hex = parsed_tx
-                .network_hash
-                .as_ref()
-                .map(|h| h.get_hash_hex());
-            
-            let network_valid = match network_hash_hex {
-                Some(NETWORK_ID_TESTNET) | Some(NETWORK_ID_MAINNET) | Some(NETWORK_ID_FUTURENET) => true,
-                _ => false,
-            };
-            
-            if !network_valid {
-                drop(s);
-                show_error(ui, "Unknown network");
-                return;
-            }
+                // Validate network
+                let network_hash_hex = parsed_tx
+                    .network_hash
+                    .as_ref()
+                    .map(|h| h.get_hash_hex());
+                
+                let network_valid = match network_hash_hex {
+                    Some(NETWORK_ID_TESTNET) | Some(NETWORK_ID_MAINNET) | Some(NETWORK_ID_FUTURENET) => true,
+                    _ => false,
+                };
+                
+                if !network_valid {
+                    drop(s);
+                    show_alert("\\\\Unknown network");
+                    return;
+                }
 
-            // Validate we have a payment or create_account operation
-            let has_valid_op = parsed_tx.operations.iter().any(|op| {
-                matches!(&op.details,
-                    crate::crypto::libcrypt0pro::stellar::OperationDetails::Payment { .. } |
-                    crate::crypto::libcrypt0pro::stellar::OperationDetails::CreateAccount { .. }
-                )
-            });
+                // Validate we have a payment or create_account operation
+                let has_valid_op = parsed_tx.operations.iter().any(|op| {
+                    matches!(&op.details,
+                        OperationDetails::Payment { .. } |
+                        OperationDetails::CreateAccount { .. }
+                    )
+                });
 
-            if !has_valid_op {
-                drop(s);
-                show_error(ui, "No payment or create_account operation found");
-                return;
-            }
+                if !has_valid_op {
+                    drop(s);
+                    show_alert("No payment or create_account operation found");
+                    return;
+                }
 
-            // Extract and validate destination
-            let dest_hex = if let Some(first_op) = parsed_tx.operations.first() {
-                match &first_op.details {
-                    crate::crypto::libcrypt0pro::stellar::OperationDetails::Payment { destination, .. } => {
-                        match destination {
-                            crate::crypto::libcrypt0pro::stellar::ParsedMuxedAccount::Ed25519 { account_id } => Some(account_id.clone()),
-                            crate::crypto::libcrypt0pro::stellar::ParsedMuxedAccount::MuxedEd25519 { account_id, .. } => Some(account_id.clone()),
+                // Extract and validate destination
+                let dest_address = if let Some(first_op) = parsed_tx.operations.first() {
+                    match &first_op.details {
+                        OperationDetails::Payment { destination, .. } => {
+                            match destination {
+                                ParsedMuxedAccount::Ed25519 { account_id } => Some(account_id.clone()),
+                                ParsedMuxedAccount::MuxedEd25519 { account_id, .. } => Some(account_id.clone()),
+                            }
                         }
+                        OperationDetails::CreateAccount { destination, .. } => {
+                            Some(destination.clone())
+                        }
+                        _ => None
                     }
-                    crate::crypto::libcrypt0pro::stellar::OperationDetails::CreateAccount { destination, .. } => {
-                        Some(destination.clone())
-                    }
-                    _ => None
-                }
-            } else {
-                None
-            };
-
-            if dest_hex.is_none() {
-                drop(s);
-                show_error(ui, "No destination address found");
-                return;
-            }
-
-            let dest_hex = dest_hex.unwrap();
-            let dest_bytes_vec = match hex_to_bytes(&dest_hex) {
-                Some(bytes) if bytes.len() == 32 => bytes,
-                _ => {
+                } else {
+                    None
+                };
+                if dest_address.is_none() {
                     drop(s);
-                    show_error(ui, "Invalid destination address");
+                    show_alert("Failed to encode destination address");
                     return;
                 }
-            };
-            
-            let mut dest_bytes = [0u8; 32];
-            dest_bytes.copy_from_slice(&dest_bytes_vec);
-            let destination = StellarWallet::encode_stellar_address(&dest_bytes);
-            if destination.is_err() {
+              },
+              TransactionEnvelope::FeeBump(_) => {
                 drop(s);
-                show_error(ui, "Failed to encode destination address");
-                return;
+                show_alert("Fee bump transactions currently not supported");
+                return; 
+              }
             }
 
             // All validation passed - store the parsed transaction and navigate
             log_info!("Stellar transaction parsed successfully");
-            s.set_parsed_tx(parsed_tx);
+            s.set_parsed_tx(envelope);
             drop(s);
             
             // Navigate to SendStellar screen to display transaction details
-            navigate_to(Screen::SendStellar);
+            navigate_to(Screen::SendStellarOperations);
         }
         Err(e) => {
-            let error_msg = format!("Failed to parse transaction:\n{:?}", e);
-            show_error(ui, &error_msg);
+            let error_msg = format!("Failed to parse transaction:\\\\{}", e);
+            show_alert(&error_msg);
         }
     }
-}
-
-/// Show an error message on the current screen
-fn show_error(ui: &MainWindow, message: &str) {
-    ui.invoke_clear_screen();
-    cleanup_send_screen();
-    ui.set_header_title(slint::SharedString::from("ERROR"));
-    let items = ModelRc::new(VecModel::from(vec![
-        ScreenItem { 
-            text: message.into(), 
-            width: 320.0 - 40.0, 
-            height: 80.0, 
-            x: 20.0, 
-            y: 80.0,
-        },
-    ]));
-    ui.set_items(items);
-    let buttons = ModelRc::new(VecModel::from(vec![
-        ScreenButton { 
-            text: "Back".into(), 
-            width: 320.0, 
-            height: 40.0, 
-            x: 0.0, 
-            has_border: false,
-            inverted: false,
-            y: 190.0,
-        },
-    ]));
-    ui.set_buttons(buttons);
-    let ui_weak = ui.as_weak();
-    ui.on_pressed(move |item| {
-        if item.text == "Back" {
-          crate::ui::navigate_to(Screen::Send);
-        }
-    });
 }
 
 
@@ -258,7 +221,7 @@ fn parse_received_data(data: &[u8], ui: &MainWindow) {
             handle_stellar_transaction(tx_data, ui);
         },
         CallType::Unknown => {
-            show_error(ui, "Unknown call type received");
+            show_alert("Unknown call type received");
             cleanup_send_screen();
         }
     }

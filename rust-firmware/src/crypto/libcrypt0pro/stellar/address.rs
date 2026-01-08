@@ -151,6 +151,48 @@ impl StellarWallet {
         Ok(encoded)
     }
 
+    /// Decode Stellar address (starting with 'G') to public key
+    pub fn decode_stellar_address(address: &str) -> Result<[u8; 32], StellarError> {
+        // Decode from base32
+        let decoded = base32::decode(Alphabet::Rfc4648 { padding: false }, address)
+            .ok_or(StellarError::AddressEncodeError)?;
+        
+        // Verify minimum length (1 byte version + 32 bytes key + 2 bytes checksum)
+        if decoded.len() != 35 {
+            return Err(StellarError::AddressEncodeError);
+        }
+        
+        // Extract version byte
+        let version_byte = decoded[0];
+        let expected_version = 6u8 << 3; // 48 in decimal
+        
+        if version_byte != expected_version {
+            return Err(StellarError::AddressEncodeError);
+        }
+        
+        // Extract public key (bytes 1-32)
+        let public_key_slice = &decoded[1..33];
+        
+        // Extract checksum (last 2 bytes, little-endian)
+        let checksum_bytes = [decoded[33], decoded[34]];
+        let provided_checksum = u16::from_le_bytes(checksum_bytes);
+        
+        // Verify checksum on version + public_key
+        let payload = &decoded[0..33];
+        let crc = Crc::<u16>::new(&CRC_16_XMODEM);
+        let calculated_checksum = crc.checksum(payload);
+        
+        if calculated_checksum != provided_checksum {
+            return Err(StellarError::AddressEncodeError);
+        }
+        
+        // Convert to fixed array
+        let mut public_key = [0u8; 32];
+        public_key.copy_from_slice(public_key_slice);
+        
+        Ok(public_key)
+    }
+
     /// Encode public key as Stellar address (starting with 'G')
     pub fn encode_stellar_secret(secret_key: &[u8; 32]) -> Result<String, StellarError> {
         // Stellar uses account ID version byte (6 << 3 = 48)

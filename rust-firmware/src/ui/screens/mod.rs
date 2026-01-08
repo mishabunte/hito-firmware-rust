@@ -2,7 +2,7 @@ extern crate alloc;
 
 use alloc::rc::Rc;
 
-use crate::{QR_CODE, slint_generatedMainWindow::MainWindow, ui::{navigate_to, screens::enter_passcode_screen::{create_confirm_passcode_screen, create_finalize_passcode_change_screen, create_set_passcode_screen}}};
+use crate::{QR_CODE, log_info, slint_generatedMainWindow::MainWindow, ui::{go_back, navigate_to, screens::enter_passcode_screen::{create_confirm_passcode_screen, create_finalize_passcode_change_screen, create_set_passcode_screen}}};
 mod pair_with_the_app_screen;
 mod menu_screen;
 mod home_screen;
@@ -14,12 +14,15 @@ mod send_screen;
 mod send_stellar_screen;
 mod show_seed_screen;
 mod enter_seed_screen;
+mod signed_screen;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use alloc::vec;
-use slint::ModelRc;
+use slint::{Model, ModelRc};
 use slint::VecModel;
 use crate::slint_generatedMainWindow::ScreenItem;
+
+const CHARS_PER_LINE_LIMIT: usize = 25;
 
 // Re-export loop handlers and cleanup functions
 pub use send_screen::{handle_send_screen_loop, cleanup_send_screen};
@@ -43,7 +46,8 @@ pub enum Screen {
     FactoryResetErase,
     Receive,
     Send,
-    SendStellar,
+    SendStellarOperations,
+    SendStellarGeneralInfo,
     ShowSeedPasscode,
     ShowSeed,
     ShowSeedBackup,
@@ -58,6 +62,7 @@ pub enum Screen {
     FinalizePasscodeChange,
     Alert,
     DeviceInfo,
+    Signed,
 }
 
 pub fn show_alert(alert: &str) {
@@ -69,32 +74,71 @@ pub fn show_alert(alert: &str) {
 
 pub fn create_alert_screen(ui: &Rc<MainWindow>, alert: &str) {
     let button_x = 0.0;
-    let button_y = 62.0;
+    let button_y = 100.0;
     let button_gap = 28.0;
-    let button_w = 130.0;
-    let button_h = 40.0;
-
-    let cancel_x = 20.0;
-    let cancel_y = 190.0;
-    let confirm_x = 170.0;
-    let confirm_y = 190.0;
     
     ui.set_center_text(true);
     // parse question into lines if too long, \\ is line break
     let alert_lines: Vec<&str> = alert.split("\\\\").collect();
 
-    let lines = alert_lines.len();
-
     // Create screen items based on number of lines
     let mut items_vec = vec![];
-    for (i, line) in alert_lines.iter().enumerate() {
+    let mut lines: Vec<&str> = vec![];
+    let mut i = 0;
+    for line in alert_lines {
+        if line.len() > CHARS_PER_LINE_LIMIT {
+          // Split long lines into multiple lines of max 25 chars. If space is found, split there
+          let mut start = 0;
+          while start < line.len() {
+              let end = if start + CHARS_PER_LINE_LIMIT >= line.len() {
+                  line.len()
+              } else {
+                  // Look for last space within next 25 chars
+                  match line[start..start + CHARS_PER_LINE_LIMIT].rfind(' ') {
+                      Some(space_index) => start + space_index,
+                      None => start + CHARS_PER_LINE_LIMIT,
+                  }
+              };
+              let segment = line[start..end].trim();
+              // items_vec.push(ScreenItem { 
+              //     text: segment.into(), 
+              //     width: 320.0,
+              //     height: 25.0,
+              //     x: button_x, 
+              //     y: button_y + i as f32 * button_gap,
+              // });
+              lines.push(segment);
+              start = end;
+              i += 1;
+        }
+      }
+      else {
+        lines.push(line);
+        // items_vec.push(ScreenItem { 
+        //     text: (*line).into(), 
+        //     width: 320.0,
+        //     height: 25.0,
+        //     x: button_x, 
+        //     // add a 10.0 gap between 2. and 3. line
+        //     y: button_y + i as f32 * button_gap,
+        // });
+        // log_info!("y: {}", button_y + i as f32 * button_gap);
+        // i += 1;
+      }
+    }
+
+    // Center y based on number of lines
+    let total_height = lines.len() as f32 * button_gap;
+    let start_y = (240.0 - total_height) / 2.0;
+
+    for (j, line) in lines.iter().enumerate() {
         items_vec.push(ScreenItem { 
             text: (*line).into(), 
             width: 320.0,
             height: 25.0,
             x: button_x, 
             // add a 10.0 gap between 2. and 3. line
-            y: if i > 1 { button_y + (i as f32) * button_gap + 10.0 } else { button_y + (i as f32) * button_gap },
+            y: start_y + j as f32 * button_gap,
         });
     }
     
@@ -119,6 +163,9 @@ fn clear_screen_data(ui: &Rc<MainWindow>) {
     ui.on_press(|_| {});
     ui.on_pressed(|_| {});
     ui.set_is_lockscreen(false);
+    ui.on_go_back(move || {
+        go_back();
+    });
 }
 
 pub fn create_screen(ui: &Rc<MainWindow>, screen: Screen) {
@@ -130,7 +177,8 @@ pub fn create_screen(ui: &Rc<MainWindow>, screen: Screen) {
         Screen::GenerateSeed => enter_seed_screen::create_generate_seed_screen(ui),
         Screen::ShowSeed => show_seed_screen::create_show_seed_screen(ui, false),
         Screen::ShowSeedBackup => show_seed_screen::create_show_seed_screen(ui, true),
-        Screen::SendStellar => send_stellar_screen::create_send_stellar_screen(ui),
+        Screen::SendStellarOperations => send_stellar_screen::create_send_stellar_operations_screen(ui),
+        Screen::SendStellarGeneralInfo => send_stellar_screen::create_send_stellar_general_info_screen(ui),
         Screen::Send => send_screen::create_send_screen(ui),
         Screen::Lock => lock_screen::create_lock_screen(ui),
         Screen::EnterPasscode => enter_passcode_screen::create_enter_passcode_screen(ui, Screen::Home),
@@ -142,6 +190,7 @@ pub fn create_screen(ui: &Rc<MainWindow>, screen: Screen) {
             };
             create_alert_screen(ui, &alert_message);
         },
+        Screen::Signed => signed_screen::create_signed_screen(ui),
         Screen::PairWithApp => pair_with_the_app_screen::create_pair_with_app_screen(ui),
         Screen::FactoryReset => factory_reset_screen::create_factory_reset_screen(ui),
         Screen::Receive => receive_screen::create_receive_screen(ui),
