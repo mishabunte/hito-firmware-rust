@@ -7,6 +7,7 @@ export component TransparentButton {
     in-out property <bool> border-shown: true;
     in-out property <color> text-color-unpressed: Palette.blue;
     in-out property <color> text-color-pressed: Palette.black;
+    property <length> touch-padding: 10px;
     Text {
         text: content;
         font-size: root.in-font-size;
@@ -14,15 +15,16 @@ export component TransparentButton {
         horizontal-alignment: center;
         vertical-alignment: center;
         TouchArea {
-            width: parent.width + 10px;
-            height: parent.height + 10px;
+            x: parent.x - touch-padding;
+            y: parent.y - touch-padding;
+            width: parent.width + 2*touch-padding;
+            height: parent.height + 2*touch-padding;
             pointer-event(event) => {
                 if (event.kind == PointerEventKind.down) {
                     pressed = true;
                 } else if (event.kind == PointerEventKind.up) {
                     pressed = false;
                     root.clicked();
-                    //debug("Clicked pin", content);
                 }
             }
         }
