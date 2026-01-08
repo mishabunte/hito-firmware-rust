@@ -18,6 +18,7 @@ use crate::log_info;
 use crate::firmware;
 use crate::drivers::Touch;
 use crate::ui::navigate_to;
+use crate::ui::router::set_back_screen;
 use crate::ui::screens::show_alert;
 
 static mut BACKUP_MODE: bool = false;
@@ -93,6 +94,7 @@ fn generate_page_items(page_index: usize, mnemonic: &[String], revealed_slots: u
 }
 
 pub fn create_show_seed_screen(ui: &Rc<MainWindow>, backup_mode: bool) {
+    set_back_screen(Screen::Home);
     unsafe {
         CURRENT_PAGE = 0;
         REVEALED_SLOTS = 0;

@@ -12,6 +12,7 @@ use slint::VecModel;
 use core::cell::RefCell;
 
 use crate::crypto::crypt0::mnemonic_to_indices;
+use crate::drivers::Battery;
 use crate::slint_generatedMainWindow::{MainWindow, ScreenItem, ScreenButton, ScreenImage};
 use crate::log_info;
 use crate::state;
@@ -351,7 +352,7 @@ fn on_encrypt_clicked(seed_check_mode: bool) {
     match vault.init(&entropy, entropy_len, pass.as_bytes()) {
         Ok(()) => {
             log_info!("Vault initialized and seed encrypted successfully.");
-            navigate_to(Screen::Lock);
+            firmware().battery.lock().reboot();
         },
         Err(e) => {
             log_info!("Error initializing vault: {:?}", e);

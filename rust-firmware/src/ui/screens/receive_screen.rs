@@ -12,12 +12,14 @@ use slint::VecModel;
 use alloc::format;
 
 use crate::ScreenItem;
+use crate::common::set_qr_data;
 use crate::drivers::Display;
 use crate::drivers::QrCodeWrapper;
 use crate::firmware;
 use crate::slint_generatedMainWindow::{MainWindow, ScreenButton};
 use crate::log_info;
 use crate::ui::router::{navigate_to, go_back};
+use crate::ui::screens::show_alert;
 use alloc::string::String;
 use slint::ToSharedString;
 
@@ -48,27 +50,27 @@ pub fn create_receive_screen(ui: &Rc<MainWindow>) {
     let address_w = 320.0;
     let address_h = 35.0;
 
-    let address = firmware().vault.lock().get_stellar_address().unwrap_or(String::from("Error retrieving address"));
-    let address_short = shorten_address(&address);
+    if let Ok(address) = firmware().vault.lock().get_stellar_address() {
+        let address_short = shorten_address(&address);
 
-    let items = ModelRc::new(VecModel::from(vec![
-      ScreenItem { 
-          text: address_short.into(), 
-          width: address_w, 
-          height: address_h, 
-          x: address_x, 
-          y: address_y,
-      },
-    ]));
+        let items = ModelRc::new(VecModel::from(vec![
+          ScreenItem { 
+              text: address_short.into(), 
+              width: address_w, 
+              height: address_h, 
+              x: address_x, 
+              y: address_y,
+          },
+        ]));
 
-    ui.set_header_title(slint::SharedString::from("YOUR ADDRESS"));
-    
-    ui.set_items(items);
+        ui.set_header_title(slint::SharedString::from("YOUR ADDRESS"));
+        
+        ui.set_items(items);
 
-    unsafe {
-      let qr_data = format!("stellar:{}", address);
-      QR_CODE = Some(QrCodeWrapper::new());
-      QR_CODE.as_mut().unwrap().set_data(&qr_data);
-      QR_CODE.as_mut().unwrap().set_coords(75, 35);
+        let qr_data = format!("stellar:{}", address);
+        set_qr_data(&qr_data);
+    } else {
+        show_alert("\\\\Error retrieving address");
+        return;
     }
 }

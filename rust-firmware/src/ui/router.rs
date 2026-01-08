@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use alloc::rc::Rc;
 use core::cell::{Cell, RefCell};
 
-use crate::slint_generatedMainWindow::MainWindow;
+use crate::{log_info, slint_generatedMainWindow::MainWindow};
 use super::screens::{create_screen, Screen, cleanup_send_screen};
 
 /// Pending navigation action
@@ -43,6 +43,14 @@ pub fn navigate_to(screen: Screen) {
 pub fn go_back() {
     unsafe {
         PENDING_NAV = PendingNavigation::GoBack;
+    }
+}
+
+pub fn set_back_screen(screen: Screen) {
+    unsafe {
+        if let Some(ref router) = GLOBAL_ROUTER {
+            router.set_back_screen(screen);
+        }
     }
 }
 
@@ -108,6 +116,9 @@ impl Router {
     /// 2. Clear existing items in the UI
     /// 3. Call the appropriate screen creation function
     /// 4. Update the current screen state
+    pub fn set_back_screen(&self, screen: Screen) {
+        self.history.borrow_mut().push(screen);
+    }
     pub fn navigate(&self, screen: Screen) {
         // Push current screen to history before navigating
         let current = *self.current_screen.borrow();
@@ -118,7 +129,9 @@ impl Router {
         }
         
         if current != screen {
-            self.history.borrow_mut().push(current);
+            if screen != Screen::Alert {
+                self.history.borrow_mut().push(current);
+            }
         }
 
         // Update current screen
