@@ -49,6 +49,8 @@ const VAULT_MAIN_FILE: &str = "hito_vault_main.bin";
 const VAULT_BACKUP_FILE: &str = "hito_vault_backup.bin";
 #[cfg(feature = "minifb")]
 const VAULT_RAM_FILE: &str = "hito_vault_ram.bin";
+#[cfg(feature = "minifb")]
+const VAULT_SEAL_FILE: &str = "hito_vault_seal.bin";
 
 // Test-specific file paths
 #[cfg(feature = "minifb")]
@@ -1544,6 +1546,19 @@ impl HitoVault {
     #[cfg(feature = "minifb")]
     {
       const VAULT_PAGE_SIZE_BYTES: usize = 4096;
+      
+      // Increment reset counter if erasing both main and backup
+      if main && backup {
+        if let Some(seal) = HitoSealBlock::get() {
+          let mut seal_update = seal;
+          seal_update.reset_counter_bits = seal_update.reset_counter_bits << 1;
+          
+          if !HitoSealBlock::save(&seal_update) {
+            log_info!("Failed to update seal block during vault erase");
+            return false;
+          }
+        }
+      }
       
       if main {
         unsafe {
