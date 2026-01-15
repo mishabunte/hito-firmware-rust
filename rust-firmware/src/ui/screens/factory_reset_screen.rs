@@ -38,8 +38,8 @@ pub fn create_erase_screen(ui: &Rc<MainWindow>) {
     create_generic_question_screen(
         ui,
         "FACTORY RESET",
-        "Enter your passcode to \\\\ confirm factory reset.",
-        "Confirm",
+        "This action cannot\\\\be undone.\\\\Are you sure you want\\\\to erase all data?",
+        "Erase",
         Some("Cancel"),
         || {
           // Perform factory reset
@@ -50,11 +50,11 @@ pub fn create_erase_screen(ui: &Rc<MainWindow>) {
           } else {
             log_info!("Factory Reset: Vault erase failed");
             // Navigate back to menu
-            navigate_to(Screen::Menu);
+            navigate_to(Screen::Home);
           }
         },
         || {
-          navigate_to(Screen::Menu);
+          navigate_to(Screen::Home);
         }
     );
 }
