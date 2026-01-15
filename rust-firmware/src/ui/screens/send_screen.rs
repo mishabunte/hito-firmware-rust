@@ -15,7 +15,7 @@ use slint::ModelRc;
 use slint::VecModel;
 
 use crate::crypto::libcrypt0pro::stellar::OperationDetails;
-use crate::crypto::libcrypt0pro::stellar::ParsedMuxedAccount;
+use crate::crypto::libcrypt0pro::stellar::MuxedAccount;
 use crate::crypto::libcrypt0pro::stellar::TransactionEnvelope;
 use crate::slint_generatedMainWindow::Protocol;
 use crate::slint_generatedMainWindow::{MainWindow, ScreenButton, ScreenItem};
@@ -94,12 +94,12 @@ fn handle_stellar_transaction(payload: &str, ui: &MainWindow) {
     let payload_split = payload
         .split_once(':');
     if payload_split.is_none() {
-        show_alert("\\\\Invalid payload\\\\prefix");
+        show_alert("Invalid payload prefix");
         return;
     }
     let (network_hash, tx_data) = payload_split.unwrap();
     if network_hash.len() != 64 {
-        show_alert("\\\\Invalid payload\\\\prefix");
+        show_alert("Invalid payload prefix");
         return;
     }
     
@@ -137,7 +137,7 @@ fn handle_stellar_transaction(payload: &str, ui: &MainWindow) {
                 
                 if !network_valid {
                     drop(s);
-                    show_alert("\\\\Unknown network");
+                    show_alert("Unknown network");
                     return;
                 }
 
@@ -145,13 +145,15 @@ fn handle_stellar_transaction(payload: &str, ui: &MainWindow) {
                 let has_valid_op = parsed_tx.operations.iter().any(|op| {
                     matches!(&op.details,
                         OperationDetails::Payment { .. } |
-                        OperationDetails::CreateAccount { .. }
+                        OperationDetails::CreateAccount { .. } | 
+                        OperationDetails::PathPaymentStrictReceive { .. } |
+                        OperationDetails::PathPaymentStrictSend { .. }
                     )
                 });
 
                 if !has_valid_op {
                     drop(s);
-                    show_alert("No payment or create_account operation found");
+                    show_alert("No payment, create_account, or path_payment operation found");
                     return;
                 }
 
@@ -160,12 +162,24 @@ fn handle_stellar_transaction(payload: &str, ui: &MainWindow) {
                     match &first_op.details {
                         OperationDetails::Payment { destination, .. } => {
                             match destination {
-                                ParsedMuxedAccount::Ed25519 { account_id } => Some(account_id.clone()),
-                                ParsedMuxedAccount::MuxedEd25519 { account_id, .. } => Some(account_id.clone()),
+                                MuxedAccount::Ed25519 { account_id } => Some(account_id.clone()),
+                                MuxedAccount::MuxedEd25519 { account_id, .. } => Some(account_id.clone()),
                             }
                         }
                         OperationDetails::CreateAccount { destination, .. } => {
                             Some(destination.clone())
+                        }
+                        OperationDetails::PathPaymentStrictReceive { destination, .. } => {
+                            match destination {
+                                MuxedAccount::Ed25519 { account_id } => Some(account_id.clone()),
+                                MuxedAccount::MuxedEd25519 { account_id, .. } => Some(account_id.clone()),
+                            }
+                        }
+                        OperationDetails::PathPaymentStrictSend { destination, .. } => {
+                            match destination {
+                                MuxedAccount::Ed25519 { account_id } => Some(account_id.clone()),
+                                MuxedAccount::MuxedEd25519 { account_id, .. } => Some(account_id.clone()),
+                            }
                         }
                         _ => None
                     }

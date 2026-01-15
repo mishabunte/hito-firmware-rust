@@ -4,7 +4,7 @@
 const TEST_SEED: &str = "38b6a363e88b28138cc71f0145ab429c251baa8cd8fa6d80bcfb39c35076f1766e24dfc01ce0e22e8dfec185ad7a67ce748cd6551ad1b738619b8859808bbf88";
 
 mod stellar_transaction_tests {
-    use hito_firmware_rust::crypto::{crypt0::{bytes_to_hex, hex_to_bytes}, libcrypt0pro::stellar::{NETWORK_ID_MAINNET, NETWORK_ID_TESTNET, OperationDetails, ParsedAsset, ParsedMuxedAccount, StellarTransactionParser, StellarTransactionSerializer, StellarTransactionSigner, StellarWallet, TransactionEnvelope}};
+    use hito_firmware_rust::crypto::{crypt0::{bytes_to_hex, hex_to_bytes}, libcrypt0pro::stellar::{NETWORK_ID_MAINNET, NETWORK_ID_TESTNET, OperationDetails, Asset, MuxedAccount, StellarTransactionParser, StellarTransactionSerializer, StellarTransactionSigner, StellarWallet, TransactionEnvelope}};
 
     use crate::TEST_SEED;
 
@@ -59,13 +59,13 @@ mod stellar_transaction_tests {
                           OperationDetails::Payment { amount, destination, asset } => {
                               assert_eq!(*amount, 10000000); // 1 XLM
                               match destination {
-                                  ParsedMuxedAccount::Ed25519 { account_id } => {
+                                  MuxedAccount::Ed25519 { account_id } => {
                                       assert_eq!(account_id, "GCEMPQ7LYZ7EYWFYQYXIFQRUHKLRT74TLORALIOZIP2KPED7TD3GG352");
                                   },
                                   _ => panic!("Expected Ed25519 destination account"),
                               }
                               match asset {
-                                  ParsedAsset::Native => {},
+                                  Asset::Native => {},
                                   _ => panic!("Expected Native asset"),
                               }
                           },
@@ -108,13 +108,13 @@ mod stellar_transaction_tests {
                           OperationDetails::Payment { amount, destination, asset } => {
                               assert_eq!(*amount, 10000000); // 1 XLM
                               match destination {
-                                  ParsedMuxedAccount::Ed25519 { account_id } => {
+                                  MuxedAccount::Ed25519 { account_id } => {
                                       assert_eq!(account_id, "GCEMPQ7LYZ7EYWFYQYXIFQRUHKLRT74TLORALIOZIP2KPED7TD3GG352");
                                   },
                                   _ => panic!("Expected Ed25519 destination account"),
                               }
                               match asset {
-                                  ParsedAsset::Native => {},
+                                  Asset::Native => {},
                                   _ => panic!("Expected Native asset"),
                               }
                           },
@@ -188,6 +188,67 @@ mod stellar_transaction_tests {
               };
               let signature_expected = "90946182bd41326335d65328a330c077f562064b4229ef4fc16011f97a593b826084106d67666b3196e5d5e9ebd5f8b618e8efec28e85ab7a63b2a28800c860c";
               assert_eq!(signature_hex, signature_expected);
+            }
+            Err(e) => panic!("Parse error: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_swap() {
+        let base64_tx = "AAAAAgAAAACIx8Prxn5MWLiGLoLCNDqXGf+TW6IFodlD9KeQf5j2YwAAAGQABVUlAAAAAwAAAAEAAAAAAAAAAAAAAABpZk6gAAAAAAAAAAEAAAAAAAAADQAAAAAAAAAAB7+kgAAAAACIx8Prxn5MWLiGLoLCNDqXGf+TW6IFodlD9KeQf5j2YwAAAAFVU0RDAAAAAEI+fQXy7K+/7BkrIVo/G+lq7bjY5wJUq+NBPgIH3layAAAAABiDEzEAAAAAAAAAAAAAAAA=";
+        match StellarTransactionParser::parse_transaction(base64_tx, NETWORK_ID_TESTNET) {
+            Ok(envelope) => {
+                println!("Parsed transaction: {:#?}", envelope);
+                match &envelope {
+                    TransactionEnvelope::Transaction(tx) => {
+                      assert_eq!(tx.operations.len(), 1);
+                      assert_eq!(tx.source_account, "GCEMPQ7LYZ7EYWFYQYXIFQRUHKLRT74TLORALIOZIP2KPED7TD3GG352");
+                      assert!(tx.network_hash.is_some());
+                      let operation = &tx.operations[0];
+                      match &operation.details {
+                          OperationDetails::PathPaymentStrictSend { send_asset, send_amount, destination, dest_asset, dest_min, path } => {
+                              // Native XLM
+                              match send_asset {
+                                  Asset::Native => {},
+                                  _ => panic!("Expected Native asset"),
+                              }
+
+                              // 13 XLM in stroops
+                              assert_eq!(*send_amount, 130000000); 
+
+                              // Destination account
+                              match destination {
+                                  MuxedAccount::Ed25519 { account_id } => {
+                                      assert_eq!(account_id, "GCEMPQ7LYZ7EYWFYQYXIFQRUHKLRT74TLORALIOZIP2KPED7TD3GG352");
+                                  },
+                                  _ => panic!("Expected Ed25519 destination account"),
+                              } 
+
+                              // Destination asset: USDC
+                              match dest_asset {
+                                  Asset::CreditAlphanum4 { code, issuer } => {
+                                      assert_eq!(code, "USDC");
+                                      assert_eq!(issuer, "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5");
+                                  },
+                                  _ => panic!("Expected CreditAlphanum4 asset"),
+                              }
+
+                              assert_eq!(*dest_min, 411243313); // 41.1243313 USDC in stroops
+
+                              assert_eq!(path.len(), 0); // No path assets
+                          },
+                          _ => panic!("Expected PathPaymentStrictSend operation"),
+                      }
+                      match StellarTransactionSerializer::serialize_to_base64(&envelope) {
+                          Ok(serialized_xdr) => {
+                              println!("Serialized XDR: {}", serialized_xdr);
+                              assert_eq!(serialized_xdr, base64_tx);
+                          }
+                          Err(e) => panic!("Serialization error: {}", e),
+                      }
+                    }
+                    _ => panic!("Expected TransactionEnvelope::Transaction"),
+                }
             }
             Err(e) => panic!("Parse error: {}", e),
         }

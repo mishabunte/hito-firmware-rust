@@ -17,9 +17,9 @@ use crate::STATE;
 use crate::ScreenItem;
 use crate::crypto::crypt0::hex_to_bytes;
 use crate::crypto::libcrypt0pro::stellar::OperationDetails;
-use crate::crypto::libcrypt0pro::stellar::ParsedAsset;
-use crate::crypto::libcrypt0pro::stellar::ParsedMuxedAccount;
-use crate::crypto::libcrypt0pro::stellar::ParsedTransaction;
+use crate::crypto::libcrypt0pro::stellar::Asset;
+use crate::crypto::libcrypt0pro::stellar::MuxedAccount;
+use crate::crypto::libcrypt0pro::stellar::Transaction;
 use crate::crypto::libcrypt0pro::stellar::StellarWallet;
 use crate::crypto::libcrypt0pro::stellar::TransactionEnvelope;
 use crate::firmware;
@@ -308,19 +308,19 @@ fn create_operations_page(ui: &Rc<MainWindow>) {
         match &current_operation.details {
             OperationDetails::Payment { destination, amount, asset } => {
                 let dest_address = match destination {
-                    ParsedMuxedAccount::Ed25519 { account_id } => {
+                    MuxedAccount::Ed25519 { account_id } => {
                       account_id.clone()
                     },
-                    ParsedMuxedAccount::MuxedEd25519 { id: _, account_id } => {
+                    MuxedAccount::MuxedEd25519 { id: _, account_id } => {
                         account_id.clone()
                     },
                 };
                 let asset_issuer = match asset {
-                    ParsedAsset::Native => "Native".to_shared_string(),
-                    ParsedAsset::CreditAlphanum4 { issuer, .. } => {
+                    Asset::Native => "Native".to_shared_string(),
+                    Asset::CreditAlphanum4 { issuer, .. } => {
                       shorten_address(issuer).to_shared_string()
                     },
-                    ParsedAsset::CreditAlphanum12 { issuer, .. } => {
+                    Asset::CreditAlphanum12 { issuer, .. } => {
                       shorten_address(issuer).to_shared_string()
                     },
                 };
@@ -329,9 +329,9 @@ fn create_operations_page(ui: &Rc<MainWindow>) {
                 operation_lines.push(format!("Destination: {}", dest_short));
                 let amount_str = StellarTransactionParser::stroops_to_xlm_string(*amount);
                 let asset_str = match asset {
-                    ParsedAsset::Native => "XLM".to_shared_string(),
-                    ParsedAsset::CreditAlphanum4 { code, .. } => code.clone().to_shared_string(),
-                    ParsedAsset::CreditAlphanum12 { code, .. } => code.clone().to_shared_string(),
+                    Asset::Native => "XLM".to_shared_string(),
+                    Asset::CreditAlphanum4 { code, .. } => code.clone().to_shared_string(),
+                    Asset::CreditAlphanum12 { code, .. } => code.clone().to_shared_string(),
                 };
                 operation_lines.push(format!("Amount: {} {}", amount_str, asset_str));
             },
@@ -340,6 +340,58 @@ fn create_operations_page(ui: &Rc<MainWindow>) {
                 operation_lines.push(format!("Destination: {}", dest_short));
                 let amount_str = StellarTransactionParser::stroops_to_xlm_string(*starting_balance);
                 operation_lines.push(format!("Starting balance: {} XLM", amount_str));
+            },
+
+            OperationDetails::PathPaymentStrictSend { send_asset, send_amount, destination, dest_asset, dest_min, path } => {
+                let send_asset_issuer = match send_asset {
+                    Asset::Native => "Native".to_shared_string(),
+                    Asset::CreditAlphanum4 { issuer, .. } => {
+                      shorten_address(issuer).to_shared_string()
+                    },
+                    Asset::CreditAlphanum12 { issuer, .. } => {
+                      shorten_address(issuer).to_shared_string()
+                    },
+                };
+                let send_asset_code = match send_asset {
+                    Asset::Native => "XLM".to_shared_string(),
+                    Asset::CreditAlphanum4 { code, .. } => code.clone().to_shared_string(),
+                    Asset::CreditAlphanum12 { code, .. } => code.clone().to_shared_string(),
+                };
+                let send_amount_str = StellarTransactionParser::stroops_to_xlm_string(*send_amount);
+                
+                
+                let dest_address = match destination {
+                    MuxedAccount::Ed25519 { account_id } => {
+                      account_id.clone()
+                    },
+                    MuxedAccount::MuxedEd25519 { id: _, account_id } => {
+                        account_id.clone()
+                    },
+                };
+                let dest_short = shorten_address(&dest_address).to_shared_string();
+
+                let dest_asset_issuer = match dest_asset {
+                    Asset::Native => "Native".to_shared_string(),
+                    Asset::CreditAlphanum4 { issuer, .. } => {
+                      shorten_address(issuer).to_shared_string()
+                    },
+                    Asset::CreditAlphanum12 { issuer, .. } => {
+                      shorten_address(issuer).to_shared_string()
+                    },
+                };
+                let dest_asset_code = match dest_asset {
+                    Asset::Native => "XLM".to_shared_string(),
+                    Asset::CreditAlphanum4 { code, .. } => code.clone().to_shared_string(),
+                    Asset::CreditAlphanum12 { code, .. } => code.clone().to_shared_string(),
+                };
+                let dest_min_str = StellarTransactionParser::stroops_to_xlm_string(*dest_min);
+
+                operation_lines.push(format!("Send: {} {}", send_amount_str, send_asset_code));
+                operation_lines.push(format!("Send asset issuer: {}", send_asset_issuer));
+                operation_lines.push(format!("Destination: {}", dest_short));
+                
+                operation_lines.push(format!("Dest asset issuer: {}", dest_asset_issuer));
+                operation_lines.push(format!("Dest min: {} {}", dest_min_str, dest_asset_code));
             },
             _ => {
                 operation_lines.push("Details: (not implemented)".to_shared_string());

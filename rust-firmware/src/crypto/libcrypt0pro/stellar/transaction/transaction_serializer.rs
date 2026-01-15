@@ -5,42 +5,11 @@ use alloc::{vec::Vec, string::String};
 use base64ct::{Base64, Encoding};
 
 use crate::crypto::crypt0::{bytes_to_hex, hex_to_bytes};
+use crate::crypto::libcrypt0pro::stellar::StellarWallet;
 
-use crate::crypto::libcrypt0pro::stellar::{
-    MAX_XDR_LEN, OperationDetails, ParsedAsset, ParsedChangeTrustAsset, ParsedFeeBumpTransaction, ParsedLedgerBounds, ParsedMemo, ParsedMuxedAccount, ParsedOperation, ParsedSignature, ParsedTimeBounds, ParsedTransaction, StellarWallet, TransactionEnvelope, TransactionEnvelopeType, TransactionParseError
-};
-
-pub enum TransactionSerializeError {
-    Base64Error,
-    XdrError,
-    InvalidEnvelopeType,
-    UnsupportedOperation,
-    StringTooLong,
-    TooManyOperations,
-    TooManySignatures,
-    DataTooLarge,
-    AccountIdError,
-    MuxedAccountError,
-}
-
-// impl core::fmt::Display for TransactionSerializeError {
-//     fn fmt(f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-//         match self {
-//             TransactionSerializeError::Base64Error => write!(f, "Base64 decode error"),
-//             TransactionSerializeError::XdrError => write!(f, "XDR parsing error"),
-//             TransactionSerializeError::InvalidEnvelopeType => write!(f, "Invalid transaction envelope type"),
-//             TransactionSerializeError::UnsupportedOperation => write!(f, "Unsupported operation type"),
-//             TransactionSerializeError::StringTooLong => write!(f, "String too long for bounded container"),
-//             TransactionSerializeError::TooManyOperations => write!(f, "Too many operations in transaction"),
-//             TransactionSerializeError::TooManySignatures => write!(f, "Too many signatures in transaction"),
-//             TransactionSerializeError::DataTooLarge => write!(f, "Data too large for bounded container"),
-//             TransactionSerializeError::AccountIdError => write!(f, "Failed to parse account ID"),
-//             TransactionSerializeError::MuxedAccountError => write!(f, "Failed to parse muxed account"),
-//         }
-//     }
-// }
-
-use crate::printk;
+use super::*;
+use super::xdr::*;
+use crate::log_info;
 
 #[derive(Debug)]
 pub struct StellarTransactionSerializer;
@@ -52,25 +21,25 @@ impl StellarTransactionSerializer {
     }
 
     /// Serialize ParsedTransaction directly to XDR bytes
-    pub fn serialize_to_xdr_bytes(envelope: &TransactionEnvelope, buffer: &mut Vec<u8>) -> Result<Vec<u8>, TransactionParseError> {
+    pub fn serialize_to_xdr_bytes(envelope: &TransactionEnvelope, buffer: &mut Vec<u8>) -> Result<Vec<u8>, StellarTransactionError> {
         match &envelope {
           TransactionEnvelope::Transaction(tx) => {
               match tx.envelope_type {
                   TransactionEnvelopeType::TxV0 => {
-                      Self::write_u32(0, buffer)?; // ENVELOPE_TYPE_TX_V0
+                      Self::write_u32(ENVELOPE_TYPE_TX_V0 as u32, buffer)?; // ENVELOPE_TYPE_TX_V0
                       Self::serialize_v0_transaction(tx, buffer)?;
                   }
                   TransactionEnvelopeType::Tx => {
-                      Self::write_u32(2, buffer)?; // ENVELOPE_TYPE_TX_V1
+                      Self::write_u32(ENVELOPE_TYPE_TX as u32, buffer)?; // ENVELOPE_TYPE_TX
                       Self::serialize_v1_transaction(tx, buffer)?;
                   }
                   TransactionEnvelopeType::TxFeeBump => {
-                      return Err(TransactionParseError::InvalidEnvelopeType);
+                      return Err(StellarTransactionError::InvalidEnvelopeType);
                   }
               }
           },
           TransactionEnvelope::FeeBump(fee_bump) => {
-              Self::write_u32(5, buffer)?; // ENVELOPE_TYPE_TX_FEE_BUMP
+              Self::write_u32(ENVELOPE_TYPE_TX_FEE_BUMP as u32, buffer)?; // ENVELOPE_TYPE_TX_FEE_BUMP
               Self::serialize_fee_bump_transaction(fee_bump, buffer)?;
           }
         }
@@ -79,7 +48,7 @@ impl StellarTransactionSerializer {
     }
 
     /// Serialize to base64-encoded XDR string
-    pub fn serialize_to_base64(parsed_tx: &TransactionEnvelope) -> Result<String, TransactionParseError> {
+    pub fn serialize_to_base64(parsed_tx: &TransactionEnvelope) -> Result<String, StellarTransactionError> {
         let mut buffer = Vec::with_capacity(MAX_XDR_LEN);
         let xdr_bytes = Self::serialize_to_xdr_bytes(parsed_tx, &mut buffer)?;
         Self::encode_base64(&xdr_bytes)
@@ -87,30 +56,8 @@ impl StellarTransactionSerializer {
 
     pub fn build_signature_base(
         envelope: &TransactionEnvelope,
-    ) -> Result<Vec<u8>, TransactionParseError> {
+    ) -> Result<Vec<u8>, StellarTransactionError> {
         let mut buffer = Vec::with_capacity(MAX_XDR_LEN);
-
-        // // 1. networkId (already SHA256(passphrase) done outside)
-        // buffer.extend_from_slice(network_id_bytes);
-
-        // match parsed_tx.envelope_type {
-        //     TransactionEnvelopeType::TxV0 | TransactionEnvelopeType::Tx => {
-        //         // IMPORTANT:
-        //         // Backwards compatibility rule:
-        //         // We ALWAYS use ENVELOPE_TYPE_TX (2) for signing both TxV0 and Tx.
-        //         Self::write_u32(2, &mut buffer)?; // ENVELOPE_TYPE_TX
-
-        //         // Then XDR for Transaction (no signatures!)
-        //         Self::serialize_tx_core_for_signature(parsed_tx, &mut buffer)?;
-        //     }
-        //     TransactionEnvelopeType::TxFeeBump => {
-        //         // Fee bump case uses ENVELOPE_TYPE_TX_FEE_BUMP (5)
-        //         Self::write_u32(5, &mut buffer)?; // ENVELOPE_TYPE_TX_FEE_BUMP
-
-        //         // Then XDR for FeeBumpTransaction (no outer signatures!)
-        //         Self::serialize_fee_bump_core_for_signature(parsed_tx, &mut buffer)?;
-        //     }
-        // }
 
         // Ok(buffer)
         //let network_id_bytes = &parsed_tx.network_hash.clone().unwrap().get_hash_bytes();
@@ -118,7 +65,7 @@ impl StellarTransactionSerializer {
           TransactionEnvelope::Transaction(tx) => {
               match tx.envelope_type {
                   TransactionEnvelopeType::TxFeeBump => {
-                      return Err(TransactionParseError::InvalidEnvelopeType);
+                      return Err(StellarTransactionError::InvalidEnvelopeType);
                   }
                   _ => {
                     let network_id_bytes = &tx.network_hash.clone().unwrap().get_hash_bytes();
@@ -129,14 +76,14 @@ impl StellarTransactionSerializer {
                             // IMPORTANT:
                             // Backwards compatibility rule:
                             // We ALWAYS use ENVELOPE_TYPE_TX (2) for signing both TxV0 and Tx.
-                            Self::write_u32(2, &mut buffer)?; // ENVELOPE_TYPE_TX
+                            Self::write_u32(ENVELOPE_TYPE_TX as u32, &mut buffer)?; // ENVELOPE_TYPE_TX
 
                             // Then XDR for Transaction (no signatures!)
                             Self::serialize_tx_core_for_signature(tx, &mut buffer)?;
                             Ok(buffer)
                         }
                         TransactionEnvelopeType::TxFeeBump => {
-                          return Err(TransactionParseError::InvalidEnvelopeType);
+                          return Err(StellarTransactionError::InvalidEnvelopeType);
                         }
                     }
                   }
@@ -154,9 +101,9 @@ impl StellarTransactionSerializer {
     }
 
     fn serialize_tx_core_for_signature(
-        parsed_tx: &ParsedTransaction,
+        parsed_tx: &Transaction,
         buffer: &mut Vec<u8>,
-    ) -> Result<(), TransactionParseError> {
+    ) -> Result<(), StellarTransactionError> {
         match parsed_tx.envelope_type {
             TransactionEnvelopeType::TxV0 => {
                 // Equivalent to Transaction with AccountID source, old-school timebounds.
@@ -178,7 +125,7 @@ impl StellarTransactionSerializer {
             TransactionEnvelopeType::Tx => {
                 // V1-style transaction (muxed account + preconditions)
                 Self::write_muxed_account(
-                    &ParsedMuxedAccount::Ed25519 {
+                    &MuxedAccount::Ed25519 {
                         account_id: parsed_tx.source_account.clone(),
                     },
                     buffer,
@@ -199,7 +146,7 @@ impl StellarTransactionSerializer {
             }
             TransactionEnvelopeType::TxFeeBump => {
                 // Should not happen, handled by serialize_fee_bump_core_for_signature.
-                return Err(TransactionParseError::XdrError);
+                return Err(StellarTransactionError::XdrError);
             }
         }
 
@@ -207,9 +154,9 @@ impl StellarTransactionSerializer {
     }
 
     fn serialize_fee_bump_core_for_signature(
-        fee_bump: &ParsedFeeBumpTransaction,
+        fee_bump: &FeeBumpTransaction,
         buffer: &mut Vec<u8>,
-    ) -> Result<(), TransactionParseError> {
+    ) -> Result<(), StellarTransactionError> {
         // Fee source (muxed)
         Self::write_muxed_account(
             &fee_bump.fee_source,
@@ -252,13 +199,13 @@ impl StellarTransactionSerializer {
         hint
     }
 
-    fn serialize_v0_transaction(parsed_tx: &ParsedTransaction, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
-        printk!("Serializing V0 transaction\n");
+    fn serialize_v0_transaction(parsed_tx: &Transaction, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
+        log_info!("Serializing V0 transaction\n");
         
         // Source account (32 bytes)
         let source_account = StellarWallet::decode_stellar_address(&parsed_tx.source_account);
         if source_account.is_err() {
-            return Err(TransactionParseError::AccountIdError);
+            return Err(StellarTransactionError::AccountIdError);
         }
         let source_account = source_account.unwrap();
         Self::write_account_id(&bytes_to_hex(&source_account), buffer)?;
@@ -292,11 +239,11 @@ impl StellarTransactionSerializer {
         Ok(())
     }
 
-    fn serialize_v1_transaction(parsed_tx: &ParsedTransaction, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
-        printk!("Serializing V1 transaction\n");
+    fn serialize_v1_transaction(parsed_tx: &Transaction, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
+        log_info!("Serializing V1 transaction\n");
         
         // Source account (muxed)
-        Self::write_muxed_account(&ParsedMuxedAccount::Ed25519 {
+        Self::write_muxed_account(&MuxedAccount::Ed25519 {
             account_id: parsed_tx.source_account.clone()
         }, buffer)?;
         
@@ -324,8 +271,8 @@ impl StellarTransactionSerializer {
         Ok(())
     }
 
-    fn serialize_fee_bump_transaction(fee_bump: &ParsedFeeBumpTransaction, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
-        printk!("Serializing Fee Bump transaction\n");
+    fn serialize_fee_bump_transaction(fee_bump: &FeeBumpTransaction, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
+        log_info!("Serializing Fee Bump transaction\n");
         
         // Fee source (muxed account)
         Self::write_muxed_account(&fee_bump.fee_source, buffer)?;
@@ -348,7 +295,7 @@ impl StellarTransactionSerializer {
         Ok(())
     }
 
-    fn serialize_memo(memo: Option<&ParsedMemo>, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn serialize_memo(memo: Option<&Memo>, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         match memo {
             None => {
                 Self::write_u32(0, buffer)?; // MEMO_NONE
@@ -393,7 +340,7 @@ impl StellarTransactionSerializer {
                             Self::write_fixed_bytes(&[0u8; 32], 32, buffer)?;
                         }
                     },
-                    _ => return Err(TransactionParseError::XdrError),
+                    _ => return Err(StellarTransactionError::XdrError),
                 }
             }
         }
@@ -401,10 +348,10 @@ impl StellarTransactionSerializer {
     }
 
     fn serialize_preconditions(
-        time_bounds: &Option<ParsedTimeBounds>,
-        ledger_bounds: &Option<ParsedLedgerBounds>,
+        time_bounds: &Option<TimeBounds>,
+        ledger_bounds: &Option<LedgerBounds>,
         buffer: &mut Vec<u8>
-    ) -> Result<(), TransactionParseError> {
+    ) -> Result<(), StellarTransactionError> {
         match (time_bounds, ledger_bounds) {
             (None, None) => {
                 Self::write_u32(0, buffer)?; // PRECOND_NONE
@@ -448,19 +395,19 @@ impl StellarTransactionSerializer {
         Ok(())
     }
 
-    fn serialize_time_bounds(time_bounds: &ParsedTimeBounds, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn serialize_time_bounds(time_bounds: &TimeBounds, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         Self::write_u64(time_bounds.min_time.unwrap_or(0), buffer)?;
         Self::write_u64(time_bounds.max_time.unwrap_or(0), buffer)?;
         Ok(())
     }
 
-    fn serialize_ledger_bounds(ledger_bounds: &ParsedLedgerBounds, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn serialize_ledger_bounds(ledger_bounds: &LedgerBounds, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         Self::write_u32(ledger_bounds.min_ledger, buffer)?;
         Self::write_u32(ledger_bounds.max_ledger, buffer)?;
         Ok(())
     }
 
-    fn serialize_operations(operations: &[ParsedOperation], buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn serialize_operations(operations: &[Operation], buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         // Write operation count
         Self::write_u32(operations.len() as u32, buffer)?;
         
@@ -471,11 +418,11 @@ impl StellarTransactionSerializer {
         Ok(())
     }
 
-    fn serialize_operation(operation: &ParsedOperation, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn serialize_operation(operation: &Operation, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         // Source account (optional)
         if let Some(ref source) = operation.source_account {
             Self::write_u32(1, buffer)?; // Present
-            Self::write_muxed_account(&ParsedMuxedAccount::Ed25519 {
+            Self::write_muxed_account(&MuxedAccount::Ed25519 {
                 account_id: source.clone()
             }, buffer)?;
         } else {
@@ -526,7 +473,7 @@ impl StellarTransactionSerializer {
             },
             OperationDetails::AccountMerge { destination } => {
                 Self::write_u32(8, buffer)?; // ACCOUNT_MERGE
-                Self::write_muxed_account(&ParsedMuxedAccount::Ed25519 {
+                Self::write_muxed_account(&MuxedAccount::Ed25519 {
                     account_id: destination.clone()
                 }, buffer)?;
             },
@@ -538,24 +485,24 @@ impl StellarTransactionSerializer {
                 Self::write_u32(*set_flags, buffer)?;
             },
             OperationDetails::Other { .. } => {
-                return Err(TransactionParseError::UnsupportedOperation);
+                return Err(StellarTransactionError::UnsupportedOperation);
             }
         }
         
         Ok(())
     }
 
-    fn serialize_asset(asset: &ParsedAsset, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn serialize_asset(asset: &Asset, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         match asset {
-            ParsedAsset::Native => {
+            Asset::Native => {
                 Self::write_u32(0, buffer)?; // ASSET_TYPE_NATIVE
             },
-            ParsedAsset::CreditAlphanum4 { code, issuer } => {
+            Asset::CreditAlphanum4 { code, issuer } => {
                 Self::write_u32(1, buffer)?; // ASSET_TYPE_CREDIT_ALPHANUM4
                 Self::write_asset_code4(code, buffer)?;
                 Self::write_account_id(issuer, buffer)?;
             },
-            ParsedAsset::CreditAlphanum12 { code, issuer } => {
+            Asset::CreditAlphanum12 { code, issuer } => {
                 Self::write_u32(2, buffer)?; // ASSET_TYPE_CREDIT_ALPHANUM12
                 Self::write_asset_code12(code, buffer)?;
                 Self::write_account_id(issuer, buffer)?;
@@ -564,22 +511,22 @@ impl StellarTransactionSerializer {
         Ok(())
     }
 
-    fn serialize_change_trust_asset(asset: &ParsedChangeTrustAsset, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn serialize_change_trust_asset(asset: &ChangeTrustAsset, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         match asset {
-            ParsedChangeTrustAsset::Native => {
+            ChangeTrustAsset::Native => {
                 Self::write_u32(0, buffer)?; // ASSET_TYPE_NATIVE
             },
-            ParsedChangeTrustAsset::CreditAlphanum4 { code, issuer } => {
+            ChangeTrustAsset::CreditAlphanum4 { code, issuer } => {
                 Self::write_u32(1, buffer)?; // ASSET_TYPE_CREDIT_ALPHANUM4
                 Self::write_asset_code4(code, buffer)?;
                 Self::write_account_id(issuer, buffer)?;
             },
-            ParsedChangeTrustAsset::CreditAlphanum12 { code, issuer } => {
+            ChangeTrustAsset::CreditAlphanum12 { code, issuer } => {
                 Self::write_u32(2, buffer)?; // ASSET_TYPE_CREDIT_ALPHANUM12
                 Self::write_asset_code12(code, buffer)?;
                 Self::write_account_id(issuer, buffer)?;
             },
-            ParsedChangeTrustAsset::LiquidityPool { asset_a, asset_b, fee } => {
+            ChangeTrustAsset::LiquidityPool { asset_a, asset_b, fee } => {
                 Self::write_u32(3, buffer)?; // ASSET_TYPE_POOL_SHARE
                 Self::write_u32(0, buffer)?; // LIQUIDITY_POOL_CONSTANT_PRODUCT
                 Self::serialize_asset(asset_a, buffer)?;
@@ -590,7 +537,7 @@ impl StellarTransactionSerializer {
         Ok(())
     }
 
-    fn serialize_asset_path(path: &[ParsedAsset], buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn serialize_asset_path(path: &[Asset], buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         Self::write_u32(path.len() as u32, buffer)?;
         for asset in path.iter() {
             Self::serialize_asset(asset, buffer)?;
@@ -598,7 +545,7 @@ impl StellarTransactionSerializer {
         Ok(())
     }
 
-    fn serialize_asset_code(code: &String, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn serialize_asset_code(code: &String, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         if code.len() <= 4 {
             Self::write_u32(1, buffer)?; // ASSET_TYPE_CREDIT_ALPHANUM4
             Self::write_asset_code4(code, buffer)?;
@@ -609,22 +556,22 @@ impl StellarTransactionSerializer {
         Ok(())
     }
 
-    fn serialize_signatures(signatures: &[ParsedSignature], buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn serialize_signatures(signatures: &[Signature], buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         Self::write_u32(signatures.len() as u32, buffer)?;
         
         for signature in signatures.iter() {
             // Signature hint (4 bytes)
             let signature_hint_hex = hex_to_bytes(&signature.hint);
-            if signature_hint_hex.is_none() {
-                return Err(TransactionParseError::XdrError);
+            if signature_hint_hex.is_err() {
+                return Err(StellarTransactionError::XdrError);
             }
             let signature_hint_hex = signature_hint_hex.unwrap();
             Self::write_fixed_bytes(&signature_hint_hex, 4, buffer)?;
             
             // Signature (variable length)
             let signature_bytes = hex_to_bytes(&signature.signature);
-            if signature_bytes.is_none() {
-                return Err(TransactionParseError::XdrError);
+            if signature_bytes.is_err() {
+                return Err(StellarTransactionError::XdrError);
             }
             let signature_bytes = signature_bytes.unwrap();
             Self::write_opaque_bytes(&signature_bytes, buffer)?;
@@ -634,33 +581,33 @@ impl StellarTransactionSerializer {
     }
 
     // Low-level writing functions
-    fn write_u32(value: u32, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn write_u32(value: u32, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         let bytes = value.to_be_bytes();
         buffer.extend_from_slice(&bytes);
         Ok(())
     }
 
-    fn write_u64(value: u64, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn write_u64(value: u64, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         let bytes = value.to_be_bytes();
         buffer.extend_from_slice(&bytes);
         Ok(())
     }
 
-    fn write_i64(value: i64, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn write_i64(value: i64, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         let bytes = value.to_be_bytes();
         buffer.extend_from_slice(&bytes);
         Ok(())
     }
 
-    fn write_i32(value: i32, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn write_i32(value: i32, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         let bytes = value.to_be_bytes();
         buffer.extend_from_slice(&bytes);
         Ok(())
     }
 
-    fn write_fixed_bytes(bytes: &[u8], expected_len: usize, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn write_fixed_bytes(bytes: &[u8], expected_len: usize, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         if bytes.len() > expected_len {
-            return Err(TransactionParseError::XdrError);
+            return Err(StellarTransactionError::XdrError);
         }
         
         buffer.extend_from_slice(bytes);
@@ -673,7 +620,7 @@ impl StellarTransactionSerializer {
         Ok(())
     }
 
-    fn write_opaque_bytes(bytes: &[u8], buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn write_opaque_bytes(bytes: &[u8], buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         // Write length
         Self::write_u32(bytes.len() as u32, buffer)?;
         
@@ -689,39 +636,39 @@ impl StellarTransactionSerializer {
         Ok(())
     }
 
-    fn write_string(s: &String, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn write_string(s: &String, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         let bytes = s.as_bytes();
         Self::write_opaque_bytes(bytes, buffer)
     }
 
-    fn write_account_id(account_hex: &String, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn write_account_id(account_hex: &String, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         Self::write_u32(0, buffer)?;
         let account_bytes = StellarWallet::decode_stellar_address(account_hex);
         if account_bytes.is_err() {
-            return Err(TransactionParseError::AccountIdError);
+            return Err(StellarTransactionError::AccountIdError);
         }
         let bytes = account_bytes.unwrap();
         Self::write_fixed_bytes(&bytes.as_slice(), 32, buffer)
     }
 
-    fn write_muxed_account(account: &ParsedMuxedAccount, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn write_muxed_account(account: &MuxedAccount, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         match account {
-            ParsedMuxedAccount::Ed25519 { account_id } => {
+            MuxedAccount::Ed25519 { account_id } => {
                 Self::write_u32(0, buffer)?; // KEY_TYPE_ED25519
                 let account_bytes = StellarWallet::decode_stellar_address(account_id);
                 if account_bytes.is_err() {
-                    return Err(TransactionParseError::MuxedAccountError);
+                    return Err(StellarTransactionError::MuxedAccountError);
                 }
                 let bytes = account_bytes.unwrap();
                 Self::write_fixed_bytes(&bytes.as_slice(), 32, buffer)?;
             },
-            ParsedMuxedAccount::MuxedEd25519 { id, account_id } => {
+            MuxedAccount::MuxedEd25519 { id, account_id } => {
                 Self::write_u32(256, buffer)?; // KEY_TYPE_MUXED_ED25519
                 Self::write_u64(*id, buffer)?;
                 
                 let account_bytes = StellarWallet::decode_stellar_address(account_id);
                 if account_bytes.is_err() {
-                    return Err(TransactionParseError::MuxedAccountError);
+                    return Err(StellarTransactionError::MuxedAccountError);
                 }
                 let bytes = account_bytes.unwrap();
                 Self::write_fixed_bytes(&bytes.as_slice(), 32, buffer)?;
@@ -730,7 +677,7 @@ impl StellarTransactionSerializer {
         Ok(())
     }
 
-    fn write_asset_code4(code: &String, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn write_asset_code4(code: &String, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         let mut code_bytes = [0u8; 4];
         let bytes = code.as_bytes();
         let len = bytes.len().min(4);
@@ -739,7 +686,7 @@ impl StellarTransactionSerializer {
         Ok(())
     }
 
-    fn write_asset_code12(code: &String, buffer: &mut Vec<u8>) -> Result<(), TransactionParseError> {
+    fn write_asset_code12(code: &String, buffer: &mut Vec<u8>) -> Result<(), StellarTransactionError> {
         let mut code_bytes = [0u8; 12];
         let bytes = code.as_bytes();
         let len = bytes.len().min(12);
@@ -749,7 +696,7 @@ impl StellarTransactionSerializer {
     }
 
     // Helper functions
-    fn parse_u64_from_string(s: &String) -> Result<u64, TransactionParseError> {
+    fn parse_u64_from_string(s: &String) -> Result<u64, StellarTransactionError> {
         let bytes = s.as_bytes();
         let mut result = 0u64;
         
@@ -759,28 +706,28 @@ impl StellarTransactionSerializer {
                     let digit = (byte - b'0') as u64;
                     result = result.checked_mul(10)
                         .and_then(|r| r.checked_add(digit))
-                        .ok_or(TransactionParseError::XdrError)?;
+                        .ok_or(StellarTransactionError::XdrError)?;
                 },
-                _ => return Err(TransactionParseError::XdrError),
+                _ => return Err(StellarTransactionError::XdrError),
             }
         }
         
         Ok(result)
     }
 
-    fn hex_char_to_u8(c: u8) -> Result<u8, TransactionParseError> {
+    fn hex_char_to_u8(c: u8) -> Result<u8, StellarTransactionError> {
         match c {
             b'0'..=b'9' => Ok(c - b'0'),
             b'a'..=b'f' => Ok(c - b'a' + 10),
             b'A'..=b'F' => Ok(c - b'A' + 10),
-            _ => Err(TransactionParseError::XdrError),
+            _ => Err(StellarTransactionError::XdrError),
         }
     }
 
-    fn encode_base64(data: &[u8]) -> Result<String, TransactionParseError> {
+    fn encode_base64(data: &[u8]) -> Result<String, StellarTransactionError> {
         let mut buf = [0u8; MAX_XDR_LEN * 4 / 3 + 4]; // Base64 expansion ratio
         let encoded = Base64::encode(data, &mut buf)
-            .map_err(|_| TransactionParseError::Base64Error)?;
+            .map_err(|_| StellarTransactionError::Base64Error)?;
         Ok(String::from(encoded))
     }
 }

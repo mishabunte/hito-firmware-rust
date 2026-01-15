@@ -26,13 +26,8 @@ pub mod crypto {
         pub mod stellar {
             mod address;  // This will look for address.rs
             pub use address::*;
-            
-            mod transaction_parser;
-            mod transaction_serializer;
-            mod transaction_signer;
-            pub use transaction_parser::*;
-            pub use transaction_serializer::*;
-            pub use transaction_signer::*;
+            pub mod transaction;
+            pub use transaction::*;
         }
     }
 }

@@ -1,27 +1,18 @@
 use crate::crypto::crypt0::bytes_to_hex;
-use crate::crypto::libcrypt0pro::stellar::{ParsedSignature, ParsedTransaction, StellarKeypair, StellarTransactionSerializer, TransactionEnvelope};
+use crate::crypto::libcrypt0pro::stellar::StellarKeypair;
+use super::*;
 
 use crate::crypto::ffi::crypt0_ed25519_sign;
 use crate::log_info;
 
 pub struct StellarTransactionSigner;
 
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum StellarSignError {
-    InvalidTransaction,
-    SigningFailed,
-    ErrorDerivingKeypair
-}
-
-
-
 impl StellarTransactionSigner {
-    pub fn sign_transaction(envelope: &TransactionEnvelope, keypair: StellarKeypair) -> Result<TransactionEnvelope, StellarSignError> {
+    pub fn sign_transaction(envelope: &TransactionEnvelope, keypair: StellarKeypair) -> Result<TransactionEnvelope, StellarTransactionError> {
       // Build the signature base
       let signature_base = StellarTransactionSerializer::build_signature_base(envelope);
       if let Err(_) = signature_base {
-          return Err(StellarSignError::InvalidTransaction);
+          return Err(StellarTransactionError::InvalidTransaction);
       }
       let signature_base = signature_base.unwrap();
       log_info!("Signature base: {}", crate::crypto::crypt0::bytes_to_hex(&signature_base));
@@ -34,7 +25,7 @@ impl StellarTransactionSigner {
               hash.len()
           );
           if !res {
-              panic!("crypt0_sha256 failed");
+              return Err(StellarTransactionError::SigningFailed);
           }
           hash
       };
@@ -53,14 +44,14 @@ impl StellarTransactionSigner {
               sig.len()
           );
           if res != 0 {
-              panic!("crypt0_ed25519_sign failed");
+              return Err(StellarTransactionError::SigningFailed);
           }
           sig
       };
       let mut envelope = envelope.clone();
       match &mut envelope {
           TransactionEnvelope::Transaction(tx_envelope) => {
-              tx_envelope.signatures.push(ParsedSignature {
+              tx_envelope.signatures.push(Signature {
               hint: {
                 let mut hint = [0u8; 4];
                 hint.copy_from_slice(&keypair.public_key[28..32]);
@@ -71,7 +62,7 @@ impl StellarTransactionSigner {
             );
           },
           TransactionEnvelope::FeeBump(fee_bump_envelope) => {
-              fee_bump_envelope.signatures.push(ParsedSignature {
+              fee_bump_envelope.signatures.push(Signature {
               hint: {
                 let mut hint = [0u8; 4];
                 hint.copy_from_slice(&keypair.public_key[28..32]);

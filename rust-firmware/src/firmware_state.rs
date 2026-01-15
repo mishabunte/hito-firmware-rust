@@ -2,7 +2,7 @@ use core::cell::{Cell, RefCell};
 extern crate alloc;
 use alloc::string::String;
 use crate::log_info;
-use crate::crypto::libcrypt0pro::stellar::{TransactionEnvelope};
+use crate::crypto::libcrypt0pro::stellar::transaction::TransactionEnvelope;
 
 pub struct DeviceInfo {
     pub firmware_version: String,
