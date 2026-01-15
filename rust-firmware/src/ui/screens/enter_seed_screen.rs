@@ -354,15 +354,15 @@ fn on_encrypt_clicked(seed_check_mode: bool) {
     match vault.init(&entropy, entropy_len, pass.as_bytes(), Some(ui_report_progress)) {
         Ok(()) => {
             log_info!("Vault initialized and seed encrypted successfully.");
-            firmware().battery.lock().reboot();
+            navigate_to(Screen::FinalizeSeed);
+            //firmware().battery.lock().reboot();
         },
         Err(e) => {
-            log_info!("Error initializing vault: {:?}", e);
-            show_alert("\\\\Error encrypting seed. \\\\ Please try again.");
+          firmware().battery.lock().reboot();
         }
     }
   } else {
-    show_alert("\\\\Error converting\\\\ Mnemonic to entropy. \\\\ Please try again.");
+    show_alert("Error converting mnemonic to entropy. Please try again.");
   }
 }
 
@@ -490,6 +490,7 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
             // Handle Done button
             if item.text == "Done" {
                 log_info!("Done pressed - all seed words entered");
+                ui.set_small_text_items(ModelRc::new(VecModel::from(vec![])));
                 if is_seed_check {
                     // Verify the entered words
                     if verify_seed_check() {
@@ -497,7 +498,7 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                         navigate_to(Screen::EncryptingSeed);
                     } else {
                         log_info!("Seed check failed!");
-                        show_alert("\\\\Seed check failed! \\\\ Please try again.");
+                        show_alert("Seed check failed! Please try again.");
                     }
                 } else {
                     navigate_to(Screen::EncryptingSeed);
@@ -521,7 +522,7 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                         }
                     }
                     set_word_display(&ui, &word_entered_rc);
-                    
+                    ui.set_small_text_items(ModelRc::new(VecModel::from(vec![])));
                     ui.set_header_title(get_header_title(new_idx, seed_len, is_seed_check));
                     let updated_words = unsafe { SEED_ENTERED.as_slice() };
                     ui.set_buttons(create_abc_buttons_with_nav(new_idx, seed_len, &updated_words));
@@ -546,7 +547,7 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                         }
                     }
                     set_word_display(&ui, &word_entered_rc);
-                    
+                    ui.set_small_text_items(ModelRc::new(VecModel::from(vec![])));
                     ui.set_header_title(get_header_title(new_idx, seed_len, is_seed_check));
                     let updated_words = unsafe { SEED_ENTERED.as_slice() };
                     ui.set_buttons(create_abc_buttons_with_nav(new_idx, seed_len, updated_words));
@@ -559,6 +560,7 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
             if item.text == "<" {
                 let mut w = word_entered_rc.borrow_mut();
                 w.pop();
+                ui.set_small_text_items(ModelRc::new(VecModel::from(vec![])));
                 drop(w);
                 set_word_display(&ui, &word_entered_rc);
                 return;
@@ -627,44 +629,114 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                     set_mode(EnterSeedMode::LetterSeq);
                 }
                 EnterSeedMode::LetterSeq => {
+                    ui.set_small_text_items(ModelRc::new(VecModel::from(vec![])));
                     ui.set_buttons(letters_from_sequence(item));
                     set_mode(EnterSeedMode::Letter);
                 }
                 EnterSeedMode::Letter => {
-                    {
-                        let mut w = word_entered_rc.borrow_mut();
-                        w.push_str(&item.text);
-                        let matches_found = find_bip39_matches(&w);
-                        if let Some(matches) = matches_found {
-                          if matches.len() <= 4 {
-                              // Show matching words
-                              let mut word_buttons: Vec<ScreenButton> = Vec::new();
-                              for (i, index) in matches.iter().enumerate() {
-                                  if let Some(word) = bip39_word_by_index(*index) {
-                                      let col = (i % 2) as f32;
-                                      let row = (i / 2) as f32;      
-                                      let x = FIRST_WORD_X + WORD_GAP_X * col;
-                                      let y = FIRST_WORD_Y + WORD_GAP_Y * row;
+                    let mut w = word_entered_rc.borrow_mut();
+                    w.push_str(&item.text);
+                    let matches_found = find_bip39_matches(&w);
+                    if let Some(matches) = matches_found {
+                      if matches.len() <= 4 {
+                          // Show matching words
+                          let mut word_buttons: Vec<ScreenButton> = Vec::new();
+                          for (i, index) in matches.iter().enumerate() {
+                              if let Some(word) = bip39_word_by_index(*index) {
+                                // Exact match - select this word
+                                if word == w.as_str() {
+                                    log_info!("Exact match found for word: {}", word);
+                                    // Update or append word at current index
+                                    let mut words = unsafe { SEED_ENTERED.clone() };
+                                    if idx < words.len() {
+                                        // Replace existing word
+                                        words[idx] = *index;
+                                        unsafe { SEED_ENTERED = words; }
+                                    } else {
+                                        // Append new word
+                                        unsafe { SEED_ENTERED.push(*index); }
+                                    }
+                                    
+                                    let seed_words = unsafe { SEED_ENTERED.as_slice() };
+                                    let next_index = idx + 1;
 
-                                      let button = ScreenButton {
-                                          text: word.into(),
-                                          width: WORD_W,
-                                          height: WORD_H,
-                                          x,
-                                          y,
-                                          has_border: false,
-                                          inverted: false,
-                                      };
-                                      word_buttons.push(button);
-                                  }
+                                    if next_index >= seed_len {
+                                        log_info!("All seed words entered: {:?}", seed_words);
+                                        // Show Done button
+                                        *current_index_rc.borrow_mut() = seed_len - 1;
+                                        unsafe { CURRENT_WORD_INDEX = seed_len - 1; }
+                                        
+                                        {
+                                            let mut w = word_entered_rc.borrow_mut();
+                                            w.clear();
+                                            w.push_str(bip39_word_by_index(seed_words[seed_len - 1]).unwrap_or(""));
+                                        }
+                                        set_word_display(&ui, &word_entered_rc);
+                                        
+                                        ui.set_header_title(get_header_title(seed_len - 1, seed_len, is_seed_check));
+                                        ui.set_buttons(create_abc_buttons_with_nav(seed_len - 1, seed_len, &seed_words));
+                                        set_mode(EnterSeedMode::LetterSeq);
+                                        return;
+                                    }
+                                    drop(w);
+
+                                    // Move to next word
+                                    *current_index_rc.borrow_mut() = next_index;
+                                    unsafe { CURRENT_WORD_INDEX = next_index; }
+                                    
+                                    {
+                                        let mut w = word_entered_rc.borrow_mut();
+                                        w.clear();
+                                        if next_index < seed_words.len() {
+                                            w.push_str(bip39_word_by_index(seed_words[next_index]).unwrap_or(""));
+                                        }
+                                    }
+                                    set_word_display(&ui, &word_entered_rc);
+
+                                    ui.set_header_title(get_header_title(next_index, seed_len, is_seed_check));
+                                    ui.set_buttons(create_abc_buttons_with_nav(next_index, seed_len, &seed_words));
+                                    set_mode(EnterSeedMode::LetterSeq);
+                                    return;
+                                }
+                                  let col = (i % 2) as f32;
+                                  let row = (i / 2) as f32;      
+                                  let x = FIRST_WORD_X + WORD_GAP_X * col;
+                                  let y = FIRST_WORD_Y + WORD_GAP_Y * row;
+
+                                  let button = ScreenButton {
+                                      text: word.into(),
+                                      width: WORD_W,
+                                      height: WORD_H,
+                                      x,
+                                      y,
+                                      has_border: false,
+                                      inverted: false,
+                                  };
+                                  word_buttons.push(button);
                               }
-                              ui.set_buttons(ModelRc::new(VecModel::from(word_buttons)));
-                              drop(w);
-                              set_mode(EnterSeedMode::WordEntered);
-                              return;
                           }
-                        }
+                          ui.set_buttons(ModelRc::new(VecModel::from(word_buttons)));
+                          drop(w);
+                          set_mode(EnterSeedMode::WordEntered);
+                          set_word_display(&ui, &word_entered_rc);
+                          return;
+                      }
+                    } else {
+                        let small_text_items = ModelRc::new(VecModel::from(vec![
+                            ScreenItem {
+                                text: "Word not found".into(),
+                                x: 100.0,
+                                y: 70.0,
+                                width: 120.0,
+                                height: 20.0,
+                            },
+                        ]));
+                        ui.set_small_text_items(small_text_items);
+                        // set_mode(EnterSeedMode::LetterSeq);
+                        // set_word_display(&ui, &word_entered_rc);
+                        // return;       
                     }
+                    drop(w);
                     set_word_display(&ui, &word_entered_rc);
                     let seed_words = unsafe {SEED_ENTERED.as_slice()};
                     ui.set_buttons(create_abc_buttons_with_nav(idx, seed_len, &seed_words));
@@ -791,7 +863,7 @@ pub fn create_generate_seed_screen(ui: &Rc<MainWindow>) {
             let array = mnemonic_to_indices(&mnemonic);
 
             if array.is_err() {
-                show_alert("Error converting \\\\mnemonic to indices \\\\ for verification");
+                show_alert("Error converting mnemonic to indices for verification");
                 return;
             }
             let array = array.unwrap();
@@ -817,38 +889,70 @@ pub fn create_generate_seed_screen(ui: &Rc<MainWindow>) {
 }
 
 pub fn create_encrypting_seed_screen(ui: &Rc<MainWindow>) {
-    ui.set_header_title("ENCRYPTING SEED".into());
+    let button_x = 0.0;
+    let button_y = 62.0;
+    let button_gap = 28.0;
+    let message = "Your seed phrase\\\\is being ciphered";
+    let header_title = "ENCRYPTING";
+    
+    ui.set_center_text(true);
+    // parse message into lines if too long, \\ is line break
+    let message_lines: Vec<&str> = message.split("\\\\").collect();
 
-    let items = ModelRc::new(VecModel::from(vec![
-        ScreenItem {
-            text: "Encrypting your seed phrase...".into(),
-            width: 300.0,
-            height: 40.0,
-            x: 10.0,
-            y: 80.0,
-        },
-    ]));
-    ui.set_items(items);
+    let lines = message_lines.len();
+    log_info!("GenericProgressBar: Message has {} lines", lines);
+    for (i, line) in message_lines.iter().enumerate() {
+        log_info!("Message line {}: {}", i, line);
+        if line.len() > 25 {
+            log_info!("Warning: line {} is too long ({} characters)", i, line.len());
+            // fail here
+            panic!("Line {} is too long ({} characters)", i, line.len());
+        }
+    }
+
+    // Create screen items based on number of lines
+    let mut items_vec = vec![];
+    for (i, line) in message_lines.iter().enumerate() {
+        items_vec.push(ScreenItem { 
+            text: (*line).into(), 
+            width: 320.0,
+            height: 25.0,
+            x: button_x, 
+            // add a 10.0 gap between 2. and 3. line
+            y: if i > 1 { button_y + (i as f32) * button_gap + 10.0 } else { button_y + (i as f32) * button_gap },
+        });
+    }
+
+    let last_y = if lines > 0 {
+        button_y + ((lines - 1) as f32) * button_gap + 10.0
+    } else {
+        button_y
+    };
 
     let buttons = ModelRc::new(VecModel::from(vec![
-      ScreenButton {
-          text: "Encrypt".into(),  
-          width: 240.0, 
-          height: 40.0,
-          has_border: true, 
-          x: 40.0, 
-          y: 150.0,
-          inverted: true,
-      },
+        ScreenButton {
+            text: "ENCRYPT".into(),  
+            has_border: true, 
+            x: 84.0, 
+            y: 158.0,
+            width: 152.0, 
+            height: 25.0,
+            inverted: true,
+        },
     ]));
-
+    
+    let items = ModelRc::new(VecModel::from(items_vec));
+    
+    ui.set_items(items);
     ui.set_buttons(buttons);
+    ui.set_header_title(slint::SharedString::from(header_title));
+    ui_set_progress_bar_properties(84, 158, 152, 25, 1);
 
     ui.on_pressed(move |item| {
-        if item.text == "Encrypt" {
-            log_info!("Starting seed encryption...");
-            let seed_check_mode = unsafe { SEED_CHECK_MODE };
-            on_encrypt_clicked(seed_check_mode);
+        if item.text == "ENCRYPT" {
+          let seed_check_mode = unsafe { SEED_CHECK_MODE };
+          on_encrypt_clicked(seed_check_mode);
         }
     });
+
 }
