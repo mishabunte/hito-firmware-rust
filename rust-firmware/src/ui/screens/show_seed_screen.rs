@@ -94,7 +94,9 @@ fn generate_page_items(page_index: usize, mnemonic: &[String], revealed_slots: u
 }
 
 pub fn create_show_seed_screen(ui: &Rc<MainWindow>, backup_mode: bool) {
-    set_back_screen(Screen::Home);
+    if !backup_mode {
+        set_back_screen(Screen::Home);
+    }
     unsafe {
         CURRENT_PAGE = 0;
         REVEALED_SLOTS = 0;
@@ -172,8 +174,8 @@ pub fn create_show_seed_screen(ui: &Rc<MainWindow>, backup_mode: bool) {
                 log_info!("Next page button pressed");
             }
         });
-    } else {
-      show_alert("\\\\Failed to retrieve \\\\seed phrase \\\\Please try again");
+    } else if let Err(e) = mnemonic_result {
+      show_alert(format!("Failed to retrieve seed phrase: {}. Please try again", e).as_str());
     }
 }
 
