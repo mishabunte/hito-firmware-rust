@@ -1,7 +1,8 @@
 pub mod ffi;
 pub mod vault;
 pub mod bootloader_version;
-pub mod firmware_version;
+pub mod firmware_version; 
+mod desktop_storage;
 
 const NONCE_LEN: usize = 7;
 const AAD_LEN: usize = 7;
@@ -18,3 +19,32 @@ pub struct VaultEncryptedBlock {
   tag: [u8; TAG_LEN],            // AES CCM tag
   crc16_ccitt: u16,              // checksum to check if block itself is valid
 }
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum VaultError {
+    EmptyVault,
+    InvalidPassword,
+    CryptoError,
+    HardwareKeyError,
+    InvalidKeyLength,
+    BlockNotFound,
+    VaultLocked,
+    InvalidMnemonicUtf8
+}
+
+impl core::fmt::Display for VaultError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            VaultError::EmptyVault => write!(f, "Vault is empty"),
+            VaultError::InvalidPassword => write!(f, "Password is invalid"),
+            VaultError::CryptoError => write!(f, "Cryptographic error"),
+            VaultError::HardwareKeyError => write!(f, "Hardware key error"),
+            VaultError::InvalidKeyLength => write!(f, "Invalid key length"),
+            VaultError::BlockNotFound => write!(f, "Block not found"),
+            VaultError::VaultLocked => write!(f, "Vault is locked"),
+            VaultError::InvalidMnemonicUtf8 => write!(f, "Invalid mnemonic"),
+        }
+    }
+}
+
+pub type VaultResult<T> = Result<T, VaultError>;

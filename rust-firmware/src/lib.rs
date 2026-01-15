@@ -37,7 +37,8 @@ mod firmware_state;
 mod ui;
 mod common;
 
-pub use vault::vault::{HitoVault, VaultError, VaultResult};
+pub use vault::vault::HitoVault;
+pub use vault::{VaultError, VaultResult};
 pub use firmware_state::DeviceInfo;
 
 use hito_firmware::HitoFirmware;
