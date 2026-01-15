@@ -50,15 +50,10 @@ impl HitoFirmware {
         //self.vault.lock().init();
         // #[cfg(feature = "minifb")]
         // {
-        //   let mut vault_lock = self.vault.lock();
-        //     vault_lock.set_passcode(TEST_PASSCODE).expect("Failed to set passcode");
-        //     vault_lock.unlock_with_password(TEST_PASSCODE).expect("Failed to unlock vault");
+        //     let mut vault_lock = self.vault.lock(); 
+        //     vault_lock.unlock_with_password(TEST_PASSCODE, None).expect("Failed to unlock vault");
         // }
 
-        #[cfg(feature = "zephyr")]
-        logging::log_info("Hardware initialization complete");
-
-        #[cfg(feature = "minifb")]
         log_info!("Hardware initialization complete");
 
         //self.display.fill_rect(10, 10, 100, 50, 0xF800); // Red rectangle
