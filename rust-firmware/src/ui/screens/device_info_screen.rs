@@ -33,7 +33,7 @@ pub fn create_device_info_screen(ui: &Rc<MainWindow>) {
 
     if let Err(e) = info {
         log_info!("Error getting device info: {:?}", e);
-        show_alert("\\\\Failed to get device info");
+        show_alert("Failed to get device info");
     } else {
         let info = info.unwrap();
 
