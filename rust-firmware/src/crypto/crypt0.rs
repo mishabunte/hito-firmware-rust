@@ -41,19 +41,19 @@ pub fn bytes_to_hex(bytes: &[u8]) -> String {
 }
 
 /// Converts hex string to bytes (returns `None` if invalid)
-pub fn hex_to_bytes(hex: &str) -> Option<Vec<u8>> {
+pub fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, CryptoError> {
     let bytes = hex.as_bytes();
     if bytes.len() % 2 != 0 {
-        return None;
+        return Err(CryptoError::CryptoError);
     }
 
     let mut out = Vec::with_capacity(bytes.len() / 2);
     for i in (0..bytes.len()).step_by(2) {
-        let high = from_hex_digit(bytes[i])?;
-        let low = from_hex_digit(bytes[i + 1])?;
+        let high = from_hex_digit(bytes[i]).ok_or(CryptoError::CryptoError)?;
+        let low = from_hex_digit(bytes[i + 1]).ok_or(CryptoError::CryptoError)?;
         out.push((high << 4) | low);
     }
-    Some(out)
+    Ok(out)
 }
 
 fn from_hex_digit(b: u8) -> Option<u8> {
@@ -65,13 +65,13 @@ fn from_hex_digit(b: u8) -> Option<u8> {
     }
 }
 
-pub fn crypt0_bech32_encode(data: &[u8], buf: &mut [u8]) -> Result<usize, ()> {
+pub fn crypt0_bech32_encode(data: &[u8], buf: &mut [u8]) -> Result<usize, CryptoError> {
     unsafe {
         let result = ffi::crypt0_bech32_encode(data.as_ptr(), data.len() as i32, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
         if result > 0 {
             Ok(result as usize)
         } else {
-            Err(())
+            Err(CryptoError::CryptoError)
         }
     }
 }
