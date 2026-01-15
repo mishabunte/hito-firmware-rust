@@ -11,7 +11,9 @@ use alloc::rc::Rc;
 
 use slint::{ModelRc, VecModel};
 
-use crate::drivers::Battery;
+use crate::common::{ui_set_progress_bar_properties};
+use crate::ui_report_progress;
+use crate::drivers::{Battery, Display};
 use crate::slint_generatedMainWindow::{MainWindow, ScreenItem, ScreenButton};
 use crate::{log_info, state};
 use crate::ui::router::navigate_to;
@@ -80,6 +82,15 @@ const CHAR_BUTTON_W: f32 = 60.0;
 const CHAR_BUTTON_H: f32 = 60.0;
 const COLS: usize = 5;
 const PASSCODE_LENGTH: usize = 6;
+
+const PIN_MESSAGE_X: f32 = 0.0;
+const PIN_MESSAGE_Y: f32 = 45.0;
+const PIN_MESSAGE_W: f32 = 320.0;
+const PIN_MESSAGE_H: f32 = 25.0;
+
+const PROGRESS_BAR_X: f32 = CHAR_BUTTON_X + CHAR_BUTTON_W + CHAR_BUTTON_W / 3.0;
+const PROGRESS_BAR_Y: f32 = CHAR_BUTTON_Y - CHAR_BUTTON_H / 2.0 - 10.0;
+const PROGRESS_BAR_W: f32 = 320.0 - CHAR_BUTTON_X * 2.0 - CHAR_BUTTON_W * 2.0 - CHAR_BUTTON_W * 2.0 / 3.0;
 
 fn show_keyboard(ui: &Rc<MainWindow>) {
     let arr = [b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9'];
@@ -184,7 +195,8 @@ fn setup_passcode_screen(ui: &Rc<MainWindow>, title: &str, action: PasscodeActio
 
     ui.on_pressed(move |item| {
         let Some(ui) = ui_weak.upgrade() else { return };
-
+        ui.set_center_text(false);
+        ui.set_small_text_items(ModelRc::new(VecModel::from(vec![])));
         // Handle digit input
         if item.text.parse::<u8>().is_ok() {
             passcode_entered.push_str(&item.text);
@@ -192,14 +204,33 @@ fn setup_passcode_screen(ui: &Rc<MainWindow>, title: &str, action: PasscodeActio
             if passcode_entered.len() >= PASSCODE_LENGTH {
                 match &action {
                     PasscodeAction::Unlock(success_screen) => {
+                        ui_set_progress_bar_properties(
+                          PROGRESS_BAR_X as u16, 
+                          PROGRESS_BAR_Y as u16 + 10, 
+                          PROGRESS_BAR_W as u16, 
+                          2,
+                          0
+                        );
+                        firmware().display.lock().fill_rect(PROGRESS_BAR_X as u16, PROGRESS_BAR_Y as u16, PROGRESS_BAR_W as u16, 25, 0xFFFF); // Clear progress bar area
                         let mut vault = firmware().vault.lock();
-                        match vault.unlock_with_password(passcode_entered.as_bytes()) {
+                        match vault.unlock_with_password(passcode_entered.as_bytes(), Some(ui_report_progress)) {
                             Ok(_) => {
                                 log_info!("Unlock successful!");
                                 navigate_to(success_screen.clone());
                             }
                             Err(e) => {
                                 log_info!("Unlock failed: {:?}", e);
+                                let small_text_items = ModelRc::new(VecModel::from(vec![
+                                    ScreenItem {
+                                        text: "Wrong passcode".into(),
+                                        x: PIN_MESSAGE_X,
+                                        y: PIN_MESSAGE_Y,
+                                        width: PIN_MESSAGE_W,
+                                        height: PIN_MESSAGE_H,
+                                    },
+                                ]));
+                                ui.set_center_text(true);
+                                ui.set_small_text_items(small_text_items);
                                 passcode_entered.clear();
                             }
                         }
@@ -211,16 +242,27 @@ fn setup_passcode_screen(ui: &Rc<MainWindow>, title: &str, action: PasscodeActio
                     PasscodeAction::Confirm(expected) => {
                         if &passcode_entered == expected {
                             log_info!("Set passcode successful!");
-                            let mut vault = firmware().vault.lock();
+                            let vault = firmware().vault.lock();
+                            let _ = state().lock().set_pin(passcode_entered.clone());
                             if vault.is_empty() {
-                              let _ = state().lock().set_pin(passcode_entered.clone());
                               navigate_to(Screen::WalletSetup);
                             } else {
-                              let _ = vault.set_passcode(passcode_entered.as_bytes());
-                              navigate_to(Screen::FinalizePasscodeChange);
+                              // let _ = vault.set_passcode(passcode_entered.as_bytes(), Some(ui_report_progress));
+                              navigate_to(Screen::EncryptingPasscode);
                             }
                         } else {
                             log_info!("Set passcode failed: confirmation does not match");
+                            let small_text_items = ModelRc::new(VecModel::from(vec![
+                                ScreenItem {
+                                    text: "Passcodes do not match".into(),
+                                    x: PIN_MESSAGE_X,
+                                    y: PIN_MESSAGE_Y,
+                                    width: PIN_MESSAGE_W,
+                                    height: PIN_MESSAGE_H,
+                                },
+                            ]));
+                            ui.set_center_text(true);
+                            ui.set_small_text_items(small_text_items);
                             passcode_entered.clear();
                         }
                     }
@@ -252,5 +294,6 @@ pub fn create_enter_passcode_screen(ui: &Rc<MainWindow>, success_screen: Screen)
 }
 
 pub fn create_finalize_passcode_change_screen(ui: &Rc<MainWindow>) {
-    create_generic_question_screen(ui, "ALL SET", "Reboot the device \\\\ to start using it", "Reboot", None, || {firmware().battery.lock().reboot()}, || {});
+    ui.set_back_shown(false);
+    create_generic_question_screen(ui, "ALL SET", "Reboot the device\\\\to start using it", "Reboot", None, || {firmware().battery.lock().reboot()}, || {});
 }

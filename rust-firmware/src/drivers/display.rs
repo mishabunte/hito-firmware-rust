@@ -1,5 +1,5 @@
 use crate::log_info;
-use crate::common::QR_CODE;
+use crate::common::{QR_CODE, ui_get_progress_bar_properties};
 use crate::drivers::qr_code::IMAGE_MAX_WIDTH;
 
 pub trait Display {
@@ -47,12 +47,19 @@ pub trait Display {
         }
     }
     fn update(&mut self);
-    fn draw_progress_bar(&mut self, x: u16, y: u16, w: u16, h: u16, progress: u8) {
+    fn draw_progress_bar(&mut self,progress: u8) {
+        let (x, y, w, h, border_width) = match ui_get_progress_bar_properties() {
+            Some(props) => (props.x, props.y, props.w, props.h, props.border_width),
+            None => {
+                log_info!("Progress bar properties not set");
+                return;
+            }
+        };
         let filled_width = (w as u32 * progress as u32) / 100;
         log_info!("Filled width: {}", filled_width);
+        self.draw_rect(x-border_width, y-border_width, w+2*border_width, h+2*border_width, 0x0000); // Black border
         self.fill_rect(x, y, w, h, 0xFFFF); // White background
         self.fill_rect(x, y, filled_width as u16, h, 0xAD55); // Filled part part
-        self.draw_rect(x, y, w, h, 0x0000); // Black border
     }
     fn set_brightness(&self, brightness: u8);
 }

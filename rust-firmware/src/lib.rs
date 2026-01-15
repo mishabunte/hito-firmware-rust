@@ -76,6 +76,17 @@ pub fn firmware() -> &'static HitoFirmware {
     }
 }
 
+pub fn ui_report_progress(progress: u8) {
+  ui::process_pending_navigation();
+  if progress % 5 != 0 {
+      return;
+  }
+  let display_arc = firmware().display.clone();
+  display_arc.lock().draw_progress_bar(progress);
+  display_arc.lock().update();
+}
+
+
 #[cfg(feature = "minifb")]
 pub fn current_stack_used() -> usize {
     let base = BASE_STACK_REMAINING.load(Ordering::Relaxed);
@@ -311,13 +322,11 @@ pub extern "C" fn rust_main() -> ! {
                     line_buffer: &mut LINE_BUFFER,
                 });
               let display_arc = firmware().display.clone();
-              unsafe {
-                if QR_CODE.is_some() {
-                    let qr_data = QR_CODE.as_ref().unwrap().get_data();
-                    let qr_width = QR_CODE.as_ref().unwrap().get_width() as usize;
-                    let (x, y) = QR_CODE.as_ref().unwrap().get_coords();
-                    display_arc.lock().draw_qr_from_buffer(x, y, &qr_data, qr_width);
-                }
+              if let Some(qr_code) = &QR_CODE {
+                  let qr_data = qr_code.get_data();
+                  let qr_width = qr_code.get_width() as usize;
+                  let (x, y) = qr_code.get_coords();
+                  display_arc.lock().draw_qr_from_buffer(x, y, &qr_data, qr_width);
               }
             }
         });

@@ -12,7 +12,7 @@ use slint::VecModel;
 use alloc::format;
 
 use crate::ScreenItem;
-use crate::common::set_qr_data;
+use crate::common::ui_draw_qr;
 use crate::drivers::Display;
 use crate::drivers::QrCodeWrapper;
 use crate::firmware;
@@ -68,9 +68,9 @@ pub fn create_receive_screen(ui: &Rc<MainWindow>) {
         ui.set_items(items);
 
         let qr_data = format!("stellar:{}", address);
-        set_qr_data(&qr_data);
-    } else {
-        show_alert("\\\\Error retrieving address");
+        ui_draw_qr(&qr_data);
+    } else if let Err(e) = firmware().vault.lock().get_stellar_address() {
+        show_alert(format!("Failed to get address: {}", e).as_str());
         return;
     }
 }

@@ -11,6 +11,7 @@ use slint::ModelRc;
 use slint::VecModel;
 use core::cell::RefCell;
 
+use crate::common::ui_set_progress_bar_properties;
 use crate::crypto::crypt0::mnemonic_to_indices;
 use crate::drivers::Battery;
 use crate::slint_generatedMainWindow::{MainWindow, ScreenItem, ScreenButton, ScreenImage};
@@ -20,6 +21,7 @@ use crate::ui::router::{navigate_to, go_back};
 
 use crate::ui::screens::show_alert;
 use crate::ui::screens::generic_question_screen::create_generic_question_screen;
+use crate::ui_report_progress;
 
 use super::Screen;
 use slint::format;
@@ -349,7 +351,7 @@ fn on_encrypt_clicked(seed_check_mode: bool) {
   // Generate entropy from mnemonic indices
   if let Ok((entropy, entropy_len)) = crypto::crypt0::mnemonic_indices_to_entropy(mnemonic.to_vec()) {
     let pass = state().lock().get_pin();
-    match vault.init(&entropy, entropy_len, pass.as_bytes()) {
+    match vault.init(&entropy, entropy_len, pass.as_bytes(), Some(ui_report_progress)) {
         Ok(()) => {
             log_info!("Vault initialized and seed encrypted successfully.");
             firmware().battery.lock().reboot();

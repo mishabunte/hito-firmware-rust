@@ -29,7 +29,7 @@ use crate::ui::screens::show_alert;
 use alloc::string::String;
 use slint::ToSharedString;
 
-use crate::common::set_qr_data;
+use crate::common::ui_draw_qr;
 
 use super::Screen;
 
@@ -68,30 +68,31 @@ pub fn create_signed_screen(ui: &Rc<MainWindow>) {
 
     if let Some(envelope) = state().lock().get_parsed_tx() {
       let keypair = firmware().vault.lock().get_stellar_keypair();
-      if let Err(_) = keypair {
-          show_alert("\\\\Error deriving\\\\keypair");
+      if let Err(e) = keypair {
+          show_alert(format!("{}", e).as_str().into());
           return;
       }
       let keypair = keypair.unwrap();
 
       let signed_tx = StellarTransactionSigner::sign_transaction(&envelope, keypair);
-      if let Err(_) = signed_tx {
-          show_alert("\\\\Error signing\\\\transaction");
+      if let Err(e) = signed_tx {
+          log_info!("Error signing transaction: {:?}", e);
+          show_alert(format!("{}", e).as_str().into());
           return;
       }
       let signed_tx = signed_tx.unwrap();
 
       let serialized_tx = StellarTransactionSerializer::serialize_to_base64(&signed_tx);
-      if let Err(_) = serialized_tx {
-          show_alert("\\\\Error serializing\\\\transaction");
+      if let Err(e) = serialized_tx {
+          log_info!("Error serializing transaction: {:?}", e);
+          show_alert(format!("{}", e).as_str().into());
           return;
       }
       let serialized_tx = serialized_tx.unwrap();
 
-
       let qr_data = format!("https://app.hito.dev/eth/tx/#!{}", serialized_tx);
 
-      set_qr_data(&qr_data);
+      ui_draw_qr(&qr_data);
     } else {
         log_info!("No parsed transaction found in state");
     }
