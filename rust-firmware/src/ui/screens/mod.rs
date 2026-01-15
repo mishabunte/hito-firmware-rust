@@ -2,7 +2,7 @@ extern crate alloc;
 
 use alloc::rc::Rc;
 
-use crate::{QR_CODE, log_info, slint_generatedMainWindow::MainWindow, ui::{go_back, navigate_to, screens::enter_passcode_screen::{create_confirm_passcode_screen, create_finalize_passcode_change_screen, create_set_passcode_screen}}};
+use crate::{QR_CODE, drivers::Battery, firmware, log_info, slint_generatedMainWindow::MainWindow, ui::{go_back, navigate_to, screens::enter_passcode_screen::{create_confirm_passcode_screen, create_finalize_passcode_change_screen, create_set_passcode_screen}}};
 mod pair_with_the_app_screen;
 mod menu_screen;
 mod home_screen;
@@ -15,6 +15,10 @@ mod send_stellar_screen;
 mod show_seed_screen;
 mod enter_seed_screen;
 mod signed_screen;
+mod generic_progress_bar_screen;
+
+
+
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use alloc::vec;
@@ -25,9 +29,7 @@ use crate::slint_generatedMainWindow::ScreenItem;
 const CHARS_PER_LINE_LIMIT: usize = 25;
 
 // Re-export loop handlers and cleanup functions
-pub use send_screen::{handle_send_screen_loop, cleanup_send_screen};
-pub use show_seed_screen::{handle_show_seed_loop};
-pub use enter_seed_screen::{handle_enter_seed_loop, cleanup_enter_seed_screen, init_seed_check};
+pub use send_screen::{cleanup_send_screen};
 mod generic_question_screen;
 mod device_info_screen;
 
@@ -63,6 +65,8 @@ pub enum Screen {
     Alert,
     DeviceInfo,
     Signed,
+    EncryptingPasscode,
+    FinalizeSeed,
 }
 
 pub fn show_alert(alert: &str) {
@@ -204,5 +208,16 @@ pub fn create_screen(ui: &Rc<MainWindow>, screen: Screen) {
         Screen::SetNewPasscode => create_set_passcode_screen(ui),
         Screen::FinalizePasscodeChange => create_finalize_passcode_change_screen(ui),
         Screen::ChangePasscodeConfirm => create_confirm_passcode_screen(ui),
+        Screen::EncryptingPasscode => generic_progress_bar_screen::create_generic_progress_bar_screen(ui, "ENCRYPTING", "Your new passcode\\\\is being set", false),
+        Screen::FinalizeSeed => enter_passcode_screen::create_finalize_passcode_change_screen(ui)
+    }
+}
+
+pub fn handle_screen_loop(ui: &Rc<MainWindow>, screen: Screen) {
+    match screen {
+        Screen::Send => send_screen::handle_send_screen_loop(&ui),
+        Screen::ShowSeed => show_seed_screen::handle_show_seed_loop(&ui),
+        Screen::EnterSeed => enter_seed_screen::handle_enter_seed_loop(&ui),
+        _ => {},
     }
 }

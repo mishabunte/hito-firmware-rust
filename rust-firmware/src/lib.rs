@@ -45,7 +45,7 @@ use hito_firmware::HitoFirmware;
 use firmware_state::FirmwareState;
 use slint::platform::software_renderer::MinimalSoftwareWindow;
 
-use crate::ui::register_main_window_callbacks;
+use crate::ui::{current_screen, register_main_window_callbacks};
 
 #[cfg(feature = "minifb")]
 static BASE_STACK_REMAINING: AtomicUsize = AtomicUsize::new(8388608);
@@ -285,32 +285,12 @@ pub extern "C" fn rust_main() -> ! {
     //   let first_screen = ui::screens::Screen::WalletSetup;
     //   ui::navigate_to(first_screen);
     // }
-    
-    // Initialize the global router and navigate to the initial screen (Menu)
-
-    // ui::navigate_to(ui::screens::Screen::EnterPasscode);
-
-
 
     loop {
         // Process any pending navigation requests (deferred from callbacks)
         ui::process_pending_navigation();
 
-        // Handle screen-specific loop events
-        if let Some(current) = ui::current_screen() {
-            match current {
-                ui::screens::Screen::Send => {
-                    ui::screens::handle_send_screen_loop(&ui);
-                }
-                ui::screens::Screen::ShowSeed => {
-                    ui::screens::handle_show_seed_loop(&ui);
-                }
-                ui::screens::Screen::EnterSeed => {
-                    ui::screens::handle_enter_seed_loop(&ui);
-                }
-                _ => {}
-            }
-        }
+        ui::screens::handle_screen_loop(&ui, current_screen().unwrap_or(ui::screens::Screen::Lock));
 
         slint::platform::update_timers_and_animations();
         
