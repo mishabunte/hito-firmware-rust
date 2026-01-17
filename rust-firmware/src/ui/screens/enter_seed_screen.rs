@@ -59,7 +59,7 @@ const NEXT_BUTTON_X: f32 = 170.0;
 const LETTER_MODE_TIMEOUT_MS: u64 = 1_250_000;
 const WORD_MODE_TIMEOUT_MS: u64 = 1_000_000;
 
-static mut SEED_ENTERED: Vec<u16> = Vec::new();
+static mut SEED_WORDS_ENTERED: Vec<String> = Vec::new();
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum EnterSeedMode {
@@ -95,14 +95,14 @@ static mut SEED_CHECK_MODE: bool = false;
 // For seed check mode: indices of words to verify (e.g., [2, 6, 14] for words 3, 7, 15)
 static mut SEED_CHECK_INDICES: [usize; 3] = [0, 0, 0];
 // For seed check mode: the expected seed to compare against
-static mut EXPECTED_SEED: Vec<u16> = Vec::new();
+static mut EXPECTED_SEED_WORDS: Vec<String> = Vec::new();
 
 use crate::crypto::ffi::{crypt0_bip39_english, CRYPT0_BIP39_MNEMONIC_ENGLISH_MAXWORDS};
 
 use crate::crypto::crypt0::{ bip39_index_by_word, bip39_word_by_index };
 
 
-pub fn find_bip39_matches(prefix: &str) -> Option<Vec<u16>> {
+pub fn find_bip39_matches(prefix: &str) -> Option<Vec<String>> {
     if prefix.is_empty() {
         return None;
     }
@@ -111,7 +111,7 @@ pub fn find_bip39_matches(prefix: &str) -> Option<Vec<u16>> {
     let prefix_bytes = prefix_lc.as_bytes();
 
     let max = CRYPT0_BIP39_MNEMONIC_ENGLISH_MAXWORDS as usize;
-    let mut indices: Vec<u16> = Vec::new();
+    let mut matches: Vec<String> = Vec::new();
 
     for i in 0..max {
         let ptr = unsafe { crypt0_bip39_english[i] };
@@ -122,14 +122,14 @@ pub fn find_bip39_matches(prefix: &str) -> Option<Vec<u16>> {
         let word = unsafe { CStr::from_ptr(ptr) }.to_bytes();
 
         if word.starts_with(prefix_bytes) {
-            indices.push(i as u16);
+            matches.push(String::from_utf8_lossy(word).into_owned());
         }
     }
 
-    if indices.is_empty() {
+    if matches.is_empty() {
         None
     } else {
-        Some(indices)
+        Some(matches)
     }
 }
 
@@ -229,7 +229,7 @@ fn create_abc_buttons() -> ModelRc<ScreenButton> {
 }
 
 /// Create ABC buttons with navigation
-fn create_abc_buttons_with_nav(current_index: usize, seed_len: usize, seed_words: &[u16]) -> ModelRc<ScreenButton> {
+fn create_abc_buttons_with_nav(current_index: usize, seed_len: usize, entered_seed_len: usize) -> ModelRc<ScreenButton> {
     let mut abc_buttons = LETTER_SEQUENCES.iter().enumerate().map(|(i, seq)| {
         let (x, y) = ABC_LOCATIONS[i];
         ScreenButton { 
@@ -254,7 +254,7 @@ fn create_abc_buttons_with_nav(current_index: usize, seed_len: usize, seed_words
     });
     
     // Add navigation buttons
-    abc_buttons.extend(create_nav_buttons(current_index, seed_len, seed_words.len()));
+    abc_buttons.extend(create_nav_buttons(current_index, seed_len, entered_seed_len));
     
     ModelRc::new(VecModel::from(abc_buttons))
 }
@@ -300,7 +300,7 @@ pub fn handle_enter_seed_loop(ui: &Rc<MainWindow>) {
                 
                 // Refresh UI to show ABC buttons
                 let seed_len = state().lock().get_seed_length().unwrap_or(24);
-                ui.set_buttons(create_abc_buttons_with_nav(CURRENT_WORD_INDEX, seed_len, SEED_ENTERED.as_slice()));
+                ui.set_buttons(create_abc_buttons_with_nav(CURRENT_WORD_INDEX, seed_len, SEED_WORDS_ENTERED.len()));
             }
         }
     }
@@ -324,32 +324,43 @@ fn get_header_title(word_index: usize, seed_len: usize, seed_check: bool) -> sli
 }
 
 /// Initialize seed check mode with specific word indices to verify
-pub fn init_seed_check(expected_seed: &[u16], indices: [usize; 3]) {
+pub fn init_seed_check(expected_seed: &[String], indices: [usize; 3]) {
     unsafe {
         SEED_CHECK_MODE = true;
         SEED_CHECK_INDICES = indices;
-        EXPECTED_SEED = expected_seed.to_vec();
-        SEED_ENTERED.clear();
+        EXPECTED_SEED_WORDS = expected_seed.to_vec();
+        SEED_WORDS_ENTERED.clear();
     }
 }
 
 fn on_encrypt_clicked(seed_check_mode: bool) {
   let mnemonic = if seed_check_mode {
     unsafe {
-      log_info!("EXPECTED_SEED: {:?}", EXPECTED_SEED);
-      EXPECTED_SEED.as_slice()   
+      log_info!("EXPECTED_SEED: {:?}", EXPECTED_SEED_WORDS);
+      EXPECTED_SEED_WORDS.as_slice()   
     }
   } else {
     unsafe {
-      log_info!("SEED_ENTERED: {:?}", SEED_ENTERED);
-      SEED_ENTERED.as_slice()
+      log_info!("SEED_WORDS_ENTERED: {:?}", SEED_WORDS_ENTERED);
+      &SEED_WORDS_ENTERED.as_slice()
     }
   };
   let vault_arc = firmware().vault.clone();
   let mut vault = vault_arc.lock();
+
+  let mut seed_indices: Vec<u16> = Vec::with_capacity(mnemonic.len());
+  for word in mnemonic.iter() {
+    match bip39_index_by_word(word) {
+      Some(idx) => seed_indices.push(idx),
+      None => {
+        show_alert("Error converting mnemonic to indices.\\\\Please try again.");
+        return;
+      }
+    }
+  }
   
   // Generate entropy from mnemonic indices
-  if let Ok((entropy, entropy_len)) = crypto::crypt0::mnemonic_indices_to_entropy(mnemonic.to_vec()) {
+  if let Ok((entropy, entropy_len)) = crypto::crypt0::mnemonic_indices_to_entropy(seed_indices) {
     let pass = state().lock().get_pin();
     match vault.init(&entropy, entropy_len, pass.as_bytes(), Some(ui_report_progress)) {
         Ok(()) => {
@@ -358,6 +369,7 @@ fn on_encrypt_clicked(seed_check_mode: bool) {
             //firmware().battery.lock().reboot();
         },
         Err(e) => {
+          log_info!("Error initializing vault: {:?}", e);
           firmware().battery.lock().reboot();
         }
     }
@@ -408,19 +420,39 @@ fn generate_random_word_indices(seed_len: usize) -> [usize; SEED_CHECK_WORDS_AMO
 /// Verify the entered words against the expected seed
 fn verify_seed_check() -> bool {
     unsafe {
-        if SEED_ENTERED.len() != 3 {
+        if SEED_WORDS_ENTERED.len() != 3 {
             return false;
         }
         for (i, &check_idx) in SEED_CHECK_INDICES.iter().enumerate() {
-            if check_idx >= EXPECTED_SEED.len() {
+            if check_idx >= EXPECTED_SEED_WORDS.len() {
                 return false;
             }
-            if SEED_ENTERED.get(i) != EXPECTED_SEED.get(check_idx) {
+            if SEED_WORDS_ENTERED.get(i) != EXPECTED_SEED_WORDS.get(check_idx) {
                 return false;
             }
         }
         true
     }
+}
+
+fn set_word_display(ui: &MainWindow, word_entered: &Rc<RefCell<String>>) {
+      let w = word_entered.borrow();
+      let word_displayed: slint::SharedString = if w.is_empty() {
+          "........".into()
+      } else {
+          w.clone().into()
+      };
+
+      let items = ModelRc::new(VecModel::from(vec![
+          ScreenItem {
+              text: word_displayed,
+              width: 220.0,
+              height: 40.0,
+              x: 50.0,
+              y: 50.0,
+          },
+      ]));
+      ui.set_items(items);
 }
 
 /// Create the "Enter Seed" screen (also used for seed check mode)
@@ -432,14 +464,14 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
         SEED_CHECK_MODE = seed_check;
         if !seed_check {
             // Clear entered seed for fresh import
-            SEED_ENTERED.clear();
+            SEED_WORDS_ENTERED.clear();
         }
         // Note: For seed check mode, init_seed_check should have been called 
         // before navigating to this screen (e.g., from create_generate_seed_screen)
     }
     
     let seed_len = if seed_check { 3 } else { state().lock().get_seed_length().unwrap_or(24) };
-    let seed_words = unsafe { SEED_ENTERED.as_slice() };
+    let seed_words = unsafe { SEED_WORDS_ENTERED.as_slice() };
     let current_word_index = 0; // Start at the next word to enter
     
     unsafe {
@@ -449,30 +481,10 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
     ui.set_header_title(get_header_title(current_word_index, seed_len, seed_check));
 
     ui.set_center_text(true);
-    ui.set_buttons(create_abc_buttons_with_nav(current_word_index, seed_len, &seed_words));
+    ui.set_buttons(create_abc_buttons_with_nav(current_word_index, seed_len, seed_words.len()));
 
     let word_entered = Rc::new(RefCell::new(String::new()));
     let current_index = Rc::new(RefCell::new(current_word_index));
-
-    let set_word_display = |ui: &MainWindow, word_entered: &Rc<RefCell<String>>| {
-        let w = word_entered.borrow();
-        let word_displayed: slint::SharedString = if w.is_empty() {
-            "........".into()
-        } else {
-            w.clone().into()
-        };
-
-        let items = ModelRc::new(VecModel::from(vec![
-            ScreenItem {
-                text: word_displayed,
-                width: 220.0,
-                height: 40.0,
-                x: 50.0,
-                y: 50.0,
-            },
-        ]));
-        ui.set_items(items);
-    };
 
     set_word_display(ui, &word_entered);
 
@@ -484,7 +496,7 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
         if let Some(ui) = ui_weak.upgrade() {
             let is_seed_check = unsafe { SEED_CHECK_MODE };
             let seed_len = if is_seed_check { 3 } else { state().lock().get_seed_length().unwrap_or(24) };
-            let seed_words = unsafe { SEED_ENTERED.as_slice() };
+            let seed_words = unsafe { SEED_WORDS_ENTERED.as_slice() };
             let idx = *current_index_rc.borrow();
             
             // Handle Done button
@@ -514,19 +526,23 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                     unsafe { CURRENT_WORD_INDEX = new_idx; }
                     
                     // Show the previous word
+                    log_info!("Moving to previous word index {}", new_idx);
                     {
+                        log_info!("Mutating word_entered for previous word");
                         let mut w = word_entered_rc.borrow_mut();
                         w.clear();
+                        log_info!("Cleared word_entered, now setting to previous word");
                         if new_idx < seed_words.len() {
-                            w.push_str(bip39_word_by_index(seed_words[new_idx]).unwrap_or(""));
+                            w.push_str(&seed_words[new_idx]);
                         }
+                        log_info!("Set word_entered to previous word: {}", *w);
                     }
                     set_word_display(&ui, &word_entered_rc);
                     ui.set_small_text_items(ModelRc::new(VecModel::from(vec![])));
                     ui.set_header_title(get_header_title(new_idx, seed_len, is_seed_check));
-                    let updated_words = unsafe { SEED_ENTERED.as_slice() };
-                    ui.set_buttons(create_abc_buttons_with_nav(new_idx, seed_len, &updated_words));
+                    ui.set_buttons(create_abc_buttons_with_nav(new_idx, seed_len, seed_words.len()));
                     set_mode(EnterSeedMode::LetterSeq);
+                    log_info!("Moved to previous word index {}", new_idx);
                 }
                 return;
             }
@@ -543,14 +559,13 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                         let mut w = word_entered_rc.borrow_mut();
                         w.clear();
                         if new_idx < seed_words.len() {
-                            w.push_str(bip39_word_by_index(seed_words[new_idx]).unwrap_or(""));
+                            w.push_str(&seed_words[new_idx]);
                         }
                     }
                     set_word_display(&ui, &word_entered_rc);
                     ui.set_small_text_items(ModelRc::new(VecModel::from(vec![])));
                     ui.set_header_title(get_header_title(new_idx, seed_len, is_seed_check));
-                    let updated_words = unsafe { SEED_ENTERED.as_slice() };
-                    ui.set_buttons(create_abc_buttons_with_nav(new_idx, seed_len, updated_words));
+                    ui.set_buttons(create_abc_buttons_with_nav(new_idx, seed_len, seed_words.len()));
                     set_mode(EnterSeedMode::LetterSeq);
                 }
                 return;
@@ -577,19 +592,19 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                         w.push_str(&item.text);
                         
                         // Update or append word at current index
-                        let mut words = unsafe { SEED_ENTERED.clone() };
-                        if idx < words.len() {
+                        let mut words = unsafe { SEED_WORDS_ENTERED.clone() };
+                        if idx < seed_words.len() {
                             // Replace existing word
-                            words[idx] = bip39_index_by_word(w.clone().as_str()).unwrap_or(0);
-                            unsafe { SEED_ENTERED = words; }
+                            words[idx] = w.clone();
+                            unsafe { SEED_WORDS_ENTERED = words; }
                         } else {
                             // Append new word
-                            unsafe { SEED_ENTERED.push(bip39_index_by_word(w.clone().as_str()).unwrap_or(0)); }
+                            unsafe { SEED_WORDS_ENTERED.push(w.clone()); }
                         }
                         log_info!("Entered seed word {}: {}", idx + 1, *w);
                     }
                     
-                    let seed_words = unsafe { SEED_ENTERED.as_slice() };
+                    let words = unsafe { SEED_WORDS_ENTERED.as_slice() };
                     let next_index = idx + 1;
 
                     if next_index >= seed_len {
@@ -601,12 +616,12 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                         {
                             let mut w = word_entered_rc.borrow_mut();
                             w.clear();
-                            w.push_str(bip39_word_by_index(seed_words[seed_len - 1]).unwrap_or(""));
+                            w.push_str(&words[seed_len - 1]);
                         }
                         set_word_display(&ui, &word_entered_rc);
                         
                         ui.set_header_title(get_header_title(seed_len - 1, seed_len, is_seed_check));
-                        ui.set_buttons(create_abc_buttons_with_nav(seed_len - 1, seed_len, &seed_words));
+                        ui.set_buttons(create_abc_buttons_with_nav(seed_len - 1, seed_len, words.len()));
                         set_mode(EnterSeedMode::LetterSeq);
                         return;
                     }
@@ -619,13 +634,13 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                         let mut w = word_entered_rc.borrow_mut();
                         w.clear();
                         if next_index < seed_words.len() {
-                            w.push_str(bip39_word_by_index(seed_words[next_index]).unwrap_or(""));
+                            w.push_str(&words[next_index]);
                         }
                     }
                     set_word_display(&ui, &word_entered_rc);
 
                     ui.set_header_title(get_header_title(next_index, seed_len, is_seed_check));
-                    ui.set_buttons(create_abc_buttons_with_nav(next_index, seed_len, &seed_words));
+                    ui.set_buttons(create_abc_buttons_with_nav(next_index, seed_len, words.len()));
                     set_mode(EnterSeedMode::LetterSeq);
                 }
                 EnterSeedMode::LetterSeq => {
@@ -641,23 +656,22 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                       if matches.len() <= 4 {
                           // Show matching words
                           let mut word_buttons: Vec<ScreenButton> = Vec::new();
-                          for (i, index) in matches.iter().enumerate() {
-                              if let Some(word) = bip39_word_by_index(*index) {
+                          for (i, word) in matches.iter().enumerate() {
                                 // Exact match - select this word
                                 if word == w.as_str() {
                                     log_info!("Exact match found for word: {}", word);
                                     // Update or append word at current index
-                                    let mut words = unsafe { SEED_ENTERED.clone() };
-                                    if idx < words.len() {
+                                    let mut word_list = unsafe { SEED_WORDS_ENTERED.clone() };
+                                    if idx < seed_words.len() {
                                         // Replace existing word
-                                        words[idx] = *index;
-                                        unsafe { SEED_ENTERED = words; }
+                                        word_list[idx] = word.to_ascii_lowercase();
+                                        unsafe { SEED_WORDS_ENTERED = word_list; }
                                     } else {
                                         // Append new word
-                                        unsafe { SEED_ENTERED.push(*index); }
+                                        unsafe { SEED_WORDS_ENTERED.push(word.to_ascii_lowercase()); }
                                     }
                                     
-                                    let seed_words = unsafe { SEED_ENTERED.as_slice() };
+                                    let seed_words = unsafe { SEED_WORDS_ENTERED.as_slice() };
                                     let next_index = idx + 1;
 
                                     if next_index >= seed_len {
@@ -669,12 +683,12 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                                         {
                                             let mut w = word_entered_rc.borrow_mut();
                                             w.clear();
-                                            w.push_str(bip39_word_by_index(seed_words[seed_len - 1]).unwrap_or(""));
+                                            w.push_str(&seed_words[seed_len - 1]);
                                         }
                                         set_word_display(&ui, &word_entered_rc);
                                         
                                         ui.set_header_title(get_header_title(seed_len - 1, seed_len, is_seed_check));
-                                        ui.set_buttons(create_abc_buttons_with_nav(seed_len - 1, seed_len, &seed_words));
+                                        ui.set_buttons(create_abc_buttons_with_nav(seed_len - 1, seed_len, seed_words.len()));
                                         set_mode(EnterSeedMode::LetterSeq);
                                         return;
                                     }
@@ -688,13 +702,13 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                                         let mut w = word_entered_rc.borrow_mut();
                                         w.clear();
                                         if next_index < seed_words.len() {
-                                            w.push_str(bip39_word_by_index(seed_words[next_index]).unwrap_or(""));
+                                            w.push_str(&seed_words[next_index]);
                                         }
                                     }
                                     set_word_display(&ui, &word_entered_rc);
 
                                     ui.set_header_title(get_header_title(next_index, seed_len, is_seed_check));
-                                    ui.set_buttons(create_abc_buttons_with_nav(next_index, seed_len, &seed_words));
+                                    ui.set_buttons(create_abc_buttons_with_nav(next_index, seed_len, seed_words.len()));
                                     set_mode(EnterSeedMode::LetterSeq);
                                     return;
                                 }
@@ -713,7 +727,6 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                                       inverted: false,
                                   };
                                   word_buttons.push(button);
-                              }
                           }
                           ui.set_buttons(ModelRc::new(VecModel::from(word_buttons)));
                           drop(w);
@@ -738,11 +751,13 @@ pub fn create_enter_seed_screen(ui: &Rc<MainWindow>, seed_check: bool) {
                     }
                     drop(w);
                     set_word_display(&ui, &word_entered_rc);
-                    let seed_words = unsafe {SEED_ENTERED.as_slice()};
-                    ui.set_buttons(create_abc_buttons_with_nav(idx, seed_len, &seed_words));
+                    let seed = unsafe {SEED_WORDS_ENTERED.as_slice()};
+                    ui.set_buttons(create_abc_buttons_with_nav(idx, seed_len, seed.len()));
                     set_mode(EnterSeedMode::LetterSeq);
                 }
             }
+        } else {
+            log_info!("UI reference lost in enter seed screen callback");
         }
     });
 }
@@ -831,7 +846,7 @@ pub fn create_wallet_setup_screen(ui: &Rc<MainWindow>) {
               unsafe {
                   SEED_CHECK_MODE = false;
                   let mnemonic = "zero zero zero zero zero zero zero zero zero zero zero zoo";
-                  SEED_ENTERED = mnemonic_to_indices(mnemonic).unwrap();
+                  SEED_WORDS_ENTERED = mnemonic.split_whitespace().map(|w| w.to_ascii_lowercase()).collect();
               }
               navigate_to(Screen::EncryptingSeed);
           },
@@ -860,13 +875,13 @@ pub fn create_generate_seed_screen(ui: &Rc<MainWindow>) {
                 log_info!("Error retrieving generated mnemonic");
                 return;
             };
-            let array = mnemonic_to_indices(&mnemonic);
+            let array = mnemonic.split_whitespace().map(|w| w.to_ascii_lowercase()).collect::<Vec<String>>();
 
-            if array.is_err() {
-                show_alert("Error converting mnemonic to indices for verification");
-                return;
-            }
-            let array = array.unwrap();
+            // if array.is_err() {
+            //     show_alert("Error converting mnemonic to indices for verification");
+            //     return;
+            // }
+            // let array = array.unwrap();
 
             if let Ok(seed_len) = vault.get_mnemonic_len() {
               log_info!("Generated seed for verification, length: {}", seed_len);
