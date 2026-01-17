@@ -115,7 +115,7 @@ component SettingsButtonLine inherits Rectangle {
   border-width: 0px;
 }
 
-export component SettingsButton {
+component SettingsButton {
     in-out property <bool> pressed: false;
     in-out property <string> content: "____";
     in-out property <color> text-color-unpressed: Palette.black;
@@ -130,10 +130,10 @@ export component SettingsButton {
       background: pressed ? Palette.blue : Palette.black;
     }
     TouchArea {
-        x: line1.x - 5px;
-        y: line1.y - 5px;
-        width: line2.width + 5px;
-        height: line2.y + 5px;
+        x: line1.x - 10px;
+        y: line1.y - 10px;
+        width: line2.width + 20px;
+        height: line2.y + line2.height + 20px;
         pointer-event(event) => {
             if (event.kind == PointerEventKind.down) {
                 pressed = true;
@@ -146,7 +146,7 @@ export component SettingsButton {
     callback clicked();
 }
 
-export component BackButton {
+component BackButton {
     in-out property <bool> pressed: false;
     in-out property <string> content: "X";
     in-out property <length> in-font-size: 20px;
@@ -162,8 +162,8 @@ export component BackButton {
         TouchArea {
             x: parent.x - 10px;
             y: parent.y - 10px;
-            width: parent.width + 15px;
-            height: parent.height + 15px;
+            width: parent.width + 20px;
+            height: parent.height + 20px;
             pointer-event(event) => {
                 if (event.kind == PointerEventKind.down) {
                     pressed = true;
