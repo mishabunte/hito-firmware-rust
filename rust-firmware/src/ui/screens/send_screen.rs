@@ -147,48 +147,14 @@ fn handle_stellar_transaction(payload: &str, ui: &MainWindow) {
                         OperationDetails::Payment { .. } |
                         OperationDetails::CreateAccount { .. } | 
                         OperationDetails::PathPaymentStrictReceive { .. } |
-                        OperationDetails::PathPaymentStrictSend { .. }
+                        OperationDetails::PathPaymentStrictSend { .. } | 
+                        OperationDetails::ChangeTrust { .. }
                     )
                 });
 
                 if !has_valid_op {
                     drop(s);
-                    show_alert("No payment, create_account, or path_payment operation found");
-                    return;
-                }
-
-                // Extract and validate destination
-                let dest_address = if let Some(first_op) = parsed_tx.operations.first() {
-                    match &first_op.details {
-                        OperationDetails::Payment { destination, .. } => {
-                            match destination {
-                                MuxedAccount::Ed25519 { account_id } => Some(account_id.clone()),
-                                MuxedAccount::MuxedEd25519 { account_id, .. } => Some(account_id.clone()),
-                            }
-                        }
-                        OperationDetails::CreateAccount { destination, .. } => {
-                            Some(destination.clone())
-                        }
-                        OperationDetails::PathPaymentStrictReceive { destination, .. } => {
-                            match destination {
-                                MuxedAccount::Ed25519 { account_id } => Some(account_id.clone()),
-                                MuxedAccount::MuxedEd25519 { account_id, .. } => Some(account_id.clone()),
-                            }
-                        }
-                        OperationDetails::PathPaymentStrictSend { destination, .. } => {
-                            match destination {
-                                MuxedAccount::Ed25519 { account_id } => Some(account_id.clone()),
-                                MuxedAccount::MuxedEd25519 { account_id, .. } => Some(account_id.clone()),
-                            }
-                        }
-                        _ => None
-                    }
-                } else {
-                    None
-                };
-                if dest_address.is_none() {
-                    drop(s);
-                    show_alert("Failed to encode destination address");
+                    show_alert("Unknown or unsupported operation");
                     return;
                 }
               },

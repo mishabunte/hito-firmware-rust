@@ -16,6 +16,7 @@ use slint::format;
 use crate::STATE;
 use crate::ScreenItem;
 use crate::crypto::crypt0::hex_to_bytes;
+use crate::crypto::libcrypt0pro::stellar::ChangeTrustAsset;
 use crate::crypto::libcrypt0pro::stellar::OperationDetails;
 use crate::crypto::libcrypt0pro::stellar::Asset;
 use crate::crypto::libcrypt0pro::stellar::MuxedAccount;
@@ -340,6 +341,45 @@ fn create_operations_page(ui: &Rc<MainWindow>) {
                 operation_lines.push(format!("Destination: {}", dest_short));
                 let amount_str = StellarTransactionParser::stroops_to_xlm_string(*starting_balance);
                 operation_lines.push(format!("Starting balance: {} XLM", amount_str));
+            },
+
+            OperationDetails::ChangeTrust { asset, limit } => {
+                match asset {
+                    ChangeTrustAsset::Native => operation_lines.push("Asset: XLM".to_shared_string()),
+                    ChangeTrustAsset::CreditAlphanum4 { code, issuer } => {
+                      operation_lines.push(format!("Asset: {} issued by {}", code, shorten_address(issuer)).to_shared_string());
+                    },
+                    ChangeTrustAsset::CreditAlphanum12 { code, issuer } => {
+                      operation_lines.push(format!("Asset: {} issued by {}", code, shorten_address(issuer)).to_shared_string());
+                    },
+                    ChangeTrustAsset::LiquidityPool { asset_a, asset_b, fee } => {
+                      operation_lines.push(format!("Liquidity Pool with fee: {}", fee).to_shared_string());
+                      match asset_a {
+                          Asset::Native => operation_lines.push("Asset A: XLM".to_shared_string()),
+                          Asset::CreditAlphanum4 { code, issuer } => {
+                            operation_lines.push(format!("Asset A: {} issued by {}", code, shorten_address(issuer)).to_shared_string());
+                          },
+                          Asset::CreditAlphanum12 { code, issuer } => {
+                            operation_lines.push(format!("Asset A: {} issued by {}", code, shorten_address(issuer)).to_shared_string());
+                          },
+                      };
+                      match asset_b {
+                          Asset::Native => operation_lines.push("Asset B: XLM".to_shared_string()),
+                          Asset::CreditAlphanum4 { code, issuer } => {
+                            operation_lines.push(format!("Asset B: {} issued by {}", code, shorten_address(issuer)).to_shared_string());
+                          },
+                          Asset::CreditAlphanum12 { code, issuer } => {
+                            operation_lines.push(format!("Asset B: {} issued by {}", code, shorten_address(issuer)).to_shared_string());
+                          },
+                      };
+                    },
+                };
+                let limit_str = if *limit == i64::MAX {
+                    "No limit".to_shared_string()
+                } else {
+                    StellarTransactionParser::stroops_to_xlm_string(*limit).to_shared_string()
+                };
+                operation_lines.push(format!("Limit: {}", limit_str));
             },
 
             OperationDetails::PathPaymentStrictSend { send_asset, send_amount, destination, dest_asset, dest_min, path } => {

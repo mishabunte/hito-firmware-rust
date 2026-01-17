@@ -4,7 +4,7 @@
 const TEST_SEED: &str = "38b6a363e88b28138cc71f0145ab429c251baa8cd8fa6d80bcfb39c35076f1766e24dfc01ce0e22e8dfec185ad7a67ce748cd6551ad1b738619b8859808bbf88";
 
 mod stellar_transaction_tests {
-    use hito_firmware_rust::crypto::{crypt0::{bytes_to_hex, hex_to_bytes}, libcrypt0pro::stellar::{NETWORK_ID_MAINNET, NETWORK_ID_TESTNET, OperationDetails, Asset, MuxedAccount, StellarTransactionParser, StellarTransactionSerializer, StellarTransactionSigner, StellarWallet, TransactionEnvelope}};
+    use hito_firmware_rust::crypto::{crypt0::{bytes_to_hex, hex_to_bytes}, libcrypt0pro::stellar::{Asset, ChangeTrustAsset, MuxedAccount, NETWORK_ID_MAINNET, NETWORK_ID_TESTNET, OperationDetails, StellarTransactionParser, StellarTransactionSerializer, StellarTransactionSigner, StellarWallet, TransactionEnvelope}};
 
     use crate::TEST_SEED;
 
@@ -238,6 +238,48 @@ mod stellar_transaction_tests {
                               assert_eq!(path.len(), 0); // No path assets
                           },
                           _ => panic!("Expected PathPaymentStrictSend operation"),
+                      }
+                      match StellarTransactionSerializer::serialize_to_base64(&envelope) {
+                          Ok(serialized_xdr) => {
+                              println!("Serialized XDR: {}", serialized_xdr);
+                              assert_eq!(serialized_xdr, base64_tx);
+                          }
+                          Err(e) => panic!("Serialization error: {}", e),
+                      }
+                    }
+                    _ => panic!("Expected TransactionEnvelope::Transaction"),
+                }
+            }
+            Err(e) => panic!("Parse error: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_change_trust_asset() {
+        let base64_tx = "AAAAAgAAAACdr++ECgMp7XJRAM8An6JDIwr7HfywJyQCDQd2Cn6CLwAAAGQABVT4AAAAAgAAAAEAAAAAAAAAAAAAAABpayOeAAAAAAAAAAEAAAAAAAAABgAAAAFVU0RDAAAAADuZETgO/piLoKiQDrHP5E82b32+lGvtB3JA9/Yk3xXFf/////////8AAAAAAAAAAA==";
+        match StellarTransactionParser::parse_transaction(base64_tx, NETWORK_ID_TESTNET) {
+            Ok(envelope) => {
+                println!("Parsed transaction: {:#?}", envelope);
+                match &envelope {
+                    TransactionEnvelope::Transaction(tx) => {
+                      assert_eq!(tx.operations.len(), 1);
+                      assert_eq!(tx.source_account, "GCO2734EBIBST3LSKEAM6AE7UJBSGCX3DX6LAJZEAIGQO5QKP2BC7NZ4");
+                      assert!(tx.network_hash.is_some());
+                      let operation = &tx.operations[0];
+                      match &operation.details {
+                          OperationDetails::ChangeTrust { asset, limit } => {
+                              // Asset: USDC
+                              match asset {
+                                  ChangeTrustAsset::CreditAlphanum4 { code, issuer } => {
+                                      assert_eq!(code, "USDC");
+                                      assert_eq!(issuer, "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN");
+                                  },
+                                  _ => panic!("Expected CreditAlphanum4 asset"),
+                              }
+
+                              assert_eq!(*limit, i64::MAX); // 1,000,000 USDC in stroops
+                          },
+                          _ => panic!("Expected ChangeTrust operation"),
                       }
                       match StellarTransactionSerializer::serialize_to_base64(&envelope) {
                           Ok(serialized_xdr) => {
