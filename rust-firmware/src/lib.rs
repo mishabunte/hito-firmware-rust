@@ -78,8 +78,7 @@ pub fn firmware() -> &'static HitoFirmware {
 }
 
 pub fn ui_report_progress(progress: u8) {
-  ui::process_pending_navigation();
-  if progress % 5 != 0 {
+  if progress % 2 != 0 {
       return;
   }
   let display_arc = firmware().display.clone();
@@ -301,13 +300,28 @@ pub extern "C" fn rust_main() -> ! {
                 renderer.render_by_line(DisplayWrapper {
                     display: &mut firmware().display.clone(),
                     line_buffer: &mut LINE_BUFFER,
-                });
+                }
+              );
               let display_arc = firmware().display.clone();
               if let Some(qr_code) = &QR_CODE {
                   let qr_data = qr_code.get_data();
                   let qr_width = qr_code.get_width() as usize;
                   let (x, y) = qr_code.get_coords();
                   display_arc.lock().draw_qr_from_buffer(x, y, &qr_data, qr_width);
+              }
+              #[cfg(feature = "minifb")]
+              {
+                use crate::drivers::minifb::simulator_window_set_memory_stats;
+
+                  let heap_used = get_heap_usage();
+                  if heap_used > HEAP_ALLOCATED.load(Ordering::Relaxed) {
+                      HEAP_ALLOCATED.store(heap_used, Ordering::Relaxed);
+                  }
+                  let stack_used = current_stack_used();
+                  if stack_used > BASE_STACK_REMAINING.load(Ordering::Relaxed) {
+                      BASE_STACK_REMAINING.store(stack_used, Ordering::Relaxed);
+                  }
+                  simulator_window_set_memory_stats(heap_used, stack_used);
               }
             }
         });
