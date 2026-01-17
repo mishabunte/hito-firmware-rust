@@ -6,7 +6,6 @@ use crate::drivers::{ Indicator, IndicatorImpl, LedColor, BlinkSpeed };
 //use crate::lib::crypt0;
 
 use crate::crypto::crypt0::hex_to_bytes;
-#[cfg(feature = "minifb")]
 use crate::log_info;
 extern crate alloc;
 use alloc::sync::Arc;

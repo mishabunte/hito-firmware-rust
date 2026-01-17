@@ -4,12 +4,12 @@ use core::ptr;
 use core::slice;
 use crate::crypto;
 use crate::crypto::crypt0::{entropy_to_mnemonic, entropy_to_seed, generate_entropy};
+#[cfg(feature = "minifb")]
 use crate::vault::desktop_storage::{save_flash_vault_storage, save_ram_vault_storage, get_vault_storage_dir};
 use crate::vault::{VaultError, VaultResult};
 use crate::crypto::libcrypt0pro::stellar::StellarKeypair;
 use crate::log_info;
 use crate::now_us;
-#[cfg(feature = "minifb")]
 use alloc::format;
 extern crate alloc;
 use crate::vault::{NONCE_LEN, AAD_LEN, TAG_LEN};
@@ -17,6 +17,8 @@ use crate::vault::VaultEncryptedBlock;
 use crate::vault::bootloader_version::*;
 use crate::vault::firmware_version::HitoFirmwareVersion;
 use crate::firmware_state::DeviceInfo;
+
+use super::ffi;
 
 use crate::crypto::libcrypt0pro::stellar::StellarWallet;
 
@@ -853,7 +855,7 @@ impl HitoVault {
             HITO_VAULT_STEPS_COUNT_RAM
           };
         }
-        self.block_encrypt(block_ram.as_mut().unwrap(), entropy_len_enum, &entropy, &seed, password, progress_handler)?;
+        self.block_encrypt(block_ram.as_mut().unwrap(), entropy_len_enum, &entropy, &seed, password, None)?;
       }
     }
     
@@ -1073,7 +1075,7 @@ mod tests {
         log_info!("Passcode is {:?}", passcode);
 
         // Initialize vault with entropy and passcode
-        assert!(vault.init(&entropy, entropy_len, passcode).is_ok());
+        assert!(vault.init(&entropy, entropy_len, passcode, None).is_ok());
         
         let seed = vault.data.as_ref().unwrap().seed;
 
@@ -1083,7 +1085,7 @@ mod tests {
         // Unlock with the passcode
         log_info!("Passcode is {:?}", passcode);
 
-        assert!(vault2.unlock_with_password(passcode).is_ok());
+        assert!(vault2.unlock_with_password(passcode, None).is_ok());
 
         // Verify vault is unlocked
         assert!(vault2.is_unlocked());
@@ -1105,12 +1107,12 @@ mod tests {
         let wrong_passcode = b"wrong_password!!";
 
         // Initialize vault with entropy and correct passcode
-        assert!(vault.init(&entropy, entropy_len, correct_passcode).is_ok());
+        assert!(vault.init(&entropy, entropy_len, correct_passcode, None).is_ok());
 
         let mut vault2 = HitoVault::new();
 
         // Try to unlock with wrong passcode
-        let result = vault2.unlock_with_password(wrong_passcode);
+        let result = vault2.unlock_with_password(wrong_passcode, None);
         assert!(result.is_err());
         assert!(!vault2.is_unlocked());
     }
@@ -1130,7 +1132,7 @@ mod tests {
         
         let mut vault = HitoVault::new();
 
-        let result = vault.unlock_with_password(b"any_password");
+        let result = vault.unlock_with_password(b"any_password", None);
         assert!(result.is_err());
         assert!(!vault.is_unlocked());
     }
@@ -1146,14 +1148,14 @@ mod tests {
         let passcode2 = b"second_password";
 
         // Initialize vault with entropy and first passcode
-        assert!(vault.init(&entropy, entropy_len, passcode1).is_ok());
+        assert!(vault.init(&entropy, entropy_len, passcode1, None).is_ok());
 
         // Change passcode
         vault.vault_is_unlocked = true; // Simulate unlocked state for passcode change
-        assert!(vault.set_passcode(passcode2).is_ok());
+        assert!(vault.set_passcode(passcode2, None).is_ok());
 
         let mut vault2 = HitoVault::new();
-        assert!(vault2.unlock_with_password(passcode2).is_ok());
+        assert!(vault2.unlock_with_password(passcode2, None).is_ok());
         assert!(vault2.is_unlocked());
     }
 
@@ -1167,10 +1169,10 @@ mod tests {
 
         let mut vault = HitoVault::new();
         // Initialize vault with entropy and passcode
-        assert!(vault.init(&entropy, entropy_len, passcode).is_ok());
+        assert!(vault.init(&entropy, entropy_len, passcode, None).is_ok());
 
         let mut vault2 = HitoVault::new();
-        assert!(vault2.unlock_with_password(passcode).is_ok());
+        assert!(vault2.unlock_with_password(passcode, None).is_ok());
         assert_eq!(vault2.data.as_ref().unwrap().entropy_len as usize, entropy_len);
     }
 
@@ -1184,9 +1186,9 @@ mod tests {
 
         // Valid passcode lengths (1-32 bytes)
         // Initialize vault with entropy and single-char passcode
-        assert!(vault.init(&entropy, entropy_len, b"a").is_ok());
+        assert!(vault.init(&entropy, entropy_len, b"a", None).is_ok());
         
         let mut vault2 = HitoVault::new();
-        assert!(vault2.unlock_with_password(b"a").is_ok());
+        assert!(vault2.unlock_with_password(b"a", None).is_ok());
     }
 }

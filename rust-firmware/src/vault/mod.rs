@@ -2,6 +2,7 @@ pub mod ffi;
 pub mod vault;
 pub mod bootloader_version;
 pub mod firmware_version; 
+#[cfg(feature = "minifb")]
 mod desktop_storage;
 
 const NONCE_LEN: usize = 7;
